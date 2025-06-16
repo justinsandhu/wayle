@@ -1,7 +1,5 @@
 use super::Config;
-
 use crate::{Result, WayleError};
-
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -25,9 +23,19 @@ impl Config {
     /// - The TOML content is invalid
     /// - Any imported files cannot be loaded
     /// - The merged configuration is invalid
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use wayle::config::Config;
+    /// use std::path::Path;
+    ///
+    /// let config = Config::load_with_imports(Path::new("config.toml"))?;
+    /// ```
     pub fn load_with_imports(path: &Path) -> Result<Config> {
         let main_config_content = fs::read_to_string(path)?;
         let imports = Self::extract_imports(&main_config_content)?;
+
         let imported_configs: Result<Vec<toml::Value>> = imports
             .iter()
             .map(|import_path| {
@@ -41,25 +49,23 @@ impl Config {
             .map_err(|e| WayleError::toml_parse(e, Some(path)))?;
 
         let merged_config = Self::merge_toml_values(imported_configs, main_config);
-        let config: Config = merged_config.try_into().map_err(|e| {
-            WayleError::Config(format!(
-                "Invalid configuration after merging imports: {}",
-                e
-            ))
-        })?;
+        let config: Config = merged_config
+            .try_into()
+            .map_err(|e| WayleError::Config(format!("Configuration validation failed: {e}")))?;
 
         Ok(config)
     }
 
     fn extract_imports(config_content: &str) -> Result<Vec<String>> {
-        let value = toml::from_str(config_content).map_err(|e| WayleError::toml_parse(e, None))?;
         const IMPORT_PREFIX: char = '@';
+
+        let value = toml::from_str(config_content).map_err(|e| WayleError::toml_parse(e, None))?;
 
         let import_paths = if let toml::Value::Table(table) = value {
             table
                 .keys()
                 .filter_map(|key| key.strip_prefix(IMPORT_PREFIX))
-                .map(|path| path.to_string())
+                .map(|path| path.to_owned())
                 .collect::<Vec<String>>()
         } else {
             Vec::new()
@@ -70,7 +76,7 @@ impl Config {
 
     fn resolve_import_path(base_path: &Path, import_path: &str) -> Result<PathBuf> {
         let parent_dir = base_path.parent().ok_or_else(|| {
-            let error_msg = format!("Invalid base path: {:?}", base_path);
+            let error_msg = format!("Invalid base path: {base_path:?}");
             WayleError::Import(error_msg)
         })?;
 
@@ -80,13 +86,11 @@ impl Config {
         }
 
         let resolved_path = parent_dir.join(import_path_buf);
-
         Ok(resolved_path)
     }
 
     fn load_import_file(path: &Path) -> Result<toml::Value> {
         let content = fs::read_to_string(path).map_err(|e| WayleError::import(e, path))?;
-
         toml::from_str(&content).map_err(|e| WayleError::toml_parse(e, Some(path)))
     }
 
@@ -100,6 +104,12 @@ impl Config {
         Self::merge_two_toml_values(accumulated, main)
     }
 
+    /// Deep merges TOML tables while preserving precedence.
+    ///
+    /// We start with overlay as base, then selectively add missing
+    /// keys from base. This ensures overlay values always win, but we don't lose
+    /// base values that aren't being overridden. For non-table values, overlay
+    /// completely replaces base (no attempt to merge primitives).
     fn merge_two_toml_values(base: toml::Value, overlay: toml::Value) -> toml::Value {
         match (base, overlay) {
             (toml::Value::Table(base_table), toml::Value::Table(overlay_table)) => {
@@ -114,9 +124,9 @@ impl Config {
                         merged_table.insert(key, merged_value);
                     }
                 }
+
                 toml::Value::Table(merged_table)
             }
-
             (_, overlay) => overlay,
         }
     }
