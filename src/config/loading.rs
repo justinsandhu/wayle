@@ -32,6 +32,7 @@ impl Config {
     ///
     /// let config = Config::load_with_imports(Path::new("config.toml"))?;
     /// ```
+    /// FIX: Circular imports
     pub fn load_with_imports(path: &Path) -> Result<Config> {
         let main_config_content = fs::read_to_string(path)?;
         let imports = Self::extract_imports(&main_config_content)?;
@@ -116,12 +117,15 @@ impl Config {
                 let mut merged_table = overlay_table;
 
                 for (key, base_value) in base_table {
-                    if !merged_table.contains_key(&key) {
-                        merged_table.insert(key, base_value);
-                    } else {
-                        let overlay_value = merged_table.remove(&key).unwrap();
-                        let merged_value = Self::merge_two_toml_values(base_value, overlay_value);
-                        merged_table.insert(key, merged_value);
+                    match merged_table.remove(&key) {
+                        None => {
+                            merged_table.insert(key, base_value);
+                        }
+                        Some(overlay_value) => {
+                            let merged_value =
+                                Self::merge_two_toml_values(base_value, overlay_value);
+                            merged_table.insert(key, merged_value);
+                        }
                     }
                 }
 

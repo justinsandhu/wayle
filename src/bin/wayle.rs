@@ -1,3 +1,5 @@
+//! Wayle binary - Entry point for the Wayle status bar application.
+
 use std::path::Path;
 use wayle::{Result, config::Config};
 
