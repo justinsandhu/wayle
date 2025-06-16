@@ -34,6 +34,49 @@ impl Config {
         Ok(config)
     }
 
+    fn extract_imports(toml_content: &str) -> Result<Vec<String>> {
+        let value = toml::from_str(toml_content).map_err(|e| {
+            WayleError::TomlParse(format!(
+                "Failed to parse toml while extracting import paths. Error: {}",
+                e
+            ))
+        })?;
+
+        let import_paths = if let toml::Value::Table(table) = value {
+            table
+                .keys()
+                .filter_map(|key| key.strip_prefix('@'))
+                .map(|path| path.to_string())
+                .collect::<Vec<String>>()
+        } else {
+            Vec::new()
+        };
+
+        Ok(import_paths)
+    }
+
+    fn resolve_import_path(base_path: &Path, import_path: &str) -> Result<PathBuf> {
+        let parent = base_path.parent().ok_or_else(|| {
+            let formatted_error = format!("Invalid base path: {:?}", base_path);
+            WayleError::Import(formatted_error)
+        })?;
+
+        let mut import_pathbuf = PathBuf::from(import_path);
+        if import_pathbuf.extension().is_none() {
+            import_pathbuf.set_extension("toml");
+        }
+
+        let resolved_path = parent.join(import_pathbuf);
+
+        Ok(resolved_path)
+    }
+
+    fn load_import_file(path: &Path) -> Result<toml::Value> {
+        let file_content = fs::read_to_string(path).map_err(|e| WayleError::import(e, path))?;
+
+        toml::from_str(&file_content).map_err(|e| WayleError::toml_parse(e, Some(path)))
+    }
+
     fn merge_toml_values(toml_list: Vec<toml::Value>, main_toml: toml::Value) -> toml::Value {
         let mut accumulated = toml::Value::Table(toml::map::Map::new());
 
@@ -58,60 +101,10 @@ impl Config {
                         merged_table.insert(key, merged_value);
                     }
                 }
-
                 toml::Value::Table(merged_table)
             }
 
             (_, overlay) => overlay,
         }
-    }
-
-    fn extract_imports(toml_content: &str) -> Result<Vec<String>> {
-        let value = toml::from_str(toml_content).map_err(|e| {
-            WayleError::TomlParse(format!(
-                "Failed to parse toml while extracting import paths. Error: {}",
-                e
-            ))
-        })?;
-
-        let import_paths = if let toml::Value::Table(table) = value {
-            table
-                .keys()
-                .filter_map(|key| key.strip_prefix('@'))
-                .map(|path| path.to_string())
-                .collect::<Vec<String>>()
-        } else {
-            Vec::new()
-        };
-
-        Ok(import_paths)
-    }
-
-    // fn resolve_import_paths(
-    //     base_config_path: &Path,
-    //     import_paths: Vec<String>,
-    // ) -> Result<Vec<PathBuf>> {
-    // }
-
-    pub fn resolve_import_path(base_path: &Path, import_path: &str) -> Result<PathBuf> {
-        let parent = base_path.parent().ok_or_else(|| {
-            let formatted_error = format!("Invalid base path: {:?}", base_path);
-            WayleError::Import(formatted_error)
-        })?;
-
-        let mut import_pathbuf = PathBuf::from(import_path);
-        if import_pathbuf.extension().is_none() {
-            import_pathbuf.set_extension("toml");
-        }
-
-        let resolved_path = parent.join(import_pathbuf);
-
-        Ok(resolved_path)
-    }
-
-    pub fn load_import_file(path: &Path) -> Result<toml::Value> {
-        let file_content = fs::read_to_string(path).map_err(|e| WayleError::import(e, path))?;
-
-        toml::from_str(&file_content).map_err(|e| WayleError::toml_parse(e, Some(path)))
     }
 }
