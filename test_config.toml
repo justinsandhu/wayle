@@ -1,0 +1,11 @@
+[general]
+log_level = "debug"
+
+
+# [modules.battery]
+# enabled = true
+# show_percentage = false
+#
+# [modules.clock]
+# enabled = true
+# format = "%I:%M %p"

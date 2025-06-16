@@ -1,0 +1,4 @@
+# Test data
+["@themes/base"]
+[theme.semantic]
+primary = "#ff6b6b"

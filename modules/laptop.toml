@@ -1,0 +1,4 @@
+# Test data
+[modules.battery]
+enabled = true
+show_percentage = false

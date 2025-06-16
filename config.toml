@@ -1,0 +1,6 @@
+# Test data
+["@themes/dark"]
+["@modules/laptop"]
+
+[general]
+log_level = "debug"
