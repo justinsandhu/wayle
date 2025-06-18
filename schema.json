@@ -1,0 +1,22 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema",
+    "title": "TestConfig",
+    "type": "object",
+    "properties": {
+        "count": {
+            "description": "A number between 1 and 10",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "default": 10
+        },
+        "name": {
+            "description": "This is a test field",
+            "type": "string"
+        }
+    },
+    "required": [
+        "name",
+        "count"
+    ]
+}

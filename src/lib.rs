@@ -9,4 +9,7 @@ pub mod config;
 /// Core types and error handling.
 pub mod core;
 
+/// Document generation module
+pub mod docs;
+
 pub use core::{Result, WayleError};

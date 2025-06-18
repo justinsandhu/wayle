@@ -3,6 +3,10 @@ mod clock;
 mod general;
 mod loading;
 mod modules;
+mod styling;
+
+pub use clock::{ClockBarConfig, ClockConfig, ClockDropdownConfig};
+pub use styling::*;
 
 use general::GeneralConfig;
 use modules::ModulesConfig;
