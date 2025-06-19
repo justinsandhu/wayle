@@ -1,56 +1,40 @@
+mod button;
+mod dropdown;
+mod general;
+mod styling;
+
 use std::collections::HashMap;
 
+use button::ClockButtonConfig;
+use dropdown::ClockDropdownConfig;
+use general::ClockGeneralConfig;
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
+use styling::{ClockButtonStyling, ClockDropdownStyling, ClockStyling};
 
 use crate::docs::{BehaviorConfigs, ModuleInfo, ModuleInfoProvider, StylingConfigs};
 
-use super::{ButtonStyling, DropdownStyling};
-
-/// General configuration settings for the clock module.
+/// Configuration for the clock module.
 ///
-/// Contains core settings that apply to the clock module regardless of
-/// where it's displayed (status bar, dropdown, etc.).
+/// Provides comprehensive settings for displaying time and calendar information,
+/// including general behavior, button appearance, dropdown functionality, and styling options.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ClockConfig {
-    /// Whether the clock module is displayed in the status bar.
+    /// General configuration settings that apply to all clock functionality.
     #[serde(default)]
-    pub enabled: bool,
+    pub general: ClockGeneralConfig,
 
-    /// Time format string using strftime syntax (e.g., "%H:%M" for 24-hour time).
+    /// Settings specific to the clock's appearance in the status bar button.
     #[serde(default)]
-    pub format: String,
-}
+    pub button: ClockButtonConfig,
 
-/// Configuration for the clock's appearance in the status bar.
-///
-/// Controls visual elements specific to how the clock module appears
-/// when displayed in the main status bar.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ClockBarConfig {
-    /// Whether to display a clock icon alongside the time text.
+    /// Configuration for the clock's dropdown panel behavior and content.
     #[serde(default)]
-    pub show_icon: bool,
-}
+    pub dropdown: ClockDropdownConfig,
 
-/// Configuration for the clock's dropdown menu.
-///
-/// Controls the content and behavior of the dropdown that appears
-/// when clicking on the clock module.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ClockDropdownConfig {
-    /// Whether to display a calendar widget in the dropdown menu.
+    /// Visual styling options for customizing the clock's appearance.
     #[serde(default)]
-    pub show_calendar: bool,
-}
-
-impl Default for ClockConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            format: "%H:%M".to_string(),
-        }
-    }
+    pub styling: ClockStyling,
 }
 
 impl ModuleInfoProvider for ClockConfig {
@@ -58,11 +42,11 @@ impl ModuleInfoProvider for ClockConfig {
         let mut styling_configs: StylingConfigs = HashMap::new();
         let mut behavior_configs: BehaviorConfigs = HashMap::new();
 
-        styling_configs.insert("button".to_string(), || schema_for!(ButtonStyling));
-        styling_configs.insert("dropdown".to_string(), || schema_for!(DropdownStyling));
+        styling_configs.insert("button".to_string(), || schema_for!(ClockButtonStyling));
+        styling_configs.insert("dropdown".to_string(), || schema_for!(ClockDropdownStyling));
 
-        behavior_configs.insert("general".to_string(), || schema_for!(ClockConfig));
-        behavior_configs.insert("button".to_string(), || schema_for!(ClockBarConfig));
+        behavior_configs.insert("general".to_string(), || schema_for!(ClockGeneralConfig));
+        behavior_configs.insert("button".to_string(), || schema_for!(ClockButtonConfig));
         behavior_configs.insert("dropdown".to_string(), || schema_for!(ClockDropdownConfig));
 
         ModuleInfo {

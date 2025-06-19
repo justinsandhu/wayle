@@ -102,4 +102,3 @@ fn get_default_value(property: &Value) -> String {
         })
         .unwrap_or("-".to_string())
 }
-

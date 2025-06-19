@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Configuration for the battery status module.
-/// 
+///
 /// Controls the display and behavior of battery information in the status bar,
 /// including percentage display and low battery warnings.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

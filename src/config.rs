@@ -5,7 +5,7 @@ mod loading;
 mod modules;
 mod styling;
 
-pub use clock::{ClockBarConfig, ClockConfig, ClockDropdownConfig};
+pub use clock::ClockConfig;
 pub use styling::*;
 
 use general::GeneralConfig;
