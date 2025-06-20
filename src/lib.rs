@@ -12,4 +12,7 @@ pub mod core;
 /// Document generation module
 pub mod docs;
 
+/// Config store and state management
+pub mod config_store;
+
 pub use core::{Result, WayleError};
