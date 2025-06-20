@@ -22,7 +22,7 @@ pub struct ClockStyling {
 /// displayed as a button in the main status bar.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ClockButtonStyling {
-    /// Color of the clock icon in the bar button.
+    /// CSS color of the clock icon in the bar button.
     #[serde(default)]
     pub icon: String,
 }
@@ -41,7 +41,7 @@ impl Default for ClockButtonStyling {
 /// dropdown panel, including calendar and time display styling.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ClockDropdownStyling {
-    /// Color of the clock display in the dropdown panel.
+    /// CSS color of the clock display in the dropdown panel.
     #[serde(default)]
     pub clock: String,
 }

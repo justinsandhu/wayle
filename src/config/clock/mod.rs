@@ -3,8 +3,6 @@ mod dropdown;
 mod general;
 mod styling;
 
-use std::collections::HashMap;
-
 use button::ClockButtonConfig;
 use dropdown::ClockDropdownConfig;
 use general::ClockGeneralConfig;
@@ -39,15 +37,16 @@ pub struct ClockConfig {
 
 impl ModuleInfoProvider for ClockConfig {
     fn module_info() -> ModuleInfo {
-        let mut styling_configs: StylingConfigs = HashMap::new();
-        let mut behavior_configs: BehaviorConfigs = HashMap::new();
+        let behavior_configs: BehaviorConfigs = vec![
+            ("general".to_string(), || schema_for!(ClockGeneralConfig)),
+            ("button".to_string(), || schema_for!(ClockButtonConfig)),
+            ("dropdown".to_string(), || schema_for!(ClockDropdownConfig)),
+        ];
 
-        styling_configs.insert("button".to_string(), || schema_for!(ClockButtonStyling));
-        styling_configs.insert("dropdown".to_string(), || schema_for!(ClockDropdownStyling));
-
-        behavior_configs.insert("general".to_string(), || schema_for!(ClockGeneralConfig));
-        behavior_configs.insert("button".to_string(), || schema_for!(ClockButtonConfig));
-        behavior_configs.insert("dropdown".to_string(), || schema_for!(ClockDropdownConfig));
+        let styling_configs: StylingConfigs = vec![
+            ("button".to_string(), || schema_for!(ClockButtonStyling)),
+            ("dropdown".to_string(), || schema_for!(ClockDropdownStyling)),
+        ];
 
         ModuleInfo {
             name: "clock".to_string(),

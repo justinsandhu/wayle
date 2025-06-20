@@ -1,4 +1,6 @@
-use super::{ModuleInfo, PropertyInfo, extract_property_info, generator::DocsError};
+use super::{
+    ModuleInfo, PropertyInfo, extract_property_info, generator::DocsError, module::SchemeFn,
+};
 
 const TABLE_HEADER: &str =
     "| Property | Type | Description | Default |\n|----------|------|-------------|---------|";
@@ -69,7 +71,7 @@ fn generate_styling_sections(module: &ModuleInfo) -> Result<String, DocsError> {
 }
 
 fn generate_sections(
-    configs: &std::collections::HashMap<String, fn() -> schemars::Schema>,
+    configs: &[(String, SchemeFn)],
     module_name: &str,
     section_type: &str,
     path_prefix: &str,

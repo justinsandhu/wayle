@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use schemars::Schema;
 
 use crate::config::ClockConfig;
@@ -9,11 +7,11 @@ pub type SchemeFn = fn() -> Schema;
 /// Collection of styling configuration schemas for a module.
 ///
 /// Maps styling component names to their schema generator functions.
-pub type StylingConfigs = HashMap<String, SchemeFn>;
+pub type StylingConfigs = Vec<(String, SchemeFn)>;
 /// Collection of behavior configuration schemas for a module.
 ///
 /// Maps behavior component names to their schema generator functions.
-pub type BehaviorConfigs = HashMap<String, SchemeFn>;
+pub type BehaviorConfigs = Vec<(String, SchemeFn)>;
 
 /// Trait for types that can provide module information for documentation.
 ///
