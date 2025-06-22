@@ -12,6 +12,7 @@ serde_json = "1"
 clap = { version = "4.0", features = ["derive"] }
 notify = "8"
 tokio = { version = "1", features = ["full"] }
+regex = "1"
 futures = "0"
 relm4 = { version = "0" }
 
@@ -27,8 +28,8 @@ manual_ok_or = "warn"
 module_name_repetitions = "allow"
 similar_names = "allow"
 
-unwrap_used = "warn"
-expect_used = "warn"
+unwrap_used = "forbid"
+expect_used = "forbid"
 panic = "warn"
 
 cognitive_complexity = "warn"

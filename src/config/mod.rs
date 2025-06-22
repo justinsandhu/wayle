@@ -3,9 +3,11 @@ mod clock;
 mod general;
 mod loading;
 mod modules;
+mod paths;
 mod styling;
 
 pub use clock::ClockConfig;
+pub use paths::ConfigPaths;
 pub use styling::*;
 
 use general::GeneralConfig;

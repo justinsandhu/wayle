@@ -69,6 +69,14 @@ pub enum ConfigError {
     /// Error occurred while persisting configuration to disk.
     #[error("Persistence error: {0}")]
     PersistenceError(String),
+
+    /// Error occurred while serializing toml
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+
+    /// Error occurred while deserializing toml
+    #[error("Deserialization error: {0}")]
+    DeserializationError(String),
 }
 
 impl ConfigChange {
