@@ -1,8 +1,8 @@
-use toml::Value;
+use toml::{Value, map::Map};
 
 /// Merges multiple TOML configs with the main configuration taking precedence
 pub fn merge_toml_configs(imports: Vec<Value>, main: Value) -> Value {
-    let mut accumulated = Value::Table(toml::map::Map::new());
+    let mut accumulated = Value::Table(Map::new());
 
     for import in imports {
         accumulated = merge_two_toml_configs(accumulated, import);

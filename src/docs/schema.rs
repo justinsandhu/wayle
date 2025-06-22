@@ -3,7 +3,7 @@
 //! This module provides functionality to parse JSON Schema documents and extract
 //! property information for documentation generation purposes.
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 /// Represents information about a single property in a JSON Schema.
 ///
@@ -63,7 +63,7 @@ pub fn extract_property_info(schema: &Value) -> Vec<PropertyInfo> {
         .unwrap_or_default()
 }
 
-fn build_properties(props_obj: &serde_json::Map<String, Value>) -> Vec<PropertyInfo> {
+fn build_properties(props_obj: &Map<String, Value>) -> Vec<PropertyInfo> {
     props_obj
         .iter()
         .map(|(name, property)| PropertyInfo {

@@ -12,6 +12,7 @@ use super::{ConfigChange, ConfigError};
 ///
 /// The ConfigStore provides a centralized way to read, write, and observe configuration changes
 /// across the application.
+#[derive(Clone)]
 pub struct ConfigStore {
     config: Arc<RwLock<Config>>,
 
@@ -137,7 +138,7 @@ impl ConfigStore {
         path: &str,
         value: &Value,
     ) -> Result<(), ConfigError> {
-        let mut config_value = toml::Value::try_from(config.clone())
+        let mut config_value = Value::try_from(config.clone())
             .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
 
         set_value_at_path(&mut config_value, path, value.clone())?;
@@ -150,7 +151,7 @@ impl ConfigStore {
     }
 
     fn get_config_field(config: &Config, path: &str) -> Result<Value, ConfigError> {
-        let config_value = toml::Value::try_from(config.clone())
+        let config_value = Value::try_from(config.clone())
             .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
 
         navigate_path(&config_value, path)
@@ -213,7 +214,7 @@ fn navigate_path(value: &Value, path: &str) -> Result<Value, ConfigError> {
 
     for (i, part) in parts.iter().enumerate() {
         match current {
-            toml::Value::Table(table) => {
+            Value::Table(table) => {
                 current = table.get(*part).ok_or_else(|| {
                     ConfigError::InvalidPath(format!(
                         "Key '{}' not found in table at path '{}'",
@@ -222,7 +223,7 @@ fn navigate_path(value: &Value, path: &str) -> Result<Value, ConfigError> {
                     ))
                 })?;
             }
-            toml::Value::Array(array) => {
+            Value::Array(array) => {
                 let index = part.parse::<usize>().map_err(|_| {
                     ConfigError::InvalidPath(format!(
                         "Invalid array index '{}' at path '{}'",
@@ -261,7 +262,11 @@ fn navigate_path(value: &Value, path: &str) -> Result<Value, ConfigError> {
 ///
 /// # Errors
 /// * `ConfigError::InvalidPath` - If the path is empty or doesn't exist
-fn set_value_at_path(value: &mut Value, path: &str, new_value: Value) -> Result<(), ConfigError> {
+fn set_value_at_path(
+    value: &mut Value,
+    path: &str,
+    new_value: Value,
+) -> Result<(), ConfigError> {
     let parts: Vec<&str> = path.split('.').collect();
 
     if parts.is_empty() {
@@ -353,7 +358,11 @@ fn navigate_step_mut<'a>(
 ///
 /// # Errors
 /// * `ConfigError::InvalidPath` - If the container type doesn't support insertion or index is invalid
-fn insert_value(container: &mut Value, key: &str, new_value: Value) -> Result<(), ConfigError> {
+fn insert_value(
+    container: &mut Value,
+    key: &str,
+    new_value: Value,
+) -> Result<(), ConfigError> {
     match container {
         Value::Table(table) => {
             table.insert(key.to_string(), new_value);

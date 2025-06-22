@@ -11,6 +11,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use toml::Value;
 
 impl Config {
     /// Loads a configuration file with support for importing other TOML files
@@ -68,7 +69,7 @@ impl Config {
         let import_paths = Self::extract_import_paths(&main_config_content)?;
         let imported_configs = Self::load_all_imports(path, &import_paths, detector)?;
 
-        let main_config: toml::Value = toml::from_str(&main_config_content)
+        let main_config: Value = toml::from_str(&main_config_content)
             .map_err(|e| WayleError::toml_parse(e, Some(path)))?;
 
         let merged_config = merge_toml_configs(imported_configs, main_config);
@@ -81,7 +82,7 @@ impl Config {
         base_path: &Path,
         import_paths: &[String],
         detector: &mut CircularDetector,
-    ) -> Result<Vec<toml::Value>> {
+    ) -> Result<Vec<Value>> {
         import_paths
             .iter()
             .map(|import_path| {
@@ -98,7 +99,7 @@ impl Config {
     fn load_imported_file_with_tracking(
         path: &Path,
         detector: &mut CircularDetector,
-    ) -> Result<toml::Value> {
+    ) -> Result<Value> {
         detector.detect_circular_import(path)?;
         detector.push_to_chain(path);
 
@@ -110,12 +111,12 @@ impl Config {
     fn load_toml_file_with_imports(
         path: &Path,
         detector: &mut CircularDetector,
-    ) -> Result<toml::Value> {
+    ) -> Result<Value> {
         let content = fs::read_to_string(path).map_err(|e| WayleError::import(e, path))?;
         let import_paths = Self::extract_import_paths(&content)?;
         let imported_configs = Self::load_all_imports(path, &import_paths, detector)?;
 
-        let main_value: toml::Value =
+        let main_value: Value =
             toml::from_str(&content).map_err(|e| WayleError::toml_parse(e, Some(path)))?;
 
         Ok(merge_toml_configs(imported_configs, main_value))
@@ -126,7 +127,7 @@ impl Config {
 
         let value = toml::from_str(config_content).map_err(|e| WayleError::toml_parse(e, None))?;
 
-        let import_paths = if let toml::Value::Table(table) = value {
+        let import_paths = if let Value::Table(table) = value {
             table
                 .keys()
                 .filter_map(|key| key.strip_prefix(IMPORT_PREFIX))
