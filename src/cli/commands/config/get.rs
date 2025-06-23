@@ -34,6 +34,18 @@ impl GetCommand {
     pub fn new(config_store: Arc<ConfigStore>) -> Self {
         Self { config_store }
     }
+
+    fn format_value(&self, value: &toml::Value) -> String {
+        match value {
+            toml::Value::String(s) => format!("\"{}\"", s),
+            toml::Value::Integer(i) => i.to_string(),
+            toml::Value::Float(f) => f.to_string(),
+            toml::Value::Boolean(b) => b.to_string(),
+            toml::Value::Array(arr) => format!("[{}]", arr.len()),
+            toml::Value::Table(table) => format!("{{{}}}", table.len()),
+            _ => "complex_value".to_string(),
+        }
+    }
 }
 
 impl Command for GetCommand {
@@ -76,20 +88,6 @@ impl Command for GetCommand {
                 "wayle config get general.log_level".to_string(),
                 "wayle config get modules.clock.format".to_string(),
             ],
-        }
-    }
-}
-
-impl GetCommand {
-    fn format_value(&self, value: &toml::Value) -> String {
-        match value {
-            toml::Value::String(s) => format!("\"{}\"", s),
-            toml::Value::Integer(i) => i.to_string(),
-            toml::Value::Float(f) => f.to_string(),
-            toml::Value::Boolean(b) => b.to_string(),
-            toml::Value::Array(arr) => format!("[{}]", arr.len()),
-            toml::Value::Table(table) => format!("{{{}}}", table.len()),
-            _ => "complex_value".to_string(),
         }
     }
 }

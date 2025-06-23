@@ -28,4 +28,9 @@ pub fn register_commands(registry: &mut CommandRegistry, config_store: Arc<Confi
         CATEGORY_NAME,
         Box::new(config::GetCommand::new(config_store.clone())),
     );
+
+    registry.register_command(
+        CATEGORY_NAME,
+        Box::new(config::SetCommand::new(config_store.clone())),
+    );
 }
