@@ -1,3 +1,8 @@
+//! Documentation generation for configuration schemas.
+//!
+//! Automatically generates markdown documentation from Rust configuration
+//! structures using reflection and type information.
+
 mod generator;
 mod markdown;
 mod module;

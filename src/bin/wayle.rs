@@ -1,29 +1,6 @@
-//! Wayle binary - Entry point for the Wayle status bar application.
+//! Wayle orchestrator - Main entry point that manages panel and settings processes
+//!
+//! This binary is designed to always start successfully, even if dependencies are missing,
+//! so it can provide diagnostic information to help users resolve issues.
 
-use std::{env, path::Path, process};
-use wayle::{Result, config::Config};
-
-fn main() -> Result<()> {
-    let config_path = env::args().nth(1).unwrap_or_else(|| "config.toml".to_string());
-    let config = match Config::load_with_imports(Path::new(&config_path)) {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("{}", e);
-            process::exit(1);
-        }
-    };
-
-    println!("Successfully loaded toml with imports");
-    println!("{:#?}", config);
-
-    if let Some(battery) = &config.modules.battery {
-        println!(
-            "\nBattery module: enabled={}, show_percentage={}",
-            battery.enabled, battery.show_percentage
-        );
-    }
-
-    println!("\nLog level: {}", config.general.log_level);
-
-    Ok(())
-}
+fn main() {}

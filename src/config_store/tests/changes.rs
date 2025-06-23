@@ -1,5 +1,6 @@
 use crate::config_store::{ChangeSource, ConfigChange, ConfigError};
 use std::f64::consts;
+use toml::Value;
 
 #[cfg(test)]
 mod tests {
@@ -16,14 +17,8 @@ mod tests {
         );
 
         assert_eq!(change.path, "modules.clock.general.format");
-        assert_eq!(
-            change.old_value,
-            Some(Value::String("%H:%M".to_string()))
-        );
-        assert_eq!(
-            change.new_value,
-            Value::String("%I:%M %p".to_string())
-        );
+        assert_eq!(change.old_value, Some(Value::String("%H:%M".to_string())));
+        assert_eq!(change.new_value, Value::String("%I:%M %p".to_string()));
         assert_eq!(change.source, ChangeSource::Gui);
         assert!(change.timestamp.elapsed().as_secs() < 1);
     }
@@ -104,10 +99,7 @@ mod tests {
             } => {
                 assert_eq!(path, "test.mismatch");
                 assert_eq!(expected_type, "i64");
-                assert_eq!(
-                    actual_value,
-                    Value::String("not_a_number".to_string())
-                );
+                assert_eq!(actual_value, Value::String("not_a_number".to_string()));
             }
             _ => unreachable!("Expected TypeMismatch error"),
         }

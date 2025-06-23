@@ -8,10 +8,10 @@ use crate::config::{Config, ConfigPaths};
 
 use super::{ConfigChange, ConfigError};
 
-/// A thread-safe configuration store that manages application settings and broadcasts changes
+/// Thread-safe configuration store with reactive change notifications.
 ///
-/// The ConfigStore provides a centralized way to read, write, and observe configuration changes
-/// across the application.
+/// Provides centralized configuration management with the ability to
+/// read, write, and observe configuration changes across the application.
 #[derive(Clone)]
 pub struct ConfigStore {
     config: Arc<RwLock<Config>>,
@@ -20,7 +20,7 @@ pub struct ConfigStore {
 }
 
 impl ConfigStore {
-    /// Creates a new ConfigStore with default configuration values and a broadcast channel for change notifications
+    /// Creates a new ConfigStore with default configuration values.
     pub fn with_defaults() -> Self {
         let config = Config::default();
         let (change_sender, _) = broadcast::channel(1000);
@@ -31,10 +31,11 @@ impl ConfigStore {
         }
     }
 
-    /// Loads a ConfigStore from the main configuration file
+    /// Loads a ConfigStore from the main configuration file.
     ///
     /// # Errors
-    /// * `ConfigError::PersistenceError` - If the configuration file cannot be loaded
+    ///
+    /// Returns `ConfigError::PersistenceError` if the configuration file cannot be loaded.
     pub fn load() -> Result<Self, ConfigError> {
         let main_config = ConfigPaths::main_config();
         let config = Config::load_with_imports(&main_config)

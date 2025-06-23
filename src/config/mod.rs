@@ -1,3 +1,9 @@
+//! Configuration schema definitions and validation.
+//!
+//! Defines the complete configuration structure for Wayle, including
+//! general settings and module-specific configurations. All configurations
+//! are serializable to/from TOML format.
+
 mod battery;
 mod clock;
 mod general;
@@ -16,8 +22,8 @@ use serde::{Deserialize, Serialize};
 
 /// Main configuration structure for Wayle.
 ///
-/// Contains all configuration settings including general settings
-/// and module-specific configurations.
+/// Represents the complete configuration schema that can be loaded
+/// from TOML files. All fields have sensible defaults.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     /// General application settings.

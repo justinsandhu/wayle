@@ -1,18 +1,39 @@
-//! Wayle - A Wayland status bar.
+//! Wayle - Compositor-agnostic desktop environment framework.
 //!
-//! This crate provides the core functionality for the Wayle status bar,
-//! including configuration management and error handling.
+//! Wayle provides a unified framework for building desktop environment components
+//! that work across different Wayland compositors. The main features include:
+//!
+//! - Reactive configuration system with TOML imports
+//! - CLI interface for configuration management
+//! - Compositor abstraction layer
+//! - Panel and widget system
+//!
+//! # Quick Start
+//!
+//! ```rust
+//! use wayle::{Result, WayleError};
+//! 
+//! // Load configuration
+//! let config_store = wayle::config_store::ConfigStore::load()?;
+//! 
+//! // Access configuration values
+//! let theme = config_store.get_by_path("general.theme")?;
+//! ```
 
-/// Configuration management module.
+/// Configuration schema definitions and validation.
 pub mod config;
 
-/// Core types and error handling.
+/// Core error types and result aliases.
 pub mod core;
 
-/// Document generation module
+/// Documentation generation for configuration schemas.
 pub mod docs;
 
-/// Config store and state management
+/// Reactive configuration store with change tracking.
 pub mod config_store;
 
+/// Command-line interface for configuration management.
+pub mod cli;
+
+/// Re-exported core types for convenience.
 pub use core::{Result, WayleError};
