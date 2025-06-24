@@ -106,14 +106,14 @@ pub struct CommandMetadata {
     /// Brief description of what this command does.
     pub description: String,
 
+    /// Category this command belongs to (e.g., "config", "system").
+    pub category: String,
+
     /// Specification of all arguments this command accepts.
     pub args: Vec<CommandArg>,
 
     /// Example usage strings to show in help text.
     pub examples: Vec<String>,
-
-    /// Category this command belongs to (e.g., "config", "system").
-    pub category: String,
 }
 
 /// Trait defining the interface for all CLI commands.

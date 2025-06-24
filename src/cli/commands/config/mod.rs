@@ -1,11 +1,13 @@
 //! Configuration management commands.
 mod get;
 mod set;
+mod watch;
 
 use std::sync::Arc;
 
 pub use get::GetCommand;
 pub use set::SetCommand;
+pub use watch::WatchCommand;
 
 use crate::{
     cli::{CommandRegistry, commands::config},
@@ -32,5 +34,10 @@ pub fn register_commands(registry: &mut CommandRegistry, config_store: Arc<Confi
     registry.register_command(
         CATEGORY_NAME,
         Box::new(config::SetCommand::new(config_store.clone())),
+    );
+
+    registry.register_command(
+        CATEGORY_NAME,
+        Box::new(config::WatchCommand::new(config_store.clone())),
     );
 }

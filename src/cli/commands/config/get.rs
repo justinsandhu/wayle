@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::{
     cli::{
         CliError, Command, CommandResult,
+        formatting::format_toml_value,
         types::{ArgType, CommandArg, CommandMetadata},
     },
     config_store::ConfigStore,
@@ -34,18 +35,6 @@ impl GetCommand {
     pub fn new(config_store: Arc<ConfigStore>) -> Self {
         Self { config_store }
     }
-
-    fn format_value(&self, value: &toml::Value) -> String {
-        match value {
-            toml::Value::String(s) => format!("\"{}\"", s),
-            toml::Value::Integer(i) => i.to_string(),
-            toml::Value::Float(f) => f.to_string(),
-            toml::Value::Boolean(b) => b.to_string(),
-            toml::Value::Array(arr) => format!("[{}]", arr.len()),
-            toml::Value::Table(table) => format!("{{{}}}", table.len()),
-            _ => "complex_value".to_string(),
-        }
-    }
 }
 
 impl Command for GetCommand {
@@ -69,7 +58,7 @@ impl Command for GetCommand {
             .get_by_path(path)
             .map_err(|e| CliError::ConfigError(e.to_string()))?;
 
-        Ok(format!("{}: {}", path, self.format_value(&value)))
+        Ok(format!("{}: {}", path, format_toml_value(&value)))
     }
 
     fn metadata(&self) -> CommandMetadata {

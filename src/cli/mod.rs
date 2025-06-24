@@ -5,6 +5,7 @@
 //! and automatically generate help text from metadata.
 
 mod commands;
+mod formatting;
 mod registry;
 mod service;
 mod types;

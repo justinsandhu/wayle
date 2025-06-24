@@ -112,11 +112,11 @@ impl ConfigStore {
     ///
     /// # Arguments
     /// * `pattern` - A pattern to match configuration paths (supports "*" wildcards)
-    pub fn subscribe_to_path(&self, pattern: &str) -> impl Stream<Item = ConfigChange> {
+    pub fn subscribe_to_path(&self, pattern: &str) -> impl Stream<Item = ConfigChange> + Unpin {
         let pattern = pattern.to_string();
         let receiver = self.change_sender.subscribe();
 
-        futures::stream::unfold(receiver, move |mut receiver| {
+        Box::pin(futures::stream::unfold(receiver, move |mut receiver| {
             let pattern = pattern.clone();
             async move {
                 loop {
@@ -130,7 +130,7 @@ impl ConfigStore {
                     }
                 }
             }
-        })
+        }))
     }
 
     fn set_config_field(
@@ -263,11 +263,7 @@ fn navigate_path(value: &Value, path: &str) -> Result<Value, ConfigError> {
 ///
 /// # Errors
 /// * `ConfigError::InvalidPath` - If the path is empty or doesn't exist
-fn set_value_at_path(
-    value: &mut Value,
-    path: &str,
-    new_value: Value,
-) -> Result<(), ConfigError> {
+fn set_value_at_path(value: &mut Value, path: &str, new_value: Value) -> Result<(), ConfigError> {
     let parts: Vec<&str> = path.split('.').collect();
 
     if parts.is_empty() {
@@ -359,11 +355,7 @@ fn navigate_step_mut<'a>(
 ///
 /// # Errors
 /// * `ConfigError::InvalidPath` - If the container type doesn't support insertion or index is invalid
-fn insert_value(
-    container: &mut Value,
-    key: &str,
-    new_value: Value,
-) -> Result<(), ConfigError> {
+fn insert_value(container: &mut Value, key: &str, new_value: Value) -> Result<(), ConfigError> {
     match container {
         Value::Table(table) => {
             table.insert(key.to_string(), new_value);
