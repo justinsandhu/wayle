@@ -1,4 +1,8 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    fs,
+    sync::{Arc, RwLock},
+};
 
 use futures::Stream;
 use tokio::sync::broadcast;
@@ -6,7 +10,10 @@ use toml::Value;
 
 use crate::config::{Config, ConfigPaths};
 
-use super::{ConfigChange, ConfigError};
+use super::{
+    ChangeSource, ConfigChange, ConfigError,
+    path_ops::{navigate_path, path_matches, set_value_at_path},
+};
 
 /// Thread-safe configuration store with reactive change notifications.
 ///
@@ -15,11 +22,54 @@ use super::{ConfigChange, ConfigError};
 #[derive(Clone)]
 pub struct ConfigStore {
     config: Arc<RwLock<Config>>,
-
     change_sender: broadcast::Sender<ConfigChange>,
+    runtime_config: Arc<RwLock<HashMap<String, Value>>>,
+}
+
+#[derive(Clone)]
+pub struct ConfigWriter {
+    store: ConfigStore,
+
+    source: ChangeSource,
 }
 
 impl ConfigStore {
+    /// Creates a configuration writer for GUI-originated changes.
+    ///
+    /// Returns a `ConfigWriter` that automatically tags all changes
+    /// as originating from the GUI settings interface.
+    pub fn gui_writer(&self) -> ConfigWriter {
+        ConfigWriter {
+            store: self.clone(),
+            source: ChangeSource::Gui,
+        }
+    }
+
+    /// Creates a configuration writer for CLI-originated changes.
+    ///
+    /// Returns a `ConfigWriter` that tags all changes with the specific
+    /// CLI command that triggered them for audit and debugging purposes.
+    ///
+    /// # Arguments
+    /// * `command` - The CLI command string that initiated the changes
+    pub fn cli_writer(&self, command: String) -> ConfigWriter {
+        ConfigWriter {
+            store: self.clone(),
+            source: ChangeSource::CliCommand(command),
+        }
+    }
+
+    /// Creates a configuration writer for system-originated changes.
+    ///
+    /// Returns a `ConfigWriter` for internal system operations such as
+    /// automatic adjustments, migrations, or default value applications.
+    pub fn system_writer(&self) -> ConfigWriter {
+        ConfigWriter {
+            store: self.clone(),
+            source: ChangeSource::System,
+        }
+    }
+
     /// Creates a new ConfigStore with default configuration values.
     pub fn with_defaults() -> Self {
         let config = Config::default();
@@ -27,6 +77,7 @@ impl ConfigStore {
 
         Self {
             config: Arc::new(RwLock::new(config)),
+            runtime_config: Arc::new(RwLock::new(HashMap::new())),
             change_sender,
         }
     }
@@ -42,8 +93,11 @@ impl ConfigStore {
             .map_err(|e| ConfigError::PersistenceError(e.to_string()))?;
         let (change_sender, _) = broadcast::channel(1000);
 
+        let runtime_config = Self::load_runtime_config()?;
+
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
+            runtime_config: Arc::new(RwLock::new(runtime_config)),
             change_sender,
         })
     }
@@ -59,8 +113,25 @@ impl ConfigStore {
     /// * `ConfigError::PersistenceError` - If the write lock cannot be acquired
     /// * `ConfigError::SerializationError` - If the config cannot be serialized
     /// * `ConfigError::DeserializationError` - If the config cannot be deserialized
-    pub fn set_by_path(&self, path: &str, value: Value) -> Result<(), ConfigError> {
-        let old_value = self.get_by_path(path)?;
+    pub fn set_by_path_with_source(
+        &self,
+        path: &str,
+        value: Value,
+        source: ChangeSource,
+    ) -> Result<(), ConfigError> {
+        let old_value = self.get_by_path(path).ok();
+
+        if matches!(source, ChangeSource::Gui | ChangeSource::CliCommand(_)) {
+            self.runtime_config
+                .write()
+                .map_err(|e| {
+                    ConfigError::PatternError(format!(
+                        "Failed to acquire write lock for runtime_config: {}",
+                        e
+                    ))
+                })?
+                .insert(path.to_string(), value.clone());
+        }
 
         {
             let mut config = self.config.write().map_err(|_| {
@@ -70,14 +141,9 @@ impl ConfigStore {
             self.set_config_field(&mut config, path, &value)?;
         }
 
-        self.save_gui_config()?;
+        self.save_config()?;
 
-        let change = ConfigChange::new(
-            path.to_string(),
-            Some(old_value),
-            value,
-            super::ChangeSource::Gui,
-        );
+        let change = ConfigChange::new(path.to_string(), old_value, value, source);
 
         let _ = self.change_sender.send(change);
         Ok(())
@@ -158,223 +224,115 @@ impl ConfigStore {
         navigate_path(&config_value, path)
     }
 
-    /// Saves the current configuration to the GUI-specific config file
+    /// Saves the current configuration to the runtime config file
     ///
     /// # Errors
     /// * `ConfigError::PersistenceError` - If the configuration cannot be saved
-    // TODO: Implement
-    pub fn save_gui_config(&self) -> Result<(), ConfigError> {
+    pub fn save_config(&self) -> Result<(), ConfigError> {
+        let runtime_config_map = self
+            .runtime_config
+            .read()
+            .map_err(|_| ConfigError::PersistenceError("Failed to acquire read lock".into()))?;
+
+        let mut runtime_value = Value::Table(toml::Table::new());
+
+        for (path, value) in runtime_config_map.iter() {
+            set_value_at_path(&mut runtime_value, path, value.clone())?;
+        }
+
+        let config_path = ConfigPaths::runtime_config();
+        let temp_path = config_path.with_extension("tmp");
+
+        let toml_str = toml::to_string_pretty(&runtime_value)
+            .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
+
+        std::fs::write(&temp_path, toml_str)
+            .map_err(|e| ConfigError::PersistenceError(e.to_string()))?;
+
+        std::fs::rename(temp_path, config_path)
+            .map_err(|e| ConfigError::PersistenceError(e.to_string()))?;
+
+        let main_path = ConfigPaths::main_config();
+        let mut main_config_toml = fs::read_to_string(&main_path).map_err(|_| {
+            ConfigError::PersistenceError(format!(
+                "Failed to persist config. Main config file {} was not found.",
+                main_path.to_string_lossy()
+            ))
+        })?;
+
+        if !main_config_toml.contains("[\"@runtime\"]") {
+            main_config_toml = Self::ensure_runtime_import(&main_config_toml);
+            fs::write(main_path, main_config_toml).map_err(|e| {
+                ConfigError::PersistenceError(format!(
+                    "Failed to add runtime import to main config: {}",
+                    e
+                ))
+            })?;
+        }
+
         Ok(())
     }
-}
 
-/// Checks if a configuration path matches a given pattern
-///
-/// # Arguments
-/// * `path` - The actual configuration path
-/// * `pattern` - The pattern to match against (supports "*" as wildcard)
-///
-/// # Examples
-/// * `"server.port"` matches `"server.port"`
-/// * `"server.port"` matches `"server.*"`
-/// * `"server.port"` matches `"*"`
-fn path_matches(path: &str, pattern: &str) -> bool {
-    const WILDCARD: &str = "*";
-
-    if pattern == WILDCARD {
-        return true;
-    };
-
-    let path_parts: Vec<&str> = path.split(".").collect();
-    let pattern_parts: Vec<&str> = pattern.split(".").collect();
-
-    for (path_part, pattern_part) in path_parts.iter().zip(pattern_parts.iter()) {
-        if pattern_part == &WILDCARD {
-            continue;
-        }
-
-        if path_part != pattern_part {
-            return false;
-        }
+    fn ensure_runtime_import(config: &str) -> String {
+        format!("[\"@runtime\"]\n\n{}", config)
     }
 
-    true
-}
+    fn load_runtime_config() -> Result<HashMap<String, Value>, ConfigError> {
+        let runtime_path = ConfigPaths::runtime_config();
+        if runtime_path.exists() {
+            let runtime_config = fs::read_to_string(&runtime_path).map_err(|e| {
+                ConfigError::InvalidPath(format!("Failed to read runtime.toml: {e}"))
+            })?;
 
-/// Navigates through a TOML value structure following a dot-separated path
-///
-/// # Arguments
-/// * `value` - The root TOML value to navigate from
-/// * `path` - Dot-separated path (e.g., "server.port" or "array.0.field")
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If the path doesn't exist or is malformed
-fn navigate_path(value: &Value, path: &str) -> Result<Value, ConfigError> {
-    let parts: Vec<&str> = path.split(".").collect();
-    let mut current = value;
-
-    for (i, part) in parts.iter().enumerate() {
-        match current {
-            Value::Table(table) => {
-                current = table.get(*part).ok_or_else(|| {
-                    ConfigError::InvalidPath(format!(
-                        "Key '{}' not found in table at path '{}'",
-                        part,
-                        parts[..i].join(".")
-                    ))
-                })?;
-            }
-            Value::Array(array) => {
-                let index = part.parse::<usize>().map_err(|_| {
-                    ConfigError::InvalidPath(format!(
-                        "Invalid array index '{}' at path '{}'",
-                        part,
-                        parts[..i].join(".")
-                    ))
-                })?;
-
-                current = array.get(index).ok_or_else(|| {
-                    ConfigError::InvalidPath(format!(
-                        "Array index '{}' out of bounds at path '{}'",
-                        index,
-                        parts[..i].join(".")
-                    ))
-                })?;
-            }
-            _ => {
-                return Err(ConfigError::InvalidPath(format!(
-                    "Cannot navigate into {:?} at path '{}'",
-                    current.type_str(),
-                    parts[..i].join("."),
-                )));
-            }
-        }
-    }
-
-    Ok(current.clone())
-}
-
-/// Sets a value at the specified path within a mutable TOML value structure
-///
-/// # Arguments
-/// * `value` - The root TOML value to modify
-/// * `path` - Dot-separated path to the target location
-/// * `new_value` - The value to insert at the path
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If the path is empty or doesn't exist
-fn set_value_at_path(value: &mut Value, path: &str, new_value: Value) -> Result<(), ConfigError> {
-    let parts: Vec<&str> = path.split('.').collect();
-
-    if parts.is_empty() {
-        return Err(ConfigError::InvalidPath("Empty path".to_string()));
-    }
-
-    let (parent, last_key) = navigate_to_parent_mut(value, &parts)?;
-
-    insert_value(parent, last_key, new_value)
-}
-
-/// Navigates to the parent container of the target element in a mutable TOML structure
-///
-/// # Arguments
-/// * `value` - The root TOML value to navigate
-/// * `parts` - Path components split by dots
-///
-/// # Returns
-/// A tuple of (parent container, last key) for insertion
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If navigation fails at any point
-fn navigate_to_parent_mut<'a>(
-    value: &'a mut Value,
-    parts: &'a [&'a str],
-) -> Result<(&'a mut Value, &'a str), ConfigError> {
-    let mut current = value;
-
-    for (i, part) in parts[..parts.len() - 1].iter().enumerate() {
-        current = navigate_step_mut(current, part, &parts[..=i])?;
-    }
-
-    Ok((current, parts[parts.len() - 1]))
-}
-
-/// Performs a single navigation step in a mutable TOML structure
-///
-/// # Arguments
-/// * `current` - The current TOML value
-/// * `key` - The key or index to navigate to
-/// * `path_so_far` - The path traversed so far (for error messages)
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If the key doesn't exist or index is invalid
-fn navigate_step_mut<'a>(
-    current: &'a mut Value,
-    key: &str,
-    path_so_far: &[&str],
-) -> Result<&'a mut Value, ConfigError> {
-    match current {
-        Value::Table(table) => table.get_mut(key).ok_or_else(|| {
-            ConfigError::InvalidPath(format!(
-                "Key '{}' not found at path '{}'",
-                key,
-                path_so_far.join(".")
-            ))
-        }),
-        Value::Array(arr) => {
-            let index = key.parse::<usize>().map_err(|_| {
-                ConfigError::InvalidPath(format!(
-                    "Invalid array index '{}' at path '{}'",
-                    key,
-                    path_so_far.join(".")
+            let runtime_toml: Value = toml::from_str(&runtime_config).map_err(|e| {
+                ConfigError::DeserializationError(format!(
+                    "Failed to parse {}: {}",
+                    runtime_path.to_string_lossy(),
+                    e
                 ))
             })?;
 
-            arr.get_mut(index).ok_or_else(|| {
-                ConfigError::InvalidPath(format!(
-                    "Array index {} out of bounds at path '{}'",
-                    index,
-                    path_so_far.join(".")
-                ))
-            })
+            let mut flat_map: HashMap<String, Value> = HashMap::new();
+
+            Self::flatten_toml_to_paths(&runtime_toml, "", &mut flat_map);
+            Ok(flat_map)
+        } else {
+            Ok(HashMap::new())
         }
-        _ => Err(ConfigError::InvalidPath(format!(
-            "Cannot navigate into {} at path '{}'",
-            current.type_str(),
-            path_so_far.join(".")
-        ))),
+    }
+
+    fn flatten_toml_to_paths(value: &Value, prefix: &str, map: &mut HashMap<String, Value>) {
+        match value {
+            Value::Table(table) => {
+                for (key, value) in table {
+                    let path = if prefix.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{}.{}", prefix, key)
+                    };
+                    Self::flatten_toml_to_paths(value, &path, map);
+                }
+            }
+            _ => {
+                map.insert(prefix.to_string(), value.clone());
+            }
+        }
     }
 }
 
-/// Inserts a value into a TOML container (table or array)
-///
-/// # Arguments
-/// * `container` - The container to insert into
-/// * `key` - The key (for tables) or index (for arrays)
-/// * `new_value` - The value to insert
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If the container type doesn't support insertion or index is invalid
-fn insert_value(container: &mut Value, key: &str, new_value: Value) -> Result<(), ConfigError> {
-    match container {
-        Value::Table(table) => {
-            table.insert(key.to_string(), new_value);
-            Ok(())
-        }
-        Value::Array(arr) => {
-            let index = key
-                .parse::<usize>()
-                .map_err(|_| ConfigError::InvalidPath(format!("Invalid array index '{}'", key)))?;
-
-            arr.get_mut(index)
-                .map(|elem| *elem = new_value)
-                .ok_or_else(|| {
-                    ConfigError::InvalidPath(format!("Array index {} out of bounds", index))
-                })
-        }
-        _ => Err(ConfigError::InvalidPath(format!(
-            "Cannot insert into {}",
-            container.type_str()
-        ))),
+impl ConfigWriter {
+    /// Sets a configuration value at the specified path
+    ///
+    /// The change source is automatically included from the writer's context.
+    ///
+    /// # Arguments
+    /// * `path` - Dot-separated path to the configuration field
+    /// * `value` - The new TOML value to set
+    ///
+    /// # Errors
+    /// Returns errors from the underlying ConfigStore::set_by_path operation
+    pub fn set(&self, path: &str, value: Value) -> Result<(), ConfigError> {
+        self.store
+            .set_by_path_with_source(path, value, self.source.clone())
     }
 }

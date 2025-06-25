@@ -36,6 +36,8 @@ pub enum ChangeSource {
     PresetLoad(String),
     /// Change made through CLI command.
     CliCommand(String),
+    /// Change made by wayle itself.
+    System,
     /// Change made through IPC (D-Bus or other inter-process communication).
     Ipc,
 }

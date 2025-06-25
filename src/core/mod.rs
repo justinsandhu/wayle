@@ -42,7 +42,11 @@ impl WayleError {
         match path {
             Some(p) => {
                 let clean_path = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-                WayleError::TomlParse(format!("Failed to parse TOML at {clean_path:?}: {error}",))
+                WayleError::TomlParse(format!(
+                    "Failed to parse TOML at {}: {}",
+                    clean_path.to_string_lossy(),
+                    error
+                ))
             }
             None => WayleError::TomlParse(format!("Failed to parse TOML: {}", error)),
         }
@@ -58,7 +62,9 @@ impl WayleError {
         let clean_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         WayleError::Import(format!(
-            "Failed to import file path: {clean_path:?}. Error: {error}"
+            "Failed to import file path: '{}'. Error: {}",
+            clean_path.to_string_lossy(),
+            error
         ))
     }
 }

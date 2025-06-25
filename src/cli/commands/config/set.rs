@@ -49,8 +49,11 @@ impl Command for SetCommand {
             CliError::InvalidArguments("Expected <value> argument for 'set' command".to_string())
         })?;
         let value = self.parse_config_value(value_str)?;
+        let cli_writer = self
+            .config_store
+            .cli_writer(format!("Set {}: {}", path, value_str));
 
-        match self.config_store.set_by_path(path, value) {
+        match cli_writer.set(path, value) {
             Ok(()) => Ok(format!("Set new value '{}' at path '{}'", value_str, path)),
             Err(e) => Err(CliError::ConfigError(e.to_string())),
         }

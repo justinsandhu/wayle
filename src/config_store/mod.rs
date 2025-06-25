@@ -4,6 +4,7 @@
 //! track changes, and notify subscribers of configuration updates.
 
 mod changes;
+mod path_ops;
 mod store;
 
 #[cfg(test)]

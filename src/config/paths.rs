@@ -48,9 +48,9 @@ impl ConfigPaths {
     /// # Panics
     /// Panics if neither HOME nor XDG_CONFIG_HOME environment variables are set
     #[allow(clippy::panic)]
-    pub fn gui_config() -> PathBuf {
+    pub fn runtime_config() -> PathBuf {
         match Self::config_dir() {
-            Ok(dir) => dir.join("gui-config.toml"),
+            Ok(dir) => dir.join("runtime.toml"),
             Err(_) => {
                 panic!("Failed to determine config directory - is $HOME or $XDG_CONFIG_HOME set?")
             }
