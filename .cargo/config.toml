@@ -1,0 +1,5 @@
+[alias]
+test-integration = "test --test config_store -- --test-threads=1"
+test-unit = "test --lib"
+test-all = "test -- --test-threads=1"
+fmt-check = "fmt --all -- --check"
