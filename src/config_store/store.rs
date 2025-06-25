@@ -260,7 +260,7 @@ impl ConfigStore {
             ))
         })?;
 
-        if !main_config_toml.contains("[\"@runtime\"]") {
+        if !main_config_toml.contains("\"@runtime\"") {
             main_config_toml = Self::ensure_runtime_import(&main_config_toml);
             fs::write(main_path, main_config_toml).map_err(|e| {
                 ConfigError::PersistenceError(format!(
@@ -274,7 +274,28 @@ impl ConfigStore {
     }
 
     fn ensure_runtime_import(config: &str) -> String {
-        format!("[\"@runtime\"]\n\n{}", config)
+        let mut doc: Value = toml::from_str(config).unwrap_or_else(|_| {
+            let mut table = toml::map::Map::new();
+            table.insert("imports".to_string(), Value::Array(vec![]));
+
+            Value::Table(table)
+        });
+
+        if let Value::Table(table) = &mut doc {
+            let imports = table
+                .entry("imports")
+                .or_insert_with(|| Value::Array(vec![]));
+
+            if let Value::Array(arr) = imports {
+                let runtime_import = Value::String("@runtime".to_string());
+
+                if !arr.iter().any(|v| v.as_str() == Some("@runtime")) {
+                    arr.push(runtime_import);
+                }
+            }
+        }
+
+        toml::to_string(&doc).unwrap_or_else(|_| config.to_string())
     }
 
     fn load_runtime_config() -> Result<HashMap<String, Value>, ConfigError> {

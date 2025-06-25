@@ -108,10 +108,7 @@ impl Config {
         result
     }
 
-    fn load_toml_file_with_imports(
-        path: &Path,
-        detector: &mut CircularDetector,
-    ) -> Result<Value> {
+    fn load_toml_file_with_imports(path: &Path, detector: &mut CircularDetector) -> Result<Value> {
         let content = fs::read_to_string(path).map_err(|e| WayleError::import(e, path))?;
         let import_paths = Self::extract_import_paths(&content)?;
         let imported_configs = Self::load_all_imports(path, &import_paths, detector)?;
@@ -123,16 +120,19 @@ impl Config {
     }
 
     fn extract_import_paths(config_content: &str) -> Result<Vec<String>> {
-        const IMPORT_PREFIX: char = '@';
-
         let value = toml::from_str(config_content).map_err(|e| WayleError::toml_parse(e, None))?;
 
         let import_paths = if let Value::Table(table) = value {
-            table
-                .keys()
-                .filter_map(|key| key.strip_prefix(IMPORT_PREFIX))
-                .map(|path| path.to_owned())
-                .collect::<Vec<String>>()
+            if let Some(Value::Array(imports)) = table.get("imports") {
+                imports
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .filter(|s| s.starts_with('@'))
+                    .map(|s| s.strip_prefix('@').unwrap_or(s).to_owned())
+                    .collect::<Vec<String>>()
+            } else {
+                Vec::new()
+            }
         } else {
             Vec::new()
         };
