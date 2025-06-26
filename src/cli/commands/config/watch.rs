@@ -38,7 +38,7 @@ impl Command for WatchCommand {
         //             "[{}s] {} -> {} (source: {:?})",
         //             change.timestamp.elapsed().as_secs(),
         //             change.path,
-        //             format_toml_value(&change.new_value),
+        //             change.new_value.as_ref().map_or("(removed)".to_string(), format_toml_value),
         //             change.source
         //         );
         //     }
