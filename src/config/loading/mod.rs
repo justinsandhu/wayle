@@ -55,6 +55,28 @@ impl Config {
         Self::load_config_with_tracking(&canonical_path, &mut detector)
     }
 
+    /// Recursively collects all configuration files involved in imports.
+    ///
+    /// Starting from the given path, this method finds all imported files
+    /// including transitive imports. Each file is listed only once even
+    /// if imported multiple times.
+    ///
+    /// # Arguments
+    /// * `path` - The root configuration file to start from
+    ///
+    /// # Returns
+    /// A vector of all configuration file paths including the root file
+    ///
+    /// # Errors
+    /// Returns error if any file cannot be read or contains invalid TOML
+    pub fn get_all_config_files(path: &Path) -> Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+
+        Self::collect_config_files(path, &mut files, &mut visited)?;
+        Ok(files)
+    }
+
     fn load_config_with_tracking(path: &Path, detector: &mut CircularDetector) -> Result<Config> {
         detector.detect_circular_import(path)?;
         detector.push_to_chain(path);
@@ -153,5 +175,32 @@ impl Config {
 
         let resolved_path = parent_dir.join(import_path_buf);
         Ok(resolved_path)
+    }
+
+    fn collect_config_files(
+        path: &Path,
+        files: &mut Vec<PathBuf>,
+        visited: &mut std::collections::HashSet<PathBuf>,
+    ) -> Result<()> {
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+        if visited.contains(&canonical) {
+            return Ok(());
+        }
+
+        visited.insert(canonical.clone());
+        files.push(canonical.clone());
+
+        if path.exists() {
+            let content = fs::read_to_string(path)?;
+            let import_paths = Self::extract_import_paths(&content)?;
+
+            for import_path in import_paths {
+                let resolved = Self::resolve_import_path(path, &import_path)?;
+                Self::collect_config_files(&resolved, files, visited)?;
+            }
+        }
+
+        Ok(())
     }
 }

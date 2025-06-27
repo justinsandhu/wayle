@@ -125,7 +125,7 @@ impl ConfigStore {
             self.runtime_config
                 .write()
                 .map_err(|e| {
-                    ConfigError::PatternError(format!(
+                    ConfigError::LockError(format!(
                         "Failed to acquire write lock for runtime_config: {}",
                         e
                     ))
@@ -135,7 +135,7 @@ impl ConfigStore {
 
         {
             let mut config = self.config.write().map_err(|_| {
-                ConfigError::PersistenceError("Failed to acquire write lock".into())
+                ConfigError::LockError("Failed to acquire write lock".into())
             })?;
 
             self.set_config_field(&mut config, path, &value)?;
@@ -161,7 +161,7 @@ impl ConfigStore {
         let config = self
             .config
             .read()
-            .map_err(|_| ConfigError::PersistenceError("Failed to acquire read lock".into()))?;
+            .map_err(|_| ConfigError::LockError("Failed to acquire read lock".into()))?;
 
         Self::get_config_field(&config, path)
     }
@@ -199,6 +199,10 @@ impl ConfigStore {
         }))
     }
 
+    pub(super) fn broadcast_change(&self, change: ConfigChange) {
+        let _ = self.change_sender.send(change);
+    }
+
     fn set_config_field(
         &self,
         config: &mut Config,
@@ -232,7 +236,7 @@ impl ConfigStore {
         let runtime_config_map = self
             .runtime_config
             .read()
-            .map_err(|_| ConfigError::PersistenceError("Failed to acquire read lock".into()))?;
+            .map_err(|_| ConfigError::LockError("Failed to acquire read lock".into()))?;
 
         let mut runtime_value = Value::Table(toml::Table::new());
 
@@ -302,7 +306,7 @@ impl ConfigStore {
         let runtime_path = ConfigPaths::runtime_config();
         if runtime_path.exists() {
             let runtime_config = fs::read_to_string(&runtime_path).map_err(|e| {
-                ConfigError::InvalidPath(format!("Failed to read runtime.toml: {e}"))
+                ConfigError::IoError(format!("Failed to read runtime.toml: {e}"))
             })?;
 
             let runtime_toml: Value = toml::from_str(&runtime_config).map_err(|e| {

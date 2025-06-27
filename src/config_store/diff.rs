@@ -62,7 +62,7 @@ fn diff_toml_values(
 
                 match (old_table.get(key), new_table.get(key)) {
                     (Some(old_val), Some(new_val)) => {
-                        changes.extend(diff_toml_values(
+                        changes.extend(handle_value_changed(
                             &field_path,
                             old_val,
                             new_val,
@@ -71,24 +71,19 @@ fn diff_toml_values(
                         ));
                     }
                     (Some(old_val), None) => {
-                        if let Ok(default_value) = get_default_for_path(&field_path) {
-                            changes.push(ConfigChange {
-                                path: field_path,
-                                old_value: Some(old_val.clone()),
-                                new_value: default_value,
-                                timestamp,
-                                source: source.clone(),
-                            });
+                        if let Some(change) =
+                            handle_value_removed(&field_path, old_val, source.clone(), timestamp)
+                        {
+                            changes.push(change);
                         }
                     }
                     (None, Some(new_val)) => {
-                        changes.push(ConfigChange {
-                            path: field_path,
-                            old_value: None,
-                            new_value: new_val.clone(),
+                        changes.push(handle_value_added(
+                            &field_path,
+                            new_val,
+                            source.clone(),
                             timestamp,
-                            source: source.clone(),
-                        });
+                        ));
                     }
                     (None, None) => unreachable!(),
                 }
@@ -113,15 +108,53 @@ fn diff_toml_values(
 #[allow(clippy::expect_used)]
 fn get_default_config() -> &'static toml::Value {
     DEFAULT_CONFIG.get_or_init(|| {
-        let default_config = Config::default();
-        let default_toml = toml::to_string(&default_config)
-            .expect("Config::default() must serialize to valid TOML");
-
-        toml::from_str(&default_toml).expect("Config::default() serialization must be valid TOML")
+        toml::Value::try_from(Config::default()).expect("Default config must be serializable")
     })
 }
 
 fn get_default_for_path(path: &str) -> Result<toml::Value, ConfigError> {
     let default_config = get_default_config();
     navigate_path(default_config, path)
+}
+
+fn handle_value_changed(
+    path: &str,
+    old_val: &toml::Value,
+    new_val: &toml::Value,
+    source: ChangeSource,
+    timestamp: Instant,
+) -> Vec<ConfigChange> {
+    diff_toml_values(path, old_val, new_val, source, timestamp)
+}
+
+fn handle_value_removed(
+    path: &str,
+    old_val: &toml::Value,
+    source: ChangeSource,
+    timestamp: Instant,
+) -> Option<ConfigChange> {
+    get_default_for_path(path)
+        .ok()
+        .map(|default_value| ConfigChange {
+            path: path.to_string(),
+            old_value: Some(old_val.clone()),
+            new_value: default_value,
+            timestamp,
+            source,
+        })
+}
+
+fn handle_value_added(
+    path: &str,
+    new_val: &toml::Value,
+    source: ChangeSource,
+    timestamp: Instant,
+) -> ConfigChange {
+    ConfigChange {
+        path: path.to_string(),
+        old_value: None,
+        new_value: new_val.clone(),
+        timestamp,
+        source,
+    }
 }

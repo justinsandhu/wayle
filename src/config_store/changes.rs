@@ -79,6 +79,22 @@ pub enum ConfigError {
     /// Error occurred while deserializing toml
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
+
+    /// Error occurred while setting up or managing file watching.
+    #[error("File watch error: {0}")]
+    FileWatchError(String),
+
+    /// Error occurred during configuration processing or analysis.
+    #[error("Processing error: {0}")]
+    ProcessingError(String),
+
+    /// Error occurred during file I/O operations.
+    #[error("IO error: {0}")]
+    IoError(String),
+
+    /// Error occurred while acquiring locks for thread-safe access.
+    #[error("Lock error: {0}")]
+    LockError(String),
 }
 
 impl ConfigChange {
