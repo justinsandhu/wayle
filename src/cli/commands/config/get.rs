@@ -6,7 +6,7 @@ use crate::{
         formatting::format_toml_value,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    config_store::ConfigStore,
+    config_store::{ConfigStore, ConfigError},
 };
 
 /// Command for retrieving configuration values from the config store.
@@ -46,19 +46,27 @@ impl Command for GetCommand {
     ///
     /// # Errors
     ///
-    /// * `CliError::InvalidArguments` - If no path argument is provided
-    /// * `CliError::ConfigError` - If the config store operation fails
+    /// * `CliError::MissingPath` - If no path argument is provided
+    /// * `CliError::ConfigPathNotFound` - If the configuration path doesn't exist
+    /// * `CliError::ConfigOperationFailed` - If the config store operation fails
     fn execute(&self, args: &[String]) -> CommandResult {
-        let path = args.first().ok_or_else(|| {
-            CliError::InvalidArguments("Expected <path> argument for 'get' command".to_string())
-        })?;
+        let path = args.first().ok_or(CliError::MissingPath)?;
 
         let value = self
             .config_store
             .get_by_path(path)
-            .map_err(|e| CliError::ConfigError(e.to_string()))?;
+            .map_err(|e| match e {
+                ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound {
+                    path: path.clone(),
+                },
+                _ => CliError::ConfigOperationFailed {
+                    operation: "get".to_string(),
+                    path: path.clone(),
+                    details: e.to_string(),
+                },
+            })?;
 
-        Ok(format!("{}: {}", path, format_toml_value(&value)))
+        Ok(format_toml_value(&value).to_string())
     }
 
     fn metadata(&self) -> CommandMetadata {

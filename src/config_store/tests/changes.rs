@@ -270,10 +270,16 @@ mod tests {
         let error = ConfigError::FieldRemoved("old.field".to_string());
         assert_eq!(error.to_string(), "Config field removed: old.field");
 
-        let error = ConfigError::PatternError("bad pattern".to_string());
-        assert_eq!(error.to_string(), "Path pattern error: bad pattern");
+        let error = ConfigError::PatternError {
+            pattern: "bad.pattern".to_string(),
+            reason: "invalid syntax".to_string(),
+        };
+        assert_eq!(error.to_string(), "invalid path pattern 'bad.pattern': invalid syntax");
 
-        let error = ConfigError::PersistenceError("disk full".to_string());
-        assert_eq!(error.to_string(), "Persistence error: disk full");
+        let error = ConfigError::PersistenceError {
+            path: std::path::PathBuf::from("/config/path"),
+            details: "disk full".to_string(),
+        };
+        assert_eq!(error.to_string(), "failed to persist config to '/config/path': disk full");
     }
 }

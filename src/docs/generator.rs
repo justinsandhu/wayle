@@ -43,7 +43,10 @@ impl DocsGenerator {
     /// Returns `DocsError::FileWrite` if direction creation failes.
     pub fn generate_all(&self) -> Result<(), DocsError> {
         fs::create_dir_all(&self.output_dir).map_err(|err| {
-            DocsError::FileWrite(format!("Failed to create output directory: {}", err))
+            DocsError::FileWriteError {
+                path: std::path::PathBuf::from(&self.output_dir),
+                details: format!("Failed to create output directory: {}", err),
+            }
         })?;
 
         let modules = ModuleRegistry::get_all();
@@ -63,7 +66,9 @@ impl DocsGenerator {
     /// Returns `DocsError::InvalidModuleName` if the module doesn't exist.
     pub fn generate_module_by_name(&self, module_name: &str) -> Result<(), DocsError> {
         let module = ModuleRegistry::get_module_by_name(module_name)
-            .ok_or_else(|| DocsError::InvalidModuleName(module_name.to_string()))?;
+            .ok_or_else(|| DocsError::ModuleNotFound {
+                name: module_name.to_string(),
+            })?;
 
         self.generate_single_module(&module)
     }
@@ -78,7 +83,10 @@ impl DocsGenerator {
         let filename = format!("{}.md", module.name);
         let filepath = Path::new(&self.output_dir).join(filename);
 
-        fs::write(&filepath, content).map_err(|err| DocsError::FileWrite(err.to_string()))?;
+        fs::write(&filepath, content).map_err(|err| DocsError::FileWriteError {
+            path: filepath.clone(),
+            details: err.to_string(),
+        })?;
 
         println!("Generated {}", filepath.display());
         Ok(())
@@ -88,12 +96,37 @@ impl DocsGenerator {
 /// Errors that can occur during documentation generation.
 #[derive(Error, Debug)]
 pub enum DocsError {
-    #[error("{0}")]
-    FileWrite(String),
+    /// Failed to write documentation file
+    #[error("failed to write documentation to '{path}': {details}")]
+    FileWriteError {
+        /// Path where write failed
+        path: std::path::PathBuf,
+        /// Write error details
+        details: String,
+    },
 
-    #[error("{0}")]
-    InvalidModuleName(String),
+    /// Invalid module name provided
+    #[error("invalid module name '{name}': {reason}")]
+    InvalidModuleName {
+        /// The invalid module name
+        name: String,
+        /// Reason why the name is invalid
+        reason: String,
+    },
 
-    #[error("{0}")]
-    SchemaConversion(String),
+    /// Schema conversion failed
+    #[error("failed to convert schema for '{module}': {details}")]
+    SchemaConversionError {
+        /// Module whose schema failed conversion
+        module: String,
+        /// Conversion error details
+        details: String,
+    },
+
+    /// Module not found in registry
+    #[error("module '{name}' not found in registry")]
+    ModuleNotFound {
+        /// The module name that wasn't found
+        name: String,
+    },
 }

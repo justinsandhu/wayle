@@ -90,7 +90,10 @@ impl ConfigStore {
     pub fn load() -> Result<Self, ConfigError> {
         let main_config = ConfigPaths::main_config();
         let config = Config::load_with_imports(&main_config)
-            .map_err(|e| ConfigError::PersistenceError(e.to_string()))?;
+            .map_err(|e| ConfigError::ProcessingError {
+                operation: "load config".to_string(),
+                details: e.to_string(),
+            })?;
         let (change_sender, _) = broadcast::channel(1000);
 
         let runtime_config = Self::load_runtime_config()?;
@@ -112,7 +115,7 @@ impl ConfigStore {
     /// * `ConfigError::InvalidPath` - If the path doesn't exist
     /// * `ConfigError::PersistenceError` - If the write lock cannot be acquired
     /// * `ConfigError::SerializationError` - If the config cannot be serialized
-    /// * `ConfigError::DeserializationError` - If the config cannot be deserialized
+    /// * `ConfigError::ConversionError` - If the config cannot be converted between formats
     pub fn set_by_path_with_source(
         &self,
         path: &str,
@@ -124,11 +127,9 @@ impl ConfigStore {
         if matches!(source, ChangeSource::Gui | ChangeSource::CliCommand(_)) {
             self.runtime_config
                 .write()
-                .map_err(|e| {
-                    ConfigError::LockError(format!(
-                        "Failed to acquire write lock for runtime_config: {}",
-                        e
-                    ))
+                .map_err(|e| ConfigError::LockError {
+                    lock_type: "write".to_string(),
+                    details: format!("Failed to acquire write lock for runtime_config: {}", e),
                 })?
                 .insert(path.to_string(), value.clone());
         }
@@ -137,7 +138,10 @@ impl ConfigStore {
             let mut config = self
                 .config
                 .write()
-                .map_err(|_| ConfigError::LockError("Failed to acquire write lock".into()))?;
+                .map_err(|_| ConfigError::LockError {
+                    lock_type: "write".to_string(),
+                    details: "Failed to acquire write lock".to_string(),
+                })?;
 
             self.set_config_field(&mut config, path, &value)?;
         }
@@ -162,7 +166,10 @@ impl ConfigStore {
         let config = self
             .config
             .read()
-            .map_err(|_| ConfigError::LockError("Failed to acquire read lock".into()))?;
+            .map_err(|_| ConfigError::LockError {
+                lock_type: "read".to_string(),
+                details: "Failed to acquire read lock".to_string(),
+            })?;
 
         Self::get_config_field(&config, path)
     }
@@ -218,20 +225,30 @@ impl ConfigStore {
         value: &Value,
     ) -> Result<(), ConfigError> {
         let mut config_value = Value::try_from(config.clone())
-            .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
+            .map_err(|e| ConfigError::SerializationError {
+                content_type: "config".to_string(),
+                details: e.to_string(),
+            })?;
 
         set_value_at_path(&mut config_value, path, value.clone())?;
 
         *config = config_value
             .try_into()
-            .map_err(|e| ConfigError::DeserializationError(e.to_string()))?;
+            .map_err(|e| ConfigError::ConversionError {
+                from: "toml::Value".to_string(),
+                to: "Config".to_string(),
+                details: e.to_string(),
+            })?;
 
         Ok(())
     }
 
     fn get_config_field(config: &Config, path: &str) -> Result<Value, ConfigError> {
         let config_value = Value::try_from(config.clone())
-            .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
+            .map_err(|e| ConfigError::SerializationError {
+                content_type: "config".to_string(),
+                details: e.to_string(),
+            })?;
 
         navigate_path(&config_value, path)
     }
@@ -244,7 +261,10 @@ impl ConfigStore {
         let runtime_config_map = self
             .runtime_config
             .read()
-            .map_err(|_| ConfigError::LockError("Failed to acquire read lock".into()))?;
+            .map_err(|_| ConfigError::LockError {
+                lock_type: "read".to_string(),
+                details: "Failed to acquire read lock".to_string(),
+            })?;
 
         let mut runtime_value = Value::Table(toml::Table::new());
 
@@ -256,29 +276,38 @@ impl ConfigStore {
         let temp_path = config_path.with_extension("tmp");
 
         let toml_str = toml::to_string_pretty(&runtime_value)
-            .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
+            .map_err(|e| ConfigError::SerializationError {
+                content_type: "config".to_string(),
+                details: e.to_string(),
+            })?;
 
         std::fs::write(&temp_path, toml_str)
-            .map_err(|e| ConfigError::PersistenceError(e.to_string()))?;
+            .map_err(|e| ConfigError::PersistenceError {
+                path: temp_path.clone(),
+                details: e.to_string(),
+            })?;
 
-        std::fs::rename(temp_path, config_path)
-            .map_err(|e| ConfigError::PersistenceError(e.to_string()))?;
+        std::fs::rename(temp_path, &config_path)
+            .map_err(|e| ConfigError::PersistenceError {
+                path: config_path.clone(),
+                details: e.to_string(),
+            })?;
 
         let main_path = ConfigPaths::main_config();
         let mut main_config_toml = fs::read_to_string(&main_path).map_err(|_| {
-            ConfigError::PersistenceError(format!(
-                "Failed to persist config. Main config file {} was not found.",
-                main_path.to_string_lossy()
-            ))
+            ConfigError::IoError {
+                path: main_path.clone(),
+                details: "Main config file not found during persist operation".to_string(),
+            }
         })?;
 
         if !main_config_toml.contains("\"@runtime\"") {
             main_config_toml = Self::ensure_runtime_import(&main_config_toml);
-            fs::write(main_path, main_config_toml).map_err(|e| {
-                ConfigError::PersistenceError(format!(
-                    "Failed to add runtime import to main config: {}",
-                    e
-                ))
+            fs::write(&main_path, main_config_toml).map_err(|e| {
+                ConfigError::PersistenceError {
+                    path: main_path.clone(),
+                    details: format!("Failed to add runtime import to main config: {}", e),
+                }
             })?;
         }
 
@@ -314,14 +343,16 @@ impl ConfigStore {
         let runtime_path = ConfigPaths::runtime_config();
         if runtime_path.exists() {
             let runtime_config = fs::read_to_string(&runtime_path)
-                .map_err(|e| ConfigError::IoError(format!("Failed to read runtime.toml: {e}")))?;
+                .map_err(|e| ConfigError::IoError {
+                    path: runtime_path.clone(),
+                    details: format!("Failed to read runtime.toml: {e}"),
+                })?;
 
             let runtime_toml: Value = toml::from_str(&runtime_config).map_err(|e| {
-                ConfigError::DeserializationError(format!(
-                    "Failed to parse {}: {}",
-                    runtime_path.to_string_lossy(),
-                    e
-                ))
+                ConfigError::TomlParseError {
+                    location: runtime_path.to_string_lossy().to_string(),
+                    details: e.to_string(),
+                }
             })?;
 
             let mut flat_map: HashMap<String, Value> = HashMap::new();

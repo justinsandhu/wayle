@@ -8,21 +8,56 @@ use thiserror::Error;
 /// configuration loading, parsing, and import operations.
 #[derive(Error, Debug)]
 pub enum WayleError {
-    /// Configuration validation error.
-    #[error("{0}")]
-    Config(String),
+    /// Configuration validation error
+    #[error("configuration validation failed for '{component}': {details}")]
+    ConfigValidation {
+        /// Component that failed validation
+        component: String,
+        /// Validation error details
+        details: String,
+    },
 
-    /// I/O operation error.
+    /// Configuration field missing or invalid
+    #[error("invalid config field '{field}' in {component}: {reason}")]
+    InvalidConfigField {
+        /// The field that is invalid
+        field: String,
+        /// Component containing the field
+        component: String,
+        /// Reason why the field is invalid
+        reason: String,
+    },
+
+    /// I/O operation error
+    #[error("I/O error on '{path}': {details}")]
+    IoError {
+        /// Path where I/O error occurred
+        path: std::path::PathBuf,
+        /// I/O error details
+        details: String,
+    },
+
+    /// Standard I/O operation error (for compatibility)
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    /// TOML parsing error.
-    #[error("{0}")]
-    TomlParse(String),
+    /// TOML parsing error with location context
+    #[error("failed to parse TOML at '{location}': {details}")]
+    TomlParseError {
+        /// Location of TOML being parsed (file path or "string")
+        location: String,
+        /// Parse error details
+        details: String,
+    },
 
-    /// Import operation error.
-    #[error("{0}")]
-    Import(String),
+    /// Import operation error with file context
+    #[error("failed to import '{path}': {details}")]
+    ImportError {
+        /// Path of file being imported
+        path: std::path::PathBuf,
+        /// Import error details
+        details: String,
+    },
 }
 
 /// A specialized `Result` type for Wayle operations.
@@ -39,16 +74,17 @@ impl WayleError {
     /// * `error` - The underlying parsing error
     /// * `path` - Optional path to the file that failed to parse
     pub fn toml_parse(error: impl std::fmt::Display, path: Option<&Path>) -> Self {
-        match path {
+        let location = match path {
             Some(p) => {
                 let clean_path = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-                WayleError::TomlParse(format!(
-                    "Failed to parse TOML at {}: {}",
-                    clean_path.to_string_lossy(),
-                    error
-                ))
+                clean_path.to_string_lossy().to_string()
             }
-            None => WayleError::TomlParse(format!("Failed to parse TOML: {}", error)),
+            None => "string".to_string(),
+        };
+
+        WayleError::TomlParseError {
+            location,
+            details: error.to_string(),
         }
     }
 
@@ -61,10 +97,9 @@ impl WayleError {
     pub fn import(error: impl std::fmt::Display, path: &Path) -> Self {
         let clean_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
-        WayleError::Import(format!(
-            "Failed to import file path: '{}'. Error: {}",
-            clean_path.to_string_lossy(),
-            error
-        ))
+        WayleError::ImportError {
+            path: clean_path,
+            details: error.to_string(),
+        }
     }
 }

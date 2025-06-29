@@ -5,7 +5,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    config_store::ConfigStore,
+    config_store::{ConfigError, ConfigStore},
 };
 
 pub struct SetCommand {
@@ -22,47 +22,58 @@ impl SetCommand {
         Self { config_store }
     }
 
-    fn parse_config_value(&self, value_str: &str) -> Result<toml::Value, CliError> {
+    fn parse_config_value(&self, value_str: &str) -> toml::Value {
         if let Ok(b) = value_str.parse::<bool>() {
-            return Ok(toml::Value::Boolean(b));
+            return toml::Value::Boolean(b);
         }
 
         if let Ok(i) = value_str.parse::<i64>() {
-            return Ok(toml::Value::Integer(i));
+            return toml::Value::Integer(i);
         }
 
         if let Ok(f) = value_str.parse::<f64>() {
-            return Ok(toml::Value::Float(f));
+            return toml::Value::Float(f);
         }
 
-        Ok(toml::Value::String(value_str.to_string()))
+        toml::Value::String(value_str.to_string())
     }
 }
 
 impl Command for SetCommand {
     fn execute(&self, args: &[String]) -> CommandResult {
-        let path = args.first().ok_or_else(|| {
-            CliError::InvalidArguments("Expected <path> argument for 'set' command".to_string())
-        })?;
+        let path = args.first().ok_or(CliError::MissingPath)?;
 
-        let value_str = args.get(1).ok_or_else(|| {
-            CliError::InvalidArguments("Expected <value> argument for 'set' command".to_string())
-        })?;
-        let value = self.parse_config_value(value_str)?;
+        let value_str = args.get(1).ok_or(CliError::MissingValue)?;
+
+        let value = self.parse_config_value(value_str);
         let cli_writer = self
             .config_store
             .cli_writer(format!("Set {}: {}", path, value_str));
 
-        match cli_writer.set(path, value) {
-            Ok(()) => Ok(format!("Set new value '{}' at path '{}'", value_str, path)),
-            Err(e) => Err(CliError::ConfigError(e.to_string())),
-        }
+        cli_writer.set(path, value).map_err(|e| match e {
+            ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound { path: path.clone() },
+            ConfigError::TypeMismatch {
+                path,
+                expected_type,
+                actual_value,
+            } => CliError::InvalidConfigValue {
+                path: path.clone(),
+                reason: format!("expected {}, got {:?}", expected_type, actual_value),
+            },
+            _ => CliError::ConfigOperationFailed {
+                operation: "set".to_string(),
+                path: path.clone(),
+                details: e.to_string(),
+            },
+        })?;
+
+        Ok(format!("Set new value '{}' at path '{}'", value_str, path))
     }
 
     fn metadata(&self) -> CommandMetadata {
         CommandMetadata {
             name: "set".to_string(),
-            description: "Set conifugration value".to_string(),
+            description: "Set configuration value".to_string(),
             category: "config".to_string(),
             args: vec![
                 CommandArg {

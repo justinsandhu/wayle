@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::config_store::ConfigStore;
 
-use super::{CliError, CommandRegistry, CommandResult};
+use super::{CliError, CommandRegistry, CommandResult, formatting::*};
 
 /// High-level service for managing and executing CLI commands.
 ///
@@ -41,7 +41,7 @@ impl CliService {
     ///
     /// # Errors
     /// Returns `CliError::CommandNotFound` if the command doesn't exist in the category.
-    /// Returns `CliError::ExecutionError` if the command fails during execution.
+    /// Other errors may be returned by the command's execute method.
     pub fn execute_command(&self, category: &str, command: &str, args: &[String]) -> CommandResult {
         if self.is_help_request(category, command, args) {
             return self.handle_help_request(category, command, args);
@@ -51,13 +51,20 @@ impl CliService {
     }
 
     fn is_help_request(&self, category: &str, command: &str, args: &[String]) -> bool {
-        category == "help" || command == "help" || args.first().map(|s| s.as_str()) == Some("help")
+        category == "help"
+            || command == "help"
+            || command.is_empty()
+            || args.first().map(|s| s.as_str()) == Some("help")
     }
 
     fn handle_help_request(&self, category: &str, command: &str, args: &[String]) -> CommandResult {
         match (category, command, args.first().map(|s| s.as_str())) {
             // wayle help (general only)
             ("help", "", None) => self.generate_general_help(),
+            // wayle <category> (no command specified)
+            (category_name, "", None) if category_name != "help" => {
+                self.generate_category_help(category_name)
+            }
             // wayle <category> help
             (category_name, "help", None) => self.generate_category_help(category_name),
             // wayle <category> <command> help
@@ -82,10 +89,18 @@ impl CliService {
 
     fn generate_general_help(&self) -> CommandResult {
         let categories = self.registry.get_categories();
-        let mut help = String::from(
-            "Wayle Desktop Shell CLI\n\nUSAGE:\n    wayle <CATEGORY> <COMMAND> [ARGS...]\n\nCATEGORIES:\n",
-        );
+        let mut help = String::new();
 
+        help.push_str(&format!("{}\n", format_header("Wayle Desktop Shell")));
+        help.push_str(&format!(
+            "{}\n\n",
+            format_description("A beautiful Wayland desktop shell and panel system")
+        ));
+
+        help.push_str(&format!("{}\n", format_subheader("USAGE")));
+        help.push_str("    wayle <CATEGORY> <COMMAND> [ARGS...]\n\n");
+
+        help.push_str(&format!("{}\n", format_subheader("CATEGORIES")));
         for category in categories {
             let commands = self
                 .registry
@@ -96,11 +111,21 @@ impl CliService {
             } else {
                 "No commands".to_string()
             };
-            help.push_str(&format!("    {:<12} {}\n", category, description));
+            help.push_str(&format!(
+                "    {:<16} {}\n",
+                format_category(&category),
+                format_description(&description)
+            ));
         }
 
-        help.push_str("\nUse 'wayle <category> help' for category-specific help.");
-        help.push_str("\nUse 'wayle <category> <command> help' for command-specific help.");
+        help.push_str(&format!(
+            "\n{}\n",
+            format_description("Use 'wayle <category>' for category-specific help")
+        ));
+        help.push_str(&format!(
+            "{}\n",
+            format_description("Use 'wayle <category> <command> help' for command-specific help")
+        ));
 
         Ok(help)
     }
@@ -109,22 +134,33 @@ impl CliService {
         let commands = self
             .registry
             .get_commands_in_category(category)
-            .ok_or_else(|| CliError::CommandNotFound(format!("Category: {}", category)))?;
+            .ok_or_else(|| CliError::CommandNotFound {
+                command: format!("{} (category)", category),
+            })?;
 
-        let mut help = format!("{} commands:\n\n", category.to_uppercase());
+        let mut help = String::new();
+
+        help.push_str(&format!(
+            "{}\n\n",
+            format_subheader(&format!("{} commands", category))
+        ));
 
         for command_name in commands {
             if let Some(metadata) = self.registry.get_command_metadata(category, &command_name) {
                 help.push_str(&format!(
-                    "    {:<12} {}\n",
-                    command_name, metadata.description
+                    "    {:<16} {}\n",
+                    format_command(&command_name),
+                    format_description(&metadata.description)
                 ));
             }
         }
 
         help.push_str(&format!(
-            "\nUse 'wayle {} <command> help' for command-specific help.",
-            category
+            "\n{}\n",
+            format_description(&format!(
+                "Use 'wayle {} <command> help' for detailed help",
+                category
+            ))
         ));
 
         Ok(help)
@@ -134,38 +170,62 @@ impl CliService {
         let metadata = self
             .registry
             .get_command_metadata(category, command)
-            .ok_or_else(|| CliError::CommandNotFound(format!("{} {}", category, command)))?;
+            .ok_or_else(|| CliError::CommandNotFound {
+                command: format!("{} {}", category, command),
+            })?;
 
-        let mut help = format!(
-            "{}\n\nUSAGE:\n    wayle {} {}",
-            metadata.description, category, command
-        );
+        let mut help = String::new();
+
+        help.push_str(&format!("{}\n", format_subheader("DESCRIPTION")));
+        help.push_str(&format!("    {}\n\n", metadata.description));
+
+        help.push_str(&format!("{}\n", format_subheader("USAGE")));
+        help.push_str(&format!(
+            "    {} {} {}",
+            format_header("wayle"),
+            format_category(category),
+            format_command(command)
+        ));
 
         for arg in &metadata.args {
             if arg.required {
-                help.push_str(&format!(" <{}>", arg.name.to_uppercase()));
+                help.push_str(&format!(
+                    " {}",
+                    format_usage(&format!("<{}>", arg.name.to_uppercase()))
+                ));
             } else {
-                help.push_str(&format!(" [{}]", arg.name.to_uppercase()));
+                help.push_str(&format!(
+                    " {}",
+                    format_description(&format!("[{}]", arg.name.to_uppercase()))
+                ));
             }
         }
-        help.push('\n');
+        help.push_str("\n\n");
 
         if !metadata.args.is_empty() {
-            help.push_str("\nARGUMENTS:\n");
+            help.push_str(&format!("{}\n", format_subheader("ARGUMENTS")));
             for arg in &metadata.args {
                 let arg_display = if arg.required {
                     format!("<{}>", arg.name.to_uppercase())
                 } else {
                     format!("[{}]", arg.name.to_uppercase())
                 };
-                help.push_str(&format!("    {:<12} {}\n", arg_display, arg.description));
+                let required_suffix = if arg.required { "" } else { " (optional)" };
+
+                help.push_str(&format!(
+                    "    {:<16} {}{}\n",
+                    format_usage(&arg_display),
+                    format_description(&arg.description),
+                    format_description(required_suffix)
+                ));
             }
+            help.push('\n');
         }
 
         if !metadata.examples.is_empty() {
-            help.push_str("\nEXAMPLES:\n");
+            help.push_str(&format!("{}\n", format_subheader("EXAMPLES")));
             for example in &metadata.examples {
-                help.push_str(&format!("    {}\n", example));
+                help.push_str(&format!("    {}\n", format_usage(example)));
             }
         }
 

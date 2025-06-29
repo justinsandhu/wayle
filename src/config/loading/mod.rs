@@ -48,7 +48,10 @@ impl Config {
         }
 
         let canonical_path = path.canonicalize().map_err(|e| {
-            WayleError::Config(format!("Failed to resolve path {}: {}", path.display(), e))
+            WayleError::IoError {
+                path: path.to_path_buf(),
+                details: format!("Failed to resolve path: {}", e),
+            }
         })?;
 
         let mut detector = CircularDetector::new();
@@ -97,7 +100,10 @@ impl Config {
         let merged_config = merge_toml_configs(imported_configs, main_config);
         merged_config
             .try_into()
-            .map_err(|e| WayleError::Config(format!("Configuration validation failed: {e}")))
+            .map_err(|e| WayleError::ConfigValidation {
+                component: "config parsing".to_string(),
+                details: format!("Configuration validation failed: {e}"),
+            })
     }
 
     fn load_all_imports(
@@ -164,8 +170,10 @@ impl Config {
 
     fn resolve_import_path(base_path: &Path, import_path: &str) -> Result<PathBuf> {
         let parent_dir = base_path.parent().ok_or_else(|| {
-            let error_msg = format!("Invalid base path: {base_path:?}");
-            WayleError::Import(error_msg)
+            WayleError::ImportError {
+                path: base_path.to_path_buf(),
+                details: "Invalid base path - no parent directory".to_string(),
+            }
         })?;
 
         let mut import_path_buf = PathBuf::from(import_path);

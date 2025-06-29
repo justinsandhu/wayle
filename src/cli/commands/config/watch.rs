@@ -23,9 +23,7 @@ impl WatchCommand {
 
 impl Command for WatchCommand {
     fn execute(&self, args: &[String]) -> CommandResult {
-        let path = args.first().ok_or_else(|| {
-            CliError::InvalidArguments("Expected <path> argument for 'watch' command".to_string())
-        })?;
+        let path = args.first().ok_or(CliError::MissingPath)?;
 
         println!("Watching changes on path '{}'...", path);
         println!("Press Ctrl+C to stop");
@@ -33,8 +31,9 @@ impl Command for WatchCommand {
         let config_store = self.config_store.clone();
         let path = path.to_string();
 
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| CliError::ServiceError(format!("Failed to create runtime: {}", e)))?;
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| CliError::RuntimeInitFailed {
+            details: e.to_string(),
+        })?;
 
         runtime.block_on(async move {
             let mut stream = config_store.subscribe_to_path(&path);

@@ -1,48 +1,87 @@
 use thiserror::Error;
 
 /// Errors that can occur during CLI command execution.
-///
-/// This enum represents all possible error conditions in the CLI system,
-/// from command discovery failures to execution errors. Each variant provides
-/// contextual information to help users understand what went wrong.
 #[derive(Error, Debug)]
 pub enum CliError {
-    /// A command or category was not found in the registry.
-    ///
-    /// This occurs when users specify a command that doesn't exist, either
-    /// because the category is invalid or the command name is wrong within
-    /// a valid category.
-    #[error("Command not found: {0}")]
-    CommandNotFound(String),
+    /// Command not found in registry
+    #[error("command '{}' not found", command)]
+    CommandNotFound {
+        /// The command that was not found
+        command: String,
+    },
 
-    /// Invalid arguments were provided to a command.
-    ///
-    /// This error is returned when argument validation fails, such as
-    /// missing required arguments, too many arguments, or arguments
-    /// that don't match the expected format.
-    #[error("Invalid arguments: {0}")]
-    InvalidArguments(String),
+    /// Missing required arguments
+    #[error("missing required argument(s): {}\nUsage: {}", missing, usage)]
+    MissingArguments {
+        /// Comma-separated list of missing arguments
+        missing: String,
+        /// Usage string showing correct syntax
+        usage: String,
+    },
 
-    /// An error occurred in the configuration system.
-    ///
-    /// This wraps errors from the reactive config store, such as
-    /// invalid paths, type mismatches, or file system issues.
-    #[error("Configuration error: {0}")]
-    ConfigError(String),
+    /// Too many arguments provided
+    #[error("too many arguments (expected {}, got {})", expected, actual)]
+    TooManyArguments {
+        /// Expected number of arguments
+        expected: usize,
+        /// Actual number provided
+        actual: usize,
+    },
 
-    /// A general service error occurred.
-    ///
-    /// This is used for errors that don't fit other categories,
-    /// such as missing dependencies or service unavailability.
-    #[error("Service error: {0}")]
-    ServiceError(String),
+    /// Missing path argument for config commands
+    #[error("missing required path argument")]
+    MissingPath,
 
-    /// An I/O operation failed.
-    ///
-    /// This automatically converts from `std::io::Error` for file
-    /// operations, network requests, or other I/O-related failures.
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
+    /// Missing value argument for set command
+    #[error("missing required value argument")]
+    MissingValue,
+
+    /// Invalid configuration value format
+    #[error("invalid value format for path '{path}': {reason}")]
+    InvalidConfigValue {
+        /// The configuration path being set
+        path: String,
+        /// Reason why the value is invalid
+        reason: String,
+    },
+
+    /// Configuration path not found
+    #[error("configuration path '{path}' not found")]
+    ConfigPathNotFound {
+        /// The path that was not found
+        path: String,
+    },
+
+    /// Configuration store operation failed
+    #[error("failed to {operation} config at '{path}': {details}")]
+    ConfigOperationFailed {
+        /// The operation that failed (get, set, watch)
+        operation: String,
+        /// The configuration path involved
+        path: String,
+        /// Additional error details
+        details: String,
+    },
+
+    /// Runtime initialization failed
+    #[error("failed to initialize runtime: {details}")]
+    RuntimeInitFailed {
+        /// Error details from runtime creation
+        details: String,
+    },
+
+    /// Service connection failed
+    #[error("failed to connect to {service}: {details}")]
+    ServiceConnectionFailed {
+        /// The service that failed to connect
+        service: String,
+        /// Connection failure details
+        details: String,
+    },
+
+    /// I/O operation failed
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 /// Type alias for command execution results.

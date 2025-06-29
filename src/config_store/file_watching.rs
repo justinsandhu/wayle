@@ -21,7 +21,9 @@ impl ConfigStore {
     /// cannot be accessed.
     pub async fn start_file_watching(&self) -> Result<(), ConfigError> {
         let (mut watcher, mut event_rx) = FileWatcher::new().map_err(|e| {
-            ConfigError::FileWatchError(format!("Failed to create file watcher: {}", e))
+            ConfigError::FileWatcherInitError {
+                details: format!("Failed to create file watcher: {}", e),
+            }
         })?;
 
         let files_to_watch = self.get_config_files().await?;
@@ -30,7 +32,9 @@ impl ConfigStore {
             .update_watched_files(files_to_watch)
             .await
             .map_err(|e| {
-                ConfigError::FileWatchError(format!("Failed to updated watched files: {}", e))
+                ConfigError::FileWatcherInitError {
+                    details: format!("Failed to update watched files: {}", e),
+                }
             })?;
 
         let store = self.clone();
@@ -67,7 +71,10 @@ impl ConfigStore {
 
     async fn get_config_files(&self) -> Result<Vec<PathBuf>, ConfigError> {
         let mut files = Config::get_all_config_files(&ConfigPaths::main_config())
-            .map_err(|e| ConfigError::IoError(format!("Failed to collect config files: {}", e)))?;
+            .map_err(|e| ConfigError::ProcessingError {
+                operation: "collect config files".to_string(),
+                details: e.to_string(),
+            })?;
 
         let runtime_path = ConfigPaths::runtime_config();
         if !files.contains(&runtime_path) {
@@ -80,11 +87,17 @@ impl ConfigStore {
     async fn reload_from_files(&self) -> Result<(), ConfigError> {
         let old_config = self.get_current();
         let new_config = Config::load_with_imports(&ConfigPaths::main_config())
-            .map_err(|e| ConfigError::IoError(format!("Failed to reload config: {}", e)))?;
+            .map_err(|e| ConfigError::ProcessingError {
+                operation: "reload config".to_string(),
+                details: e.to_string(),
+            })?;
 
         let changes = self
             .diff_configs(&old_config, &new_config)
-            .map_err(|e| ConfigError::ProcessingError(format!("Failed to diff configs: {}", e)))?;
+            .map_err(|e| ConfigError::ProcessingError {
+                operation: "diff configs".to_string(),
+                details: e.to_string(),
+            })?;
 
         for change in changes {
             self.broadcast_change(change);

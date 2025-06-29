@@ -97,13 +97,19 @@ impl CommandRegistry {
         command_name: &str,
         args: &[String],
     ) -> Result<String, CliError> {
-        let found_category = self.categories.get(category).ok_or_else(|| {
-            CliError::CommandNotFound(format!("Failed to find category '{category}'"))
-        })?;
+        let found_category =
+            self.categories
+                .get(category)
+                .ok_or_else(|| CliError::CommandNotFound {
+                    command: format!("{} (category)", category),
+                })?;
 
-        let found_command = found_category.get(command_name).ok_or_else(|| {
-            CliError::CommandNotFound(format!("Failed to find command '{command_name}'"))
-        })?;
+        let found_command =
+            found_category
+                .get(command_name)
+                .ok_or_else(|| CliError::CommandNotFound {
+                    command: format!("{} {}", category, command_name),
+                })?;
 
         Self::validate_args(&found_command.metadata(), args)?;
 
@@ -134,16 +140,44 @@ impl CommandRegistry {
         categories
     }
 
+    /// Returns all registered category names.
+    ///
+    /// Categories are returned in arbitrary order. Use this method to discover
+    /// available command categories for help generation or command discovery.
+    ///
+    /// # Returns
+    /// Vector of category names currently registered in the registry
     pub fn get_categories(&self) -> Vec<String> {
         self.categories.keys().cloned().collect()
     }
 
+    /// Returns all command names within a specific category.
+    ///
+    /// Use this method to list available commands for a category when generating
+    /// help text or implementing command discovery features.
+    ///
+    /// # Arguments
+    /// * `category` - The category to list commands for
+    ///
+    /// # Returns
+    /// Some(commands) if the category exists, None if category not found
     pub fn get_commands_in_category(&self, category: &str) -> Option<Vec<String>> {
         self.categories
             .get(category)
             .map(|commands| commands.keys().cloned().collect())
     }
 
+    /// Retrieves metadata for a specific command.
+    ///
+    /// Command metadata includes the command's description, arguments, and examples.
+    /// Use this for generating detailed help text for individual commands.
+    ///
+    /// # Arguments
+    /// * `category` - The category containing the command
+    /// * `command` - The command name to get metadata for
+    ///
+    /// # Returns
+    /// Some(metadata) if command exists, None if category or command not found
     pub fn get_command_metadata(&self, category: &str, command: &str) -> Option<CommandMetadata> {
         self.categories
             .get(category)?
@@ -156,19 +190,34 @@ impl CommandRegistry {
         let total_count = metadata.args.len();
 
         if args.len() < required_count {
-            return Err(CliError::InvalidArguments(format!(
-                "Expected at least {} arguments, got {}",
-                required_count,
-                args.len(),
-            )));
+            let missing_args: Vec<String> = metadata
+                .args
+                .iter()
+                .skip(args.len())
+                .filter(|arg| arg.required)
+                .map(|arg| format!("<{}>", arg.name.to_uppercase()))
+                .collect();
+
+            let mut usage = format!("wayle {} {}", metadata.category, metadata.name);
+            for arg in &metadata.args {
+                if arg.required {
+                    usage.push_str(&format!(" <{}>", arg.name.to_uppercase()));
+                } else {
+                    usage.push_str(&format!(" [{}]", arg.name.to_uppercase()));
+                }
+            }
+
+            return Err(CliError::MissingArguments {
+                missing: missing_args.join(", "),
+                usage,
+            });
         }
 
         if args.len() > total_count {
-            return Err(CliError::InvalidArguments(format!(
-                "Expected at most {} arguments, got {}",
-                total_count,
-                args.len(),
-            )));
+            return Err(CliError::TooManyArguments {
+                expected: total_count,
+                actual: args.len(),
+            });
         }
 
         Ok(())

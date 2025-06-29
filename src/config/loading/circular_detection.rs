@@ -34,11 +34,14 @@ impl CircularDetector {
                 .unwrap_or(path.as_os_str())
                 .to_string_lossy();
 
-            return Err(WayleError::Config(format!(
-                "Circular import detected: {} -> {}",
-                chain_display.join(" -> "),
-                current_file
-            )));
+            return Err(WayleError::ConfigValidation {
+                component: "import system".to_string(),
+                details: format!(
+                    "Circular import detected: {} -> {}",
+                    chain_display.join(" -> "),
+                    current_file
+                ),
+            });
         }
         Ok(())
     }

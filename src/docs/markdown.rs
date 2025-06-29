@@ -80,7 +80,10 @@ fn generate_sections(
 
     for (config_name, schema_fn) in configs {
         let schema_value = serde_json::to_value(schema_fn()).map_err(|e| {
-            DocsError::SchemaConversion(format!("Failed to generate section: {}", e))
+            DocsError::SchemaConversionError {
+                module: module_name.to_string(),
+                details: format!("Failed to generate section for '{}': {}", config_name, e),
+            }
         })?;
 
         let properties = extract_property_info(&schema_value);

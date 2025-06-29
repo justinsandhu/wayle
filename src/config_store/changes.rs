@@ -64,37 +64,95 @@ pub enum ConfigError {
     #[error("Config field removed: {0}")]
     FieldRemoved(String),
 
-    /// Error in path pattern matching or parsing.
-    #[error("Path pattern error: {0}")]
-    PatternError(String),
+    /// Error in path pattern matching or parsing
+    #[error("invalid path pattern '{pattern}': {reason}")]
+    PatternError {
+        /// The pattern that failed to parse
+        pattern: String,
+        /// Reason why the pattern is invalid
+        reason: String,
+    },
 
-    /// Error occurred while persisting configuration to disk.
-    #[error("Persistence error: {0}")]
-    PersistenceError(String),
+    /// Error occurred while persisting configuration to disk
+    #[error("failed to persist config to '{path}': {details}")]
+    PersistenceError {
+        /// Path where persistence failed
+        path: std::path::PathBuf,
+        /// Error details from the persistence operation
+        details: String,
+    },
 
-    /// Error occurred while serializing toml
-    #[error("Serialization error: {0}")]
-    SerializationError(String),
+    /// Error occurred while serializing configuration
+    #[error("failed to serialize {content_type}: {details}")]
+    SerializationError {
+        /// Type of content being serialized (e.g., "config", "module settings")
+        content_type: String,
+        /// Serialization error details
+        details: String,
+    },
 
-    /// Error occurred while deserializing toml
-    #[error("Deserialization error: {0}")]
-    DeserializationError(String),
+    /// Failed to parse TOML content
+    #[error("failed to parse TOML from {location}: {details}")]
+    TomlParseError {
+        /// Location of the TOML (file path, "string", etc.)
+        location: String,
+        /// Parse error details
+        details: String,
+    },
 
-    /// Error occurred while setting up or managing file watching.
-    #[error("File watch error: {0}")]
-    FileWatchError(String),
+    /// Failed to convert between config formats or types
+    #[error("failed to convert {from} to {to}: {details}")]
+    ConversionError {
+        /// Source format/type
+        from: String,
+        /// Target format/type
+        to: String,
+        /// Conversion error details
+        details: String,
+    },
 
-    /// Error occurred during configuration processing or analysis.
-    #[error("Processing error: {0}")]
-    ProcessingError(String),
+    /// Failed to initialize file watcher
+    #[error("failed to initialize file watcher: {details}")]
+    FileWatcherInitError {
+        /// File watcher initialization error details
+        details: String,
+    },
 
-    /// Error occurred during file I/O operations.
-    #[error("IO error: {0}")]
-    IoError(String),
+    /// Error occurred while watching a specific file
+    #[error("file watcher error for '{path}': {details}")]
+    FileWatchError {
+        /// Path being watched when error occurred
+        path: std::path::PathBuf,
+        /// File watcher error details
+        details: String,
+    },
 
-    /// Error occurred while acquiring locks for thread-safe access.
-    #[error("Lock error: {0}")]
-    LockError(String),
+    /// Error occurred during configuration processing or analysis
+    #[error("config processing failed for '{operation}': {details}")]
+    ProcessingError {
+        /// The operation that was being processed
+        operation: String,
+        /// Processing error details
+        details: String,
+    },
+
+    /// Error occurred during file I/O operations
+    #[error("I/O error on '{path}': {details}")]
+    IoError {
+        /// Path where I/O error occurred
+        path: std::path::PathBuf,
+        /// I/O error details
+        details: String,
+    },
+
+    /// Error occurred while acquiring locks for thread-safe access
+    #[error("failed to acquire {lock_type} lock: {details}")]
+    LockError {
+        /// Type of lock that failed (read, write)
+        lock_type: String,
+        /// Lock error details
+        details: String,
+    },
 }
 
 impl ConfigChange {
