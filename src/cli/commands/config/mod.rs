@@ -9,10 +9,7 @@ pub use get::GetCommand;
 pub use set::SetCommand;
 pub use watch::WatchCommand;
 
-use crate::{
-    cli::{CommandRegistry, commands::config},
-    config_store::ConfigStore,
-};
+use crate::{cli::CommandRegistry, config_store::ConfigStore};
 
 /// Registers all configuration-related commands with the command registry.
 ///
@@ -28,16 +25,16 @@ pub fn register_commands(registry: &mut CommandRegistry, config_store: Arc<Confi
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(config::GetCommand::new(config_store.clone())),
+        Box::new(GetCommand::new(config_store.clone())),
     );
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(config::SetCommand::new(config_store.clone())),
+        Box::new(SetCommand::new(config_store.clone())),
     );
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(config::WatchCommand::new(config_store.clone())),
+        Box::new(WatchCommand::new(config_store.clone())),
     );
 }

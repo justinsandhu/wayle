@@ -27,24 +27,30 @@ impl Command for WatchCommand {
             CliError::InvalidArguments("Expected <path> argument for 'watch' command".to_string())
         })?;
 
-        // let mut stream = self.config_store.subscribe_to_path(path);
+        println!("Watching changes on path '{}'...", path);
+        println!("Press Ctrl+C to stop");
 
-        print!("Watching changes on path '{}'...", path);
-        print!("Press Ctrl+C to stop");
+        let config_store = self.config_store.clone();
+        let path = path.to_string();
 
-        // tokio::spawn(async move {
-        //     while let Some(change) = stream.next().await {
-        //         println!(
-        //             "[{}s] {} -> {} (source: {:?})",
-        //             change.timestamp.elapsed().as_secs(),
-        //             change.path,
-        //             change.new_value.as_ref().map_or("(removed)".to_string(), format_toml_value),
-        //             change.source
-        //         );
-        //     }
-        // });
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| CliError::ServiceError(format!("Failed to create runtime: {}", e)))?;
 
-        Ok("Watch started (TODO: Implement async watching".to_string())
+        runtime.block_on(async move {
+            let mut stream = config_store.subscribe_to_path(&path);
+
+            while let Some(change) = stream.next().await {
+                println!(
+                    "[{}s] {} -> {} (source: {:?})",
+                    change.timestamp.elapsed().as_secs(),
+                    change.path,
+                    format_toml_value(&change.new_value),
+                    change.source
+                );
+            }
+        });
+
+        Ok("Watch ended".to_string())
     }
 
     fn metadata(&self) -> CommandMetadata {

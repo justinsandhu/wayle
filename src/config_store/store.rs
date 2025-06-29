@@ -5,7 +5,7 @@ use std::{
 };
 
 use futures::Stream;
-use tokio::sync::broadcast;
+use tokio::sync::broadcast::{self, error::RecvError};
 use toml::Value;
 
 use crate::config::{Config, ConfigPaths};
@@ -134,9 +134,10 @@ impl ConfigStore {
         }
 
         {
-            let mut config = self.config.write().map_err(|_| {
-                ConfigError::LockError("Failed to acquire write lock".into())
-            })?;
+            let mut config = self
+                .config
+                .write()
+                .map_err(|_| ConfigError::LockError("Failed to acquire write lock".into()))?;
 
             self.set_config_field(&mut config, path, &value)?;
         }
@@ -192,7 +193,14 @@ impl ConfigStore {
                                 return Some((change, receiver));
                             }
                         }
-                        Err(_) => return None,
+                        Err(RecvError::Lagged(e)) => eprintln!(
+                            "Warning: Config Watcher lagged for path '{}'. Skipped: {}",
+                            pattern, e
+                        ),
+                        Err(RecvError::Closed) => {
+                            eprintln!("Config Watcher closed for path '{}'.", pattern);
+                            return None;
+                        }
                     }
                 }
             }
@@ -305,9 +313,8 @@ impl ConfigStore {
     fn load_runtime_config() -> Result<HashMap<String, Value>, ConfigError> {
         let runtime_path = ConfigPaths::runtime_config();
         if runtime_path.exists() {
-            let runtime_config = fs::read_to_string(&runtime_path).map_err(|e| {
-                ConfigError::IoError(format!("Failed to read runtime.toml: {e}"))
-            })?;
+            let runtime_config = fs::read_to_string(&runtime_path)
+                .map_err(|e| ConfigError::IoError(format!("Failed to read runtime.toml: {e}")))?;
 
             let runtime_toml: Value = toml::from_str(&runtime_config).map_err(|e| {
                 ConfigError::DeserializationError(format!(

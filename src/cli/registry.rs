@@ -134,6 +134,23 @@ impl CommandRegistry {
         categories
     }
 
+    pub fn get_categories(&self) -> Vec<String> {
+        self.categories.keys().cloned().collect()
+    }
+
+    pub fn get_commands_in_category(&self, category: &str) -> Option<Vec<String>> {
+        self.categories
+            .get(category)
+            .map(|commands| commands.keys().cloned().collect())
+    }
+
+    pub fn get_command_metadata(&self, category: &str, command: &str) -> Option<CommandMetadata> {
+        self.categories
+            .get(category)?
+            .get(command)
+            .map(|cmd| cmd.metadata())
+    }
+
     fn validate_args(metadata: &CommandMetadata, args: &[String]) -> Result<(), CliError> {
         let required_count = metadata.args.iter().filter(|arg| arg.required).count();
         let total_count = metadata.args.len();
