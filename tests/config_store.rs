@@ -81,16 +81,15 @@ enabled = false
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer = store.cli_writer("test command".to_string());
-        let gui_writer = store.gui_writer();
+        let writer = store.writer();
 
-        cli_writer
+        writer
             .set(
                 "general.log_level",
                 toml::Value::String("debug".to_string()),
             )
             .unwrap();
-        gui_writer
+        writer
             .set("modules.battery.enabled", toml::Value::Boolean(true))
             .unwrap();
 
@@ -153,16 +152,15 @@ some_field = "value"
 
         {
             let store = ConfigStore::load().unwrap();
-            let cli_writer = store.cli_writer("set log_level".to_string());
-            let gui_writer = store.gui_writer();
+            let writer = store.writer();
 
-            cli_writer
+            writer
                 .set(
                     "general.log_level",
                     toml::Value::String("debug".to_string()),
                 )
                 .unwrap();
-            gui_writer
+            writer
                 .set("modules.battery.enabled", toml::Value::Boolean(true))
                 .unwrap();
 
@@ -214,8 +212,8 @@ log_level = "info"
             "info"
         );
 
-        let cli_writer = store.cli_writer("test".to_string());
-        cli_writer
+        let writer = store.writer();
+        writer
             .set(
                 "general.log_level",
                 toml::Value::String("debug".to_string()),
@@ -243,20 +241,18 @@ enabled = false
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer = store.cli_writer("test".to_string());
-        let gui_writer = store.gui_writer();
-        let system_writer = store.system_writer();
+        let writer = store.writer();
 
-        cli_writer
+        writer
             .set(
                 "general.log_level",
                 toml::Value::String("debug".to_string()),
             )
             .unwrap();
-        gui_writer
+        writer
             .set("modules.battery.enabled", toml::Value::Boolean(true))
             .unwrap();
-        system_writer
+        writer
             .set(
                 "general.log_level",
                 toml::Value::String("error".to_string()),
@@ -270,7 +266,7 @@ enabled = false
             let runtime_content = fs::read_to_string(runtime_path).unwrap();
             assert!(runtime_content.contains("debug"));
             assert!(runtime_content.contains("true"));
-            assert!(!runtime_content.contains("error"));
+            assert!(runtime_content.contains("error"));
         }
     }
 }
@@ -389,9 +385,9 @@ log_level = "info"
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer = store.cli_writer("set command".to_string());
+        let writer = store.writer();
 
-        cli_writer
+        writer
             .set(
                 "general.log_level",
                 toml::Value::String("debug".to_string()),
@@ -424,9 +420,9 @@ enabled = false
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer = store.cli_writer("set command".to_string());
+        let writer = store.writer();
 
-        cli_writer
+        writer
             .set("modules.battery.enabled", toml::Value::Boolean(true))
             .unwrap();
 
@@ -455,7 +451,7 @@ log_level = "info"
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer = store.cli_writer("set command".to_string());
+        let writer = store.writer();
 
         assert_eq!(
             store
@@ -466,7 +462,7 @@ log_level = "info"
             "info"
         );
 
-        cli_writer
+        writer
             .set(
                 "general.log_level",
                 toml::Value::String("debug".to_string()),
@@ -501,9 +497,7 @@ log_level = "info"
 
         let store = ConfigStore::load().unwrap();
 
-        let _gui_writer = store.gui_writer();
-        let _cli_writer = store.cli_writer("command".to_string());
-        let _system_writer = store.system_writer();
+        let _writer = store.writer();
     }
 
     #[test]
@@ -523,7 +517,7 @@ enabled = false
         );
 
         let store = ConfigStore::load().unwrap();
-        let writer = store.cli_writer("test command".to_string());
+        let writer = store.writer();
 
         writer
             .set("modules.battery.enabled", toml::Value::Boolean(true))
@@ -559,7 +553,7 @@ enabled = false
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer = store.cli_writer("test".to_string());
+        let writer = store.writer();
 
         assert_eq!(
             store
@@ -577,13 +571,13 @@ enabled = false
                 .unwrap()
         );
 
-        cli_writer
+        writer
             .set(
                 "general.log_level",
                 toml::Value::String("debug".to_string()),
             )
             .unwrap();
-        cli_writer
+        writer
             .set("modules.battery.enabled", toml::Value::Boolean(true))
             .unwrap();
 
@@ -794,9 +788,9 @@ log_level = "info"
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer = store.cli_writer("test".to_string());
+        let writer = store.writer();
 
-        let result = cli_writer.set(
+        let result = writer.set(
             "general.log_level.invalid_subfield",
             toml::Value::String("value".to_string()),
         );
@@ -817,15 +811,15 @@ log_level = "info"
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer = store.cli_writer("test unicode 🦀".to_string());
+        let writer = store.writer();
 
-        let result = cli_writer.set(
+        let result = writer.set(
             "general.log_level",
             toml::Value::String("debug".to_string()),
         );
         assert!(result.is_ok());
 
-        let result_invalid = cli_writer.set(
+        let result_invalid = writer.set(
             "general.log_level",
             toml::Value::String("测试 🦀 invalid".to_string()),
         );
@@ -873,14 +867,14 @@ log_level = "info"
         );
 
         let store = ConfigStore::load().unwrap();
-        let cli_writer1 = store.cli_writer("command1".to_string());
-        let cli_writer2 = store.cli_writer("command2".to_string());
+        let writer1 = store.writer();
+        let writer2 = store.writer();
 
-        let result1 = cli_writer1.set(
+        let result1 = writer1.set(
             "general.log_level",
             toml::Value::String("debug".to_string()),
         );
-        let result2 = cli_writer2.set(
+        let result2 = writer2.set(
             "general.log_level",
             toml::Value::String("error".to_string()),
         );
