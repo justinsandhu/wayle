@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use super::{ChangeSource, ConfigChange, ConfigError, path_ops::navigate_path};
+use super::{ConfigChange, ConfigError, path_ops::navigate_path};
 
 static DEFAULT_CONFIG: OnceLock<toml::Value> = OnceLock::new();
 
@@ -16,14 +16,12 @@ static DEFAULT_CONFIG: OnceLock<toml::Value> = OnceLock::new();
 /// # Arguments
 /// * `old` - The previous configuration state
 /// * `new` - The new configuration state to compare against
-/// * `source` - The source that triggered this configuration change
 ///
 /// # Errors
 /// Returns error if either configuration cannot be serialized to TOML format.
 pub fn diff_configs(
     old: &Config,
     new: &Config,
-    source: ChangeSource,
 ) -> Result<Vec<ConfigChange>, Box<dyn std::error::Error>> {
     let old_toml = toml::to_string(old)?;
     let new_toml = toml::to_string(new)?;
@@ -31,7 +29,7 @@ pub fn diff_configs(
     let old_value: toml::Value = toml::from_str(&old_toml)?;
     let new_value: toml::Value = toml::from_str(&new_toml)?;
 
-    let changes = diff_toml_values("", &old_value, &new_value, source, Instant::now());
+    let changes = diff_toml_values("", &old_value, &new_value, Instant::now());
 
     Ok(changes)
 }
@@ -40,7 +38,6 @@ fn diff_toml_values(
     path: &str,
     old: &toml::Value,
     new: &toml::Value,
-    source: ChangeSource,
     timestamp: Instant,
 ) -> Vec<ConfigChange> {
     use toml::Value;
@@ -66,13 +63,12 @@ fn diff_toml_values(
                             &field_path,
                             old_val,
                             new_val,
-                            source.clone(),
                             timestamp,
                         ));
                     }
                     (Some(old_val), None) => {
                         if let Some(change) =
-                            handle_value_removed(&field_path, old_val, source.clone(), timestamp)
+                            handle_value_removed(&field_path, old_val, timestamp)
                         {
                             changes.push(change);
                         }
@@ -81,7 +77,6 @@ fn diff_toml_values(
                         changes.push(handle_value_added(
                             &field_path,
                             new_val,
-                            source.clone(),
                             timestamp,
                         ));
                     }
@@ -96,7 +91,6 @@ fn diff_toml_values(
                     old_value: Some(old.clone()),
                     new_value: new.clone(),
                     timestamp,
-                    source,
                 });
             }
         }
@@ -121,16 +115,14 @@ fn handle_value_changed(
     path: &str,
     old_val: &toml::Value,
     new_val: &toml::Value,
-    source: ChangeSource,
     timestamp: Instant,
 ) -> Vec<ConfigChange> {
-    diff_toml_values(path, old_val, new_val, source, timestamp)
+    diff_toml_values(path, old_val, new_val, timestamp)
 }
 
 fn handle_value_removed(
     path: &str,
     old_val: &toml::Value,
-    source: ChangeSource,
     timestamp: Instant,
 ) -> Option<ConfigChange> {
     get_default_for_path(path)
@@ -140,14 +132,12 @@ fn handle_value_removed(
             old_value: Some(old_val.clone()),
             new_value: default_value,
             timestamp,
-            source,
         })
 }
 
 fn handle_value_added(
     path: &str,
     new_val: &toml::Value,
-    source: ChangeSource,
     timestamp: Instant,
 ) -> ConfigChange {
     ConfigChange {
@@ -155,6 +145,5 @@ fn handle_value_added(
         old_value: None,
         new_value: new_val.clone(),
         timestamp,
-        source,
     }
 }

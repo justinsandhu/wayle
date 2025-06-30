@@ -5,7 +5,7 @@ use toml::Value;
 /// Represents a configuration change with path-based identification.
 ///
 /// This struct captures all relevant information about a configuration change,
-/// including what changed, when it changed, and what triggered the change.
+/// including what changed and when it changed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfigChange {
     /// Path to the changed field using dot notation (e.g., "modules.clock.general.format").
@@ -16,31 +16,8 @@ pub struct ConfigChange {
     pub new_value: Value,
     /// Timestamp when the change occurred.
     pub timestamp: Instant,
-    /// What triggered this configuration change.
-    pub source: ChangeSource,
 }
 
-/// Identifies what triggered a configuration change.
-///
-/// This enum helps with debugging and conditional logic by tracking
-/// the origin of each configuration change.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ChangeSource {
-    /// Change made through the GUI settings window.
-    Gui,
-    /// Configuration file was edited externally (e.g., text editor).
-    FileEdit,
-    /// Configuration file was reloaded (e.g., on startup or manual reload).
-    FileReload,
-    /// A preset configuration was loaded.
-    PresetLoad(String),
-    /// Change made through CLI command.
-    CliCommand(String),
-    /// Change made by wayle itself.
-    System,
-    /// Change made through IPC (D-Bus or other inter-process communication).
-    Ipc,
-}
 
 /// Errors that can occur during configuration operations.
 #[derive(Debug, thiserror::Error)]
@@ -163,19 +140,16 @@ impl ConfigChange {
     /// * `path` - The dot-separated path to the configuration field
     /// * `old_value` - The previous value of the field (if known)
     /// * `new_value` - The new value of the field
-    /// * `source` - What triggered this change
     pub fn new(
         path: String,
         old_value: Option<Value>,
         new_value: Value,
-        source: ChangeSource,
     ) -> Self {
         Self {
             path,
             old_value,
             new_value,
             timestamp: Instant::now(),
-            source,
         }
     }
 
