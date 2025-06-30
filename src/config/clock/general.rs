@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 
 /// Core clock functionality settings.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
 pub struct ClockGeneralConfig {
     /// Time format string using strftime syntax.
-    #[serde(default)]
     pub format: String,
 }
 

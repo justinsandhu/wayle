@@ -6,13 +6,12 @@ use serde::{Deserialize, Serialize};
 /// Controls the visual appearance of the clock in both the status bar
 /// and dropdown views, including colors, fonts, and icons.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(default)]
 pub struct ClockStyling {
     /// Styling options for the clock button in the bar.
-    #[serde(default)]
     pub button: ClockButtonStyling,
 
     /// Styling options for the clock dropdown panel.
-    #[serde(default)]
     pub dropdown: ClockDropdownStyling,
 }
 
@@ -21,9 +20,9 @@ pub struct ClockStyling {
 /// Defines visual properties specific to how the clock appears when
 /// displayed as a button in the main status bar.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
 pub struct ClockButtonStyling {
     /// CSS color of the clock icon in the bar button.
-    #[serde(default)]
     pub icon: String,
 }
 
@@ -40,9 +39,9 @@ impl Default for ClockButtonStyling {
 /// Controls the visual appearance of the clock when displayed in the
 /// dropdown panel, including calendar and time display styling.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
 pub struct ClockDropdownStyling {
     /// CSS color of the clock display in the dropdown panel.
-    #[serde(default)]
     pub clock: String,
 }
 
