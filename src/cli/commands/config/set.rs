@@ -46,11 +46,9 @@ impl Command for SetCommand {
         let value_str = args.get(1).ok_or(CliError::MissingValue)?;
 
         let value = self.parse_config_value(value_str);
-        let cli_writer = self
-            .config_store
-            .cli_writer(format!("Set {}: {}", path, value_str));
+        let writer = self.config_store.writer();
 
-        cli_writer.set(path, value).map_err(|e| match e {
+        writer.set(path, value).map_err(|e| match e {
             ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound { path: path.clone() },
             ConfigError::TypeMismatch {
                 path,

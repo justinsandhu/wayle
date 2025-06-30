@@ -30,24 +30,34 @@ impl Command for WatchCommand {
 
         let config_store = self.config_store.clone();
         let path = path.to_string();
+        let path_for_error = path.clone();
 
         let runtime = tokio::runtime::Runtime::new().map_err(|e| CliError::RuntimeInitFailed {
             details: e.to_string(),
         })?;
 
-        runtime.block_on(async move {
-            let mut stream = config_store.subscribe_to_path(&path);
+        runtime
+            .block_on(async move {
+                config_store.start_file_watching().await?;
 
-            while let Some(change) = stream.next().await {
-                println!(
-                    "[{}s] {} -> {} (source: {:?})",
-                    change.timestamp.elapsed().as_secs(),
-                    change.path,
-                    format_toml_value(&change.new_value),
-                    change.source
-                );
-            }
-        });
+                let mut stream = config_store.subscribe_to_path(&path);
+
+                while let Some(change) = stream.next().await {
+                    println!(
+                        "[{}s] {} -> {}",
+                        change.timestamp.elapsed().as_secs(),
+                        change.path,
+                        format_toml_value(&change.new_value)
+                    );
+                }
+
+                Ok::<(), crate::config_store::ConfigError>(())
+            })
+            .map_err(|e| CliError::ConfigOperationFailed {
+                operation: "start file watching".to_string(),
+                path: path_for_error,
+                details: e.to_string(),
+            })?;
 
         Ok("Watch ended".to_string())
     }
