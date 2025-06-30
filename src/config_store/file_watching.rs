@@ -1,12 +1,14 @@
+use super::{ConfigChange, ConfigError, ConfigStore, diff};
 use crate::config::{Config, ConfigPaths};
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
 
-use super::{
-    ChangeSource, ConfigChange, ConfigError, ConfigStore, diff, file_watcher::FileWatcher,
+use notify::{
+    EventKind, RecursiveMode, Watcher,
+    event::{AccessKind, AccessMode},
+    recommended_watcher,
+};
+use std::{
+    sync::mpsc,
+    time::{Duration, Instant},
 };
 
 impl ConfigStore {
@@ -20,47 +22,67 @@ impl ConfigStore {
     /// Returns error if file watching cannot be initialized or configuration files
     /// cannot be accessed.
     pub async fn start_file_watching(&self) -> Result<(), ConfigError> {
-        let (mut watcher, mut event_rx) = FileWatcher::new().map_err(|e| {
-            ConfigError::FileWatcherInitError {
-                details: format!("Failed to create file watcher: {}", e),
+        let (std_tx, std_rx) = mpsc::channel();
+        let (tokio_tx, mut tokio_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let mut watcher = recommended_watcher(move |res| {
+            if let Ok(event) = res {
+                let _ = std_tx.send(event);
             }
+        })
+        .map_err(|e| ConfigError::FileWatcherInitError {
+            details: format!("Failed to create watcher: {}", e),
         })?;
 
-        let files_to_watch = self.get_config_files().await?;
+        let bridge_tx = tokio_tx.clone();
+        std::thread::spawn(move || {
+            while let Ok(event) = std_rx.recv() {
+                if bridge_tx.send(event).is_err() {
+                    break;
+                }
+            }
+        });
+
+        let config_dir =
+            ConfigPaths::config_dir().map_err(|e| ConfigError::FileWatcherInitError {
+                details: format!("Failed to get config directory: {}", e),
+            })?;
 
         watcher
-            .update_watched_files(files_to_watch)
-            .await
-            .map_err(|e| {
-                ConfigError::FileWatcherInitError {
-                    details: format!("Failed to update watched files: {}", e),
-                }
+            .watch(&config_dir, RecursiveMode::NonRecursive)
+            .map_err(|e| ConfigError::FileWatcherInitError {
+                details: format!("Failed to watch config directory: {}", e),
             })?;
 
         let store = self.clone();
 
         tokio::spawn(async move {
-            let mut pending_reloads: HashMap<PathBuf, Instant> = HashMap::new();
-
-            let debounce_duration = Duration::from_millis(500);
-            let debounce_sleep = tokio::time::sleep(debounce_duration);
-
-            tokio::pin!(debounce_sleep);
+            let _watcher = watcher;
+            let mut pending_changes = false;
+            let mut last_change = Instant::now();
+            let debounce_duration = Duration::from_millis(100);
 
             loop {
                 tokio::select! {
-                    Some(event) = event_rx.recv() => {
-                        pending_reloads.insert(event.path.clone(), Instant::now());
+                    event = tokio_rx.recv() => {
+                        let Some(event) = event else { break };
 
-                        debounce_sleep.as_mut().reset(tokio::time::Instant::now() + debounce_duration);
+                        if is_relevant_event(&event) {
+                            pending_changes = true;
+                            last_change = Instant::now();
+                        }
                     }
 
-                    _ = &mut debounce_sleep, if !pending_reloads.is_empty() => {
+                    _ = tokio::time::sleep(debounce_duration), if pending_changes => {
+                        if last_change.elapsed() < debounce_duration {
+                            continue;
+                        }
+
                         if let Err(e) = store.reload_from_files().await {
                             eprintln!("Failed to reload config: {}", e);
                         }
 
-                        pending_reloads.clear();
+                        pending_changes = false;
                     }
                 }
             }
@@ -69,38 +91,26 @@ impl ConfigStore {
         Ok(())
     }
 
-    async fn get_config_files(&self) -> Result<Vec<PathBuf>, ConfigError> {
-        let mut files = Config::get_all_config_files(&ConfigPaths::main_config())
-            .map_err(|e| ConfigError::ProcessingError {
-                operation: "collect config files".to_string(),
-                details: e.to_string(),
-            })?;
-
-        let runtime_path = ConfigPaths::runtime_config();
-        if !files.contains(&runtime_path) {
-            files.push(runtime_path);
-        }
-
-        Ok(files)
-    }
-
     async fn reload_from_files(&self) -> Result<(), ConfigError> {
         let old_config = self.get_current();
-        let new_config = Config::load_with_imports(&ConfigPaths::main_config())
-            .map_err(|e| ConfigError::ProcessingError {
+        let new_config = Config::load_with_imports(&ConfigPaths::main_config()).map_err(|e| {
+            ConfigError::ProcessingError {
                 operation: "reload config".to_string(),
                 details: e.to_string(),
-            })?;
+            }
+        })?;
 
-        let changes = self
-            .diff_configs(&old_config, &new_config)
-            .map_err(|e| ConfigError::ProcessingError {
+        let changes = self.diff_configs(&old_config, &new_config).map_err(|e| {
+            ConfigError::ProcessingError {
                 operation: "diff configs".to_string(),
                 details: e.to_string(),
-            })?;
+            }
+        })?;
 
-        for change in changes {
-            self.broadcast_change(change);
+        self.update_config(new_config)?;
+
+        for change in &changes {
+            self.broadcast_change(change.clone());
         }
 
         Ok(())
@@ -111,6 +121,24 @@ impl ConfigStore {
         old: &Config,
         new: &Config,
     ) -> Result<Vec<ConfigChange>, Box<dyn std::error::Error>> {
-        diff::diff_configs(old, new, ChangeSource::FileEdit)
+        diff::diff_configs(old, new)
     }
+}
+
+/// Checks if a file system event is relevant for config reloading.
+fn is_relevant_event(event: &notify::Event) -> bool {
+    let is_write_event = matches!(
+        event.kind,
+        EventKind::Modify(_)
+            | EventKind::Create(_)
+            | EventKind::Remove(_)
+            | EventKind::Access(AccessKind::Close(AccessMode::Write))
+    );
+
+    is_write_event
+        && event.paths.iter().any(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|name| name.ends_with(".toml"))
+        })
 }

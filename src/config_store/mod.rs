@@ -5,7 +5,6 @@
 
 mod changes;
 mod diff;
-mod file_watcher;
 mod file_watching;
 mod path_ops;
 mod store;

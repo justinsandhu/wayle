@@ -226,12 +226,3 @@ pub(super) fn insert_value(
         ))),
     }
 }
-
-/// Helper function to extract value at JSON pointer path
-pub(super) fn extract_value_at_path(
-    value: &serde_json::Value,
-    path: &str,
-) -> Option<serde_json::Value> {
-    let pointer = path.trim_start_matches('/');
-    value.pointer(pointer).cloned()
-}
