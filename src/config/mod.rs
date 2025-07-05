@@ -12,6 +12,9 @@ mod modules;
 mod paths;
 mod styling;
 
+#[cfg(test)]
+mod tests;
+
 pub use clock::ClockConfig;
 pub use paths::ConfigPaths;
 pub use styling::*;

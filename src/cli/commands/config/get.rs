@@ -6,7 +6,7 @@ use crate::{
         formatting::format_toml_value,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    config_store::{ConfigStore, ConfigError},
+    config_store::{ConfigError, ConfigStore},
 };
 
 /// Command for retrieving configuration values from the config store.
@@ -52,19 +52,14 @@ impl Command for GetCommand {
     fn execute(&self, args: &[String]) -> CommandResult {
         let path = args.first().ok_or(CliError::MissingPath)?;
 
-        let value = self
-            .config_store
-            .get_by_path(path)
-            .map_err(|e| match e {
-                ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound {
-                    path: path.clone(),
-                },
-                _ => CliError::ConfigOperationFailed {
-                    operation: "get".to_string(),
-                    path: path.clone(),
-                    details: e.to_string(),
-                },
-            })?;
+        let value = self.config_store.get_by_path(path).map_err(|e| match e {
+            ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound { path: path.clone() },
+            _ => CliError::ConfigOperationFailed {
+                operation: "get".to_string(),
+                path: path.clone(),
+                details: e.to_string(),
+            },
+        })?;
 
         Ok(format_toml_value(&value).to_string())
     }

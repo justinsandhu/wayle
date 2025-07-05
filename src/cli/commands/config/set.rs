@@ -46,24 +46,25 @@ impl Command for SetCommand {
         let value_str = args.get(1).ok_or(CliError::MissingValue)?;
 
         let value = self.parse_config_value(value_str);
-        let writer = self.config_store.writer();
 
-        writer.set(path, value).map_err(|e| match e {
-            ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound { path: path.clone() },
-            ConfigError::TypeMismatch {
-                path,
-                expected_type,
-                actual_value,
-            } => CliError::InvalidConfigValue {
-                path: path.clone(),
-                reason: format!("expected {}, got {:?}", expected_type, actual_value),
-            },
-            _ => CliError::ConfigOperationFailed {
-                operation: "set".to_string(),
-                path: path.clone(),
-                details: e.to_string(),
-            },
-        })?;
+        self.config_store
+            .set_by_path(path, value)
+            .map_err(|e| match e {
+                ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound { path: path.clone() },
+                ConfigError::TypeMismatch {
+                    path,
+                    expected_type,
+                    actual_value,
+                } => CliError::InvalidConfigValue {
+                    path: path.clone(),
+                    reason: format!("expected {}, got {:?}", expected_type, actual_value),
+                },
+                _ => CliError::ConfigOperationFailed {
+                    operation: "set".to_string(),
+                    path: path.clone(),
+                    details: e.to_string(),
+                },
+            })?;
 
         Ok(format!("Set new value '{}' at path '{}'", value_str, path))
     }

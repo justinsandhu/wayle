@@ -18,7 +18,6 @@ pub struct ConfigChange {
     pub timestamp: Instant,
 }
 
-
 /// Errors that can occur during configuration operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -130,6 +129,15 @@ pub enum ConfigError {
         /// Lock error details
         details: String,
     },
+
+    /// A required service is unavailable
+    #[error("{service} service unavailable: {details}")]
+    ServiceUnavailable {
+        /// Name of the service that is unavailable
+        service: String,
+        /// Details about why the service is unavailable
+        details: String,
+    },
 }
 
 impl ConfigChange {
@@ -140,11 +148,7 @@ impl ConfigChange {
     /// * `path` - The dot-separated path to the configuration field
     /// * `old_value` - The previous value of the field (if known)
     /// * `new_value` - The new value of the field
-    pub fn new(
-        path: String,
-        old_value: Option<Value>,
-        new_value: Value,
-    ) -> Self {
+    pub fn new(path: String, old_value: Option<Value>, new_value: Value) -> Self {
         Self {
             path,
             old_value,

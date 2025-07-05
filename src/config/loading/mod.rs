@@ -37,21 +37,22 @@ impl Config {
     /// # Example
     ///
     /// ```rust
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use wayle::config::Config;
     /// use std::path::Path;
     ///
     /// let config = Config::load_with_imports(Path::new("config.toml"))?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn load_with_imports(path: &Path) -> Result<Config> {
         if !path.exists() {
             create_default_config_file(path)?;
         }
 
-        let canonical_path = path.canonicalize().map_err(|e| {
-            WayleError::IoError {
-                path: path.to_path_buf(),
-                details: format!("Failed to resolve path: {}", e),
-            }
+        let canonical_path = path.canonicalize().map_err(|e| WayleError::IoError {
+            path: path.to_path_buf(),
+            details: format!("Failed to resolve path: {}", e),
         })?;
 
         let mut detector = CircularDetector::new();
@@ -169,11 +170,9 @@ impl Config {
     }
 
     fn resolve_import_path(base_path: &Path, import_path: &str) -> Result<PathBuf> {
-        let parent_dir = base_path.parent().ok_or_else(|| {
-            WayleError::ImportError {
-                path: base_path.to_path_buf(),
-                details: "Invalid base path - no parent directory".to_string(),
-            }
+        let parent_dir = base_path.parent().ok_or_else(|| WayleError::ImportError {
+            path: base_path.to_path_buf(),
+            details: "Invalid base path - no parent directory".to_string(),
         })?;
 
         let mut import_path_buf = PathBuf::from(import_path);

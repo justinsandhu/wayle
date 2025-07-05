@@ -55,6 +55,4 @@ impl CircularDetector {
     pub fn pop_from_chain(&mut self) {
         self.import_chain.pop();
     }
-
 }
-

@@ -11,13 +11,14 @@
 //! # Quick Start
 //!
 //! ```rust
-//! use wayle::{Result, WayleError};
-//! 
-//! // Load configuration
-//! let config_store = wayle::config_store::ConfigStore::load()?;
-//! 
-//! // Access configuration values
-//! let theme = config_store.get_by_path("general.theme")?;
+//! use wayle::config_store::ConfigStore;
+//!
+//! // Create configuration store with defaults
+//! let config_store = ConfigStore::with_defaults();
+//!
+//! // Access configuration values  
+//! let config = config_store.get_current();
+//! println!("Config loaded: {:?}", config.general);
 //! ```
 
 /// Configuration schema definitions and validation.

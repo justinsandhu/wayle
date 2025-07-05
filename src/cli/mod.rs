@@ -10,6 +10,9 @@ mod registry;
 mod service;
 mod types;
 
+#[cfg(test)]
+mod tests;
+
 pub use commands::config::GetCommand;
 pub use registry::CommandRegistry;
 pub use service::CliService;

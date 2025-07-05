@@ -42,11 +42,9 @@ impl DocsGenerator {
     ///
     /// Returns `DocsError::FileWrite` if direction creation failes.
     pub fn generate_all(&self) -> Result<(), DocsError> {
-        fs::create_dir_all(&self.output_dir).map_err(|err| {
-            DocsError::FileWriteError {
-                path: std::path::PathBuf::from(&self.output_dir),
-                details: format!("Failed to create output directory: {}", err),
-            }
+        fs::create_dir_all(&self.output_dir).map_err(|err| DocsError::FileWriteError {
+            path: std::path::PathBuf::from(&self.output_dir),
+            details: format!("Failed to create output directory: {}", err),
         })?;
 
         let modules = ModuleRegistry::get_all();
@@ -65,10 +63,11 @@ impl DocsGenerator {
     ///
     /// Returns `DocsError::InvalidModuleName` if the module doesn't exist.
     pub fn generate_module_by_name(&self, module_name: &str) -> Result<(), DocsError> {
-        let module = ModuleRegistry::get_module_by_name(module_name)
-            .ok_or_else(|| DocsError::ModuleNotFound {
+        let module = ModuleRegistry::get_module_by_name(module_name).ok_or_else(|| {
+            DocsError::ModuleNotFound {
                 name: module_name.to_string(),
-            })?;
+            }
+        })?;
 
         self.generate_single_module(&module)
     }

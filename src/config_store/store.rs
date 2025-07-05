@@ -4,15 +4,14 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use futures::Stream;
-use tokio::sync::broadcast::{self, error::RecvError};
 use toml::Value;
 
 use crate::config::{Config, ConfigPaths};
 
 use super::{
-    ConfigChange, ConfigError,
-    path_ops::{navigate_path, path_matches, set_value_at_path},
+    ConfigChange, ConfigError, Subscription,
+    broadcast::BroadcastService,
+    path_ops::{navigate_path, set_value_at_path},
 };
 
 /// Thread-safe configuration store with reactive change notifications.
@@ -22,34 +21,20 @@ use super::{
 #[derive(Clone)]
 pub struct ConfigStore {
     config: Arc<RwLock<Config>>,
-    change_sender: broadcast::Sender<ConfigChange>,
+    broadcast_service: BroadcastService,
     runtime_config: Arc<RwLock<HashMap<String, Value>>>,
 }
 
-#[derive(Clone)]
-pub struct ConfigWriter {
-    store: ConfigStore,
-}
-
 impl ConfigStore {
-    /// Creates a configuration writer for making changes.
-    ///
-    /// Returns a `ConfigWriter` that can be used to modify configuration values.
-    pub fn writer(&self) -> ConfigWriter {
-        ConfigWriter {
-            store: self.clone(),
-        }
-    }
-
     /// Creates a new ConfigStore with default configuration values.
     pub fn with_defaults() -> Self {
         let config = Config::default();
-        let (change_sender, _) = broadcast::channel(1000);
+        let broadcast_service = BroadcastService::new();
 
         Self {
             config: Arc::new(RwLock::new(config)),
             runtime_config: Arc::new(RwLock::new(HashMap::new())),
-            change_sender,
+            broadcast_service,
         }
     }
 
@@ -57,7 +42,7 @@ impl ConfigStore {
     ///
     /// # Errors
     ///
-    /// Returns `ConfigError::PersistenceError` if the configuration file cannot be loaded.
+    /// Returns `ConfigError::ProcessingError` if the configuration file cannot be loaded.
     pub fn load() -> Result<Self, ConfigError> {
         let main_config = ConfigPaths::main_config();
         let config =
@@ -65,14 +50,14 @@ impl ConfigStore {
                 operation: "load config".to_string(),
                 details: e.to_string(),
             })?;
-        let (change_sender, _) = broadcast::channel(1000);
+        let broadcast_service = BroadcastService::new();
 
         let runtime_config = Self::load_runtime_config()?;
 
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
             runtime_config: Arc::new(RwLock::new(runtime_config)),
-            change_sender,
+            broadcast_service,
         })
     }
 
@@ -84,9 +69,10 @@ impl ConfigStore {
     ///
     /// # Errors
     /// * `ConfigError::InvalidPath` - If the path doesn't exist
-    /// * `ConfigError::PersistenceError` - If the write lock cannot be acquired
+    /// * `ConfigError::LockError` - If the write lock cannot be acquired
     /// * `ConfigError::SerializationError` - If the config cannot be serialized
     /// * `ConfigError::ConversionError` - If the config cannot be converted between formats
+    /// * `ConfigError::PersistenceError` - If the config cannot be saved to disk
     pub fn set_by_path(&self, path: &str, value: Value) -> Result<(), ConfigError> {
         let old_value = self.get_by_path(path).ok();
 
@@ -111,7 +97,7 @@ impl ConfigStore {
 
         let change = ConfigChange::new(path.to_string(), old_value, value);
 
-        let _ = self.change_sender.send(change);
+        self.broadcast_change(change);
         Ok(())
     }
 
@@ -122,7 +108,9 @@ impl ConfigStore {
     ///
     /// # Errors
     /// * `ConfigError::InvalidPath` - If the path doesn't exist
-    /// * `ConfigError::PersistenceError` - If the read lock cannot be acquired
+    /// * `ConfigError::LockError` - If the read lock cannot be acquired
+    /// * `ConfigError::SerializationError` - If the config cannot be serialized
+    /// * `ConfigError::ConversionError` - If the config cannot be converted to TOML Value
     pub fn get_by_path(&self, path: &str) -> Result<Value, ConfigError> {
         let config = self.config.read().map_err(|_| ConfigError::LockError {
             lock_type: "read".to_string(),
@@ -140,40 +128,88 @@ impl ConfigStore {
         }
     }
 
-    /// Creates a stream that yields ConfigChange events matching the specified path pattern
+    /// Subscribe to configuration changes matching the specified path pattern.
+    ///
+    /// Returns a receiver that will receive only changes matching the pattern.
+    /// Events are filtered at the source for efficiency with many subscribers.
     ///
     /// # Arguments
     /// * `pattern` - A pattern to match configuration paths (supports "*" wildcards)
-    pub fn subscribe_to_path(&self, pattern: &str) -> impl Stream<Item = ConfigChange> + Unpin {
-        let pattern = pattern.to_string();
-        let receiver = self.change_sender.subscribe();
+    ///
+    /// # Errors
+    /// Returns `ConfigError::ServiceUnavailable` if the broadcast service is unavailable.
+    pub fn subscribe_to_path(&self, pattern: &str) -> Result<Subscription, ConfigError> {
+        self.broadcast_service.subscribe(pattern)
+    }
 
-        Box::pin(futures::stream::unfold(receiver, move |mut receiver| {
-            let pattern = pattern.clone();
-            async move {
-                loop {
-                    match receiver.recv().await {
-                        Ok(change) => {
-                            if path_matches(&change.path, &pattern) {
-                                return Some((change, receiver));
-                            }
-                        }
-                        Err(RecvError::Lagged(e)) => eprintln!(
-                            "Warning: Config Watcher lagged for path '{}'. Skipped: {}",
-                            pattern, e
-                        ),
-                        Err(RecvError::Closed) => {
-                            eprintln!("Config Watcher closed for path '{}'.", pattern);
-                            return None;
-                        }
-                    }
-                }
+    /// Saves the current configuration to the runtime config file
+    ///
+    /// # Errors
+    /// * `ConfigError::LockError` - If the read lock cannot be acquired
+    /// * `ConfigError::SerializationError` - If the config cannot be serialized to TOML
+    /// * `ConfigError::PersistenceError` - If the configuration cannot be saved to disk
+    /// * `ConfigError::IoError` - If the main config file cannot be read
+    pub fn save_config(&self) -> Result<(), ConfigError> {
+        let config_data = {
+            self.runtime_config
+                .read()
+                .map_err(|_| ConfigError::LockError {
+                    lock_type: "read".to_string(),
+                    details: "Failed to acquire read lock".to_string(),
+                })?
+                .clone()
+        };
+
+        let mut runtime_value = Value::Table(toml::Table::new());
+
+        for (path, value) in config_data.iter() {
+            set_value_at_path(&mut runtime_value, path, value.clone())?;
+        }
+
+        let config_path = ConfigPaths::runtime_config();
+        let temp_path = config_path.with_extension("tmp");
+
+        let toml_str = toml::to_string_pretty(&runtime_value).map_err(|e| {
+            ConfigError::SerializationError {
+                content_type: "config".to_string(),
+                details: e.to_string(),
             }
-        }))
+        })?;
+
+        Self::ensure_config_dir()?;
+
+        std::fs::write(&temp_path, toml_str).map_err(|e| ConfigError::PersistenceError {
+            path: temp_path.clone(),
+            details: e.to_string(),
+        })?;
+
+        std::fs::rename(temp_path, &config_path).map_err(|e| ConfigError::PersistenceError {
+            path: config_path.clone(),
+            details: e.to_string(),
+        })?;
+
+        let main_path = ConfigPaths::main_config();
+        let mut main_config_toml =
+            fs::read_to_string(&main_path).map_err(|_| ConfigError::IoError {
+                path: main_path.clone(),
+                details: "Main config file not found during persist operation".to_string(),
+            })?;
+
+        if !main_config_toml.contains("\"@runtime\"") {
+            main_config_toml = Self::ensure_runtime_import(&main_config_toml);
+            fs::write(&main_path, main_config_toml).map_err(|e| ConfigError::PersistenceError {
+                path: main_path.clone(),
+                details: format!("Failed to add runtime import to main config: {}", e),
+            })?;
+        }
+
+        Ok(())
     }
 
     pub(super) fn broadcast_change(&self, change: ConfigChange) {
-        let _ = self.change_sender.send(change);
+        if let Err(e) = self.broadcast_service.broadcast(change) {
+            eprintln!("Warning: Failed to broadcast config change: {}", e);
+        }
     }
 
     pub(super) fn update_config(&self, new_config: Config) -> Result<(), ConfigError> {
@@ -218,63 +254,6 @@ impl ConfigStore {
             })?;
 
         navigate_path(&config_value, path)
-    }
-
-    /// Saves the current configuration to the runtime config file
-    ///
-    /// # Errors
-    /// * `ConfigError::PersistenceError` - If the configuration cannot be saved
-    pub fn save_config(&self) -> Result<(), ConfigError> {
-        let runtime_config_map =
-            self.runtime_config
-                .read()
-                .map_err(|_| ConfigError::LockError {
-                    lock_type: "read".to_string(),
-                    details: "Failed to acquire read lock".to_string(),
-                })?;
-
-        let mut runtime_value = Value::Table(toml::Table::new());
-
-        for (path, value) in runtime_config_map.iter() {
-            set_value_at_path(&mut runtime_value, path, value.clone())?;
-        }
-
-        let config_path = ConfigPaths::runtime_config();
-        let temp_path = config_path.with_extension("tmp");
-
-        let toml_str = toml::to_string_pretty(&runtime_value).map_err(|e| {
-            ConfigError::SerializationError {
-                content_type: "config".to_string(),
-                details: e.to_string(),
-            }
-        })?;
-
-        std::fs::write(&temp_path, toml_str).map_err(|e| ConfigError::PersistenceError {
-            path: temp_path.clone(),
-            details: e.to_string(),
-        })?;
-
-        std::fs::rename(temp_path, &config_path).map_err(|e| ConfigError::PersistenceError {
-            path: config_path.clone(),
-            details: e.to_string(),
-        })?;
-
-        let main_path = ConfigPaths::main_config();
-        let mut main_config_toml =
-            fs::read_to_string(&main_path).map_err(|_| ConfigError::IoError {
-                path: main_path.clone(),
-                details: "Main config file not found during persist operation".to_string(),
-            })?;
-
-        if !main_config_toml.contains("\"@runtime\"") {
-            main_config_toml = Self::ensure_runtime_import(&main_config_toml);
-            fs::write(&main_path, main_config_toml).map_err(|e| ConfigError::PersistenceError {
-                path: main_path.clone(),
-                details: format!("Failed to add runtime import to main config: {}", e),
-            })?;
-        }
-
-        Ok(())
     }
 
     fn ensure_runtime_import(config: &str) -> String {
@@ -343,20 +322,18 @@ impl ConfigStore {
             }
         }
     }
-}
 
-impl ConfigWriter {
-    /// Sets a configuration value at the specified path
-    ///
-    /// The change source is automatically included from the writer's context.
-    ///
-    /// # Arguments
-    /// * `path` - Dot-separated path to the configuration field
-    /// * `value` - The new TOML value to set
-    ///
-    /// # Errors
-    /// Returns errors from the underlying ConfigStore::set_by_path operation
-    pub fn set(&self, path: &str, value: Value) -> Result<(), ConfigError> {
-        self.store.set_by_path(path, value)
+    fn ensure_config_dir() -> Result<(), ConfigError> {
+        let config_dir = ConfigPaths::config_dir().map_err(|e| ConfigError::PersistenceError {
+            path: std::path::PathBuf::from("."),
+            details: format!("Failed to determine config directory: {}", e),
+        })?;
+
+        std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::PersistenceError {
+            path: config_dir,
+            details: format!("Failed to create config directory: {}", e),
+        })?;
+
+        Ok(())
     }
 }

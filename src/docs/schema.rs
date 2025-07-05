@@ -39,7 +39,7 @@ pub struct PropertyInfo {
 ///
 /// ```
 /// use serde_json::json;
-/// use wayle::docs::schema::extract_property_info;
+/// use wayle::docs::extract_property_info;
 ///
 /// let schema = json!({
 ///     "properties": {

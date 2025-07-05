@@ -67,18 +67,13 @@ fn diff_toml_values(
                         ));
                     }
                     (Some(old_val), None) => {
-                        if let Some(change) =
-                            handle_value_removed(&field_path, old_val, timestamp)
+                        if let Some(change) = handle_value_removed(&field_path, old_val, timestamp)
                         {
                             changes.push(change);
                         }
                     }
                     (None, Some(new_val)) => {
-                        changes.push(handle_value_added(
-                            &field_path,
-                            new_val,
-                            timestamp,
-                        ));
+                        changes.push(handle_value_added(&field_path, new_val, timestamp));
                     }
                     (None, None) => unreachable!(),
                 }
@@ -135,11 +130,7 @@ fn handle_value_removed(
         })
 }
 
-fn handle_value_added(
-    path: &str,
-    new_val: &toml::Value,
-    timestamp: Instant,
-) -> ConfigChange {
+fn handle_value_added(path: &str, new_val: &toml::Value, timestamp: Instant) -> ConfigChange {
     ConfigChange {
         path: path.to_string(),
         old_value: None,

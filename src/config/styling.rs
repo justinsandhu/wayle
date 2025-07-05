@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Styling configuration for button UI components.
-/// 
+///
 /// Defines visual properties for buttons used throughout the Wayle interface,
 /// including colors, spacing, and border styling.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -21,7 +21,7 @@ pub struct ButtonStyling {
 }
 
 /// Styling configuration for dropdown UI components.
-/// 
+///
 /// Defines visual properties for dropdown menus used in the Wayle interface,
 /// including colors and border styling.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

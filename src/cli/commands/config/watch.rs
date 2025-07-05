@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use futures::StreamExt;
-
 use crate::{
     cli::{
         CliError, Command, CommandResult,
@@ -28,36 +26,30 @@ impl Command for WatchCommand {
         println!("Watching changes on path '{}'...", path);
         println!("Press Ctrl+C to stop");
 
-        let config_store = self.config_store.clone();
-        let path = path.to_string();
-        let path_for_error = path.clone();
-
-        let runtime = tokio::runtime::Runtime::new().map_err(|e| CliError::RuntimeInitFailed {
-            details: e.to_string(),
+        let _file_watch_handle = self.config_store.start_file_watching().map_err(|e| {
+            CliError::ConfigOperationFailed {
+                operation: "start file watching".to_string(),
+                path: path.clone(),
+                details: e.to_string(),
+            }
         })?;
 
-        runtime
-            .block_on(async move {
-                config_store.start_file_watching().await?;
-
-                let mut stream = config_store.subscribe_to_path(&path);
-
-                while let Some(change) = stream.next().await {
-                    println!(
-                        "[{}s] {} -> {}",
-                        change.timestamp.elapsed().as_secs(),
-                        change.path,
-                        format_toml_value(&change.new_value)
-                    );
-                }
-
-                Ok::<(), crate::config_store::ConfigError>(())
-            })
-            .map_err(|e| CliError::ConfigOperationFailed {
-                operation: "start file watching".to_string(),
-                path: path_for_error,
+        let subscription = self.config_store.subscribe_to_path(path).map_err(|e| {
+            CliError::ConfigOperationFailed {
+                operation: "subscribe to path".to_string(),
+                path: path.clone(),
                 details: e.to_string(),
-            })?;
+            }
+        })?;
+
+        while let Ok(change) = subscription.receiver().recv() {
+            println!(
+                "[{}s] {} -> {}",
+                change.timestamp.elapsed().as_secs(),
+                change.path,
+                format_toml_value(&change.new_value)
+            );
+        }
 
         Ok("Watch ended".to_string())
     }

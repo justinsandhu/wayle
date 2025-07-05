@@ -103,6 +103,8 @@ pub fn format_error(text: &str) -> String {
 /// # Examples
 ///
 /// ```
+/// use wayle::cli::formatting::format_toml_value;
+///
 /// let value = toml::Value::String("hello".to_string());
 /// assert_eq!(format_toml_value(&value), "\"hello\"");
 ///

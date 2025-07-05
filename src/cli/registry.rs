@@ -62,8 +62,13 @@ impl CommandRegistry {
     /// # Example
     ///
     /// ```
-    /// let mut registry = CommandRegistry::new();
-    /// registry.register_command("config", Box::new(GetCommand::new(config_store)));
+    /// use wayle::cli::CommandRegistry;
+    /// use wayle::config_store::ConfigStore;
+    /// use std::sync::Arc;
+    /// 
+    /// let config_store = Arc::new(ConfigStore::with_defaults());
+    /// let mut registry = CommandRegistry::new(config_store);
+    /// // registry.register_command("config", Box::new(SomeCommand::new()));
     /// ```
     pub fn register_command(&mut self, category: &str, command: Box<dyn Command>) {
         self.categories

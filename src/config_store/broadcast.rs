@@ -1,0 +1,179 @@
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+        mpsc::{self, Receiver, Sender},
+    },
+    thread,
+};
+
+use super::{ConfigChange, ConfigError, path_ops::path_matches};
+
+/// Commands sent to the broadcast actor thread
+pub enum BroadcastCommand {
+    /// Subscribe to configuration changes matching a pattern
+    Subscribe {
+        id: usize,
+        pattern: String,
+        sender: Sender<ConfigChange>,
+    },
+    /// Remove a subscription by ID
+    Unsubscribe { id: usize },
+    /// Broadcast a configuration change to all matching subscribers
+    Broadcast(ConfigChange),
+}
+
+/// Internal subscription data stored in the actor
+struct ActorSubscription {
+    id: usize,
+    pattern: String,
+    sender: Sender<ConfigChange>,
+}
+
+/// A subscription handle that automatically cleans up when dropped.
+///
+/// This handle uses RAII to ensure subscriptions are properly cleaned up
+/// when UI components are removed or go out of scope.
+pub struct Subscription {
+    id: usize,
+    service: BroadcastService,
+    receiver: Receiver<ConfigChange>,
+}
+
+/// Handle to the broadcast service
+///
+/// This is the main interface for interacting with the configuration broadcast system.
+/// It uses an actor pattern where a dedicated thread owns all subscriber state and
+/// processes commands via message passing.
+#[derive(Clone)]
+pub struct BroadcastService {
+    command_tx: Sender<BroadcastCommand>,
+    next_id: Arc<AtomicUsize>,
+}
+
+impl BroadcastService {
+    /// Creates a new broadcast service with its own dedicated actor thread.
+    ///
+    /// The actor thread will run until the service is dropped or explicitly shutdown.
+    pub fn new() -> Self {
+        let (command_tx, command_rx) = mpsc::channel();
+
+        thread::spawn(move || {
+            broadcast_actor_loop(command_rx);
+        });
+
+        Self {
+            command_tx,
+            next_id: Arc::new(AtomicUsize::new(1)),
+        }
+    }
+
+    /// Subscribe to configuration changes matching the given pattern.
+    ///
+    /// Returns a subscription handle that includes the receiver for changes.
+    /// The subscription will automatically clean up when the handle is dropped.
+    /// Pattern matching supports wildcards like "modules.clock.*" or "modules.*".
+    ///
+    /// # Arguments
+    /// * `pattern` - Pattern to match configuration paths (supports "*" wildcards)
+    ///
+    /// # Errors
+    /// Returns `ConfigError::ServiceUnavailable` if the broadcast service is not running.
+    pub fn subscribe(&self, pattern: &str) -> Result<Subscription, ConfigError> {
+        let (tx, rx) = mpsc::channel();
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+
+        self.command_tx
+            .send(BroadcastCommand::Subscribe {
+                id,
+                pattern: pattern.to_string(),
+                sender: tx,
+            })
+            .map_err(|_| ConfigError::ServiceUnavailable {
+                service: "broadcast".to_string(),
+                details: "Broadcast service is not running".to_string(),
+            })?;
+
+        Ok(Subscription {
+            id,
+            service: self.clone(),
+            receiver: rx,
+        })
+    }
+
+    /// Broadcast a configuration change to all matching subscribers.
+    ///
+    /// The change will be filtered and sent only to subscribers whose patterns match
+    /// the change path. This is more efficient than broadcasting to all subscribers.
+    ///
+    /// # Arguments
+    /// * `change` - The configuration change to broadcast
+    ///
+    /// # Errors
+    /// Returns `ConfigError::ServiceUnavailable` if the broadcast service is not running.
+    pub fn broadcast(&self, change: ConfigChange) -> Result<(), ConfigError> {
+        self.command_tx
+            .send(BroadcastCommand::Broadcast(change))
+            .map_err(|_| ConfigError::ServiceUnavailable {
+                service: "broadcast".to_string(),
+                details: "Broadcast service is not running".to_string(),
+            })
+    }
+}
+
+impl Subscription {
+    /// Get the receiver for configuration changes.
+    ///
+    /// This receiver will only receive changes that match the subscription pattern.
+    pub fn receiver(&self) -> &Receiver<ConfigChange> {
+        &self.receiver
+    }
+
+}
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        let _ = self
+            .service
+            .command_tx
+            .send(BroadcastCommand::Unsubscribe { id: self.id });
+    }
+}
+
+/// The main actor loop that processes broadcast commands.
+///
+/// This function runs in a dedicated thread and owns all subscriber state.
+/// It processes commands sequentially, ensuring no race conditions or lock contention.
+fn broadcast_actor_loop(command_rx: Receiver<BroadcastCommand>) {
+    let mut subscriptions = Vec::new();
+
+    while let Ok(command) = command_rx.recv() {
+        match command {
+            BroadcastCommand::Subscribe {
+                id,
+                pattern,
+                sender,
+            } => {
+                subscriptions.push(ActorSubscription {
+                    id,
+                    pattern,
+                    sender,
+                });
+            }
+
+            BroadcastCommand::Unsubscribe { id } => {
+                subscriptions.retain(|sub| sub.id != id);
+            }
+
+            BroadcastCommand::Broadcast(change) => {
+                subscriptions.retain(|sub| {
+                    if path_matches(&change.path, &sub.pattern) {
+                        sub.sender.send(change.clone()).is_ok()
+                    } else {
+                        true
+                    }
+                });
+            }
+        }
+    }
+}
