@@ -60,7 +60,7 @@ impl Command for SetCommand {
                     actual_value,
                 } => CliError::InvalidConfigValue {
                     path: path.clone(),
-                    reason: format!("expected {}, got {:?}", expected_type, actual_value),
+                    reason: format!("expected {expected_type}, got {actual_value:?}"),
                 },
                 _ => CliError::ConfigOperationFailed {
                     operation: "set".to_string(),
@@ -69,7 +69,7 @@ impl Command for SetCommand {
                 },
             })?;
 
-        Ok(format!("Set new value '{}' at path '{}'", value_str, path))
+        Ok(format!("Set new value '{value_str}' at path '{path}'"))
     }
 
     fn metadata(&self) -> CommandMetadata {

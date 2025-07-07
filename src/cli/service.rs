@@ -107,7 +107,7 @@ impl CliService {
                 .get_commands_in_category(&category)
                 .unwrap_or_default();
             let description = if !commands.is_empty() {
-                format!("{} management", category)
+                format!("{category} management")
             } else {
                 "No commands".to_string()
             };
@@ -135,14 +135,14 @@ impl CliService {
             .registry
             .get_commands_in_category(category)
             .ok_or_else(|| CliError::CommandNotFound {
-                command: format!("{} (category)", category),
+                command: format!("{category} (category)"),
             })?;
 
         let mut help = String::new();
 
         help.push_str(&format!(
             "{}\n\n",
-            format_subheader(&format!("{} commands", category))
+            format_subheader(&format!("{category} commands"))
         ));
 
         for command_name in commands {
@@ -158,8 +158,7 @@ impl CliService {
         help.push_str(&format!(
             "\n{}\n",
             format_description(&format!(
-                "Use 'wayle {} <command> help' for detailed help",
-                category
+                "Use 'wayle {category} <command> help' for detailed help"
             ))
         ));
 
@@ -171,7 +170,7 @@ impl CliService {
             .registry
             .get_command_metadata(category, command)
             .ok_or_else(|| CliError::CommandNotFound {
-                command: format!("{} {}", category, command),
+                command: format!("{category} {command}"),
             })?;
 
         let mut help = String::new();

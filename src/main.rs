@@ -56,7 +56,7 @@ async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn std::error::Erro
     match result {
         Ok(output) => {
             if !output.trim().is_empty() {
-                println!("{}", output);
+                println!("{output}");
             }
             Ok(())
         }

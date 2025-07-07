@@ -80,7 +80,7 @@ impl ConfigStore {
             .write()
             .map_err(|e| ConfigError::LockError {
                 lock_type: "write".to_string(),
-                details: format!("Failed to acquire write lock for runtime_config: {}", e),
+                details: format!("Failed to acquire write lock for runtime_config: {e}"),
             })?
             .insert(path.to_string(), value.clone());
 
@@ -199,7 +199,7 @@ impl ConfigStore {
             main_config_toml = Self::ensure_runtime_import(&main_config_toml);
             fs::write(&main_path, main_config_toml).map_err(|e| ConfigError::PersistenceError {
                 path: main_path.clone(),
-                details: format!("Failed to add runtime import to main config: {}", e),
+                details: format!("Failed to add runtime import to main config: {e}"),
             })?;
         }
 
@@ -210,7 +210,7 @@ impl ConfigStore {
         let broadcast_service = self.broadcast_service.clone();
         tokio::spawn(async move {
             if let Err(e) = broadcast_service.broadcast(change).await {
-                eprintln!("Warning: Failed to broadcast config change: {}", e);
+                eprintln!("Warning: Failed to broadcast config change: {e}");
             }
         });
     }
@@ -218,7 +218,7 @@ impl ConfigStore {
     pub(super) fn update_config(&self, new_config: Config) -> Result<(), ConfigError> {
         let mut config_guard = self.config.write().map_err(|e| ConfigError::LockError {
             lock_type: "write".to_string(),
-            details: format!("Failed to acquire write lock: {}", e),
+            details: format!("Failed to acquire write lock: {e}"),
         })?;
         *config_guard = new_config;
         Ok(())
@@ -315,7 +315,7 @@ impl ConfigStore {
                     let path = if prefix.is_empty() {
                         key.clone()
                     } else {
-                        format!("{}.{}", prefix, key)
+                        format!("{prefix}.{key}")
                     };
                     Self::flatten_toml_to_paths(value, &path, map);
                 }
@@ -329,12 +329,12 @@ impl ConfigStore {
     fn ensure_config_dir() -> Result<(), ConfigError> {
         let config_dir = ConfigPaths::config_dir().map_err(|e| ConfigError::PersistenceError {
             path: std::path::PathBuf::from("."),
-            details: format!("Failed to determine config directory: {}", e),
+            details: format!("Failed to determine config directory: {e}"),
         })?;
 
         std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::PersistenceError {
             path: config_dir,
-            details: format!("Failed to create config directory: {}", e),
+            details: format!("Failed to create config directory: {e}"),
         })?;
 
         Ok(())

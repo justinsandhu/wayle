@@ -30,8 +30,7 @@ pub fn generate_property_table(
         .join("\n");
 
     format!(
-        "## {}\n**Config path:** `{}`\n\n{}\n{}\n",
-        section_title, config_path, TABLE_HEADER, property_rows
+        "## {section_title}\n**Config path:** `{config_path}`\n\n{TABLE_HEADER}\n{property_rows}\n"
     )
 }
 
@@ -82,7 +81,7 @@ fn generate_sections(
         let schema_value =
             serde_json::to_value(schema_fn()).map_err(|e| DocsError::SchemaConversionError {
                 module: module_name.to_string(),
-                details: format!("Failed to generate section for '{}': {}", config_name, e),
+                details: format!("Failed to generate section for '{config_name}': {e}"),
             })?;
 
         let properties = extract_property_info(&schema_value);
@@ -90,7 +89,7 @@ fn generate_sections(
         if !properties.is_empty() {
             let section_title = format!("{} {}", title_case(config_name), section_type);
 
-            let config_path = format!("[modules.{}{}.{}]", module_name, path_prefix, config_name);
+            let config_path = format!("[modules.{module_name}{path_prefix}.{config_name}]");
 
             let generated_table = generate_property_table(&section_title, &config_path, properties);
 

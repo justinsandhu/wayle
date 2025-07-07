@@ -36,5 +36,8 @@ pub mod config_store;
 /// Command-line interface for configuration management.
 pub mod cli;
 
+/// Reactive services for system integration.
+pub mod services;
+
 /// Re-exported core types for convenience.
 pub use core::{Result, WayleError};

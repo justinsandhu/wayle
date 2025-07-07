@@ -54,7 +54,7 @@ fn diff_toml_values(
                 let field_path = if path.is_empty() {
                     key.clone()
                 } else {
-                    format!("{}.{}", path, key)
+                    format!("{path}.{key}")
                 };
 
                 match (old_table.get(key), new_table.get(key)) {

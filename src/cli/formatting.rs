@@ -113,7 +113,7 @@ pub fn format_error(text: &str) -> String {
 /// ```
 pub fn format_toml_value(value: &Value) -> String {
     match value {
-        Value::String(s) => format!("\"{}\"", s),
+        Value::String(s) => format!("\"{s}\""),
         Value::Integer(i) => i.to_string(),
         Value::Float(f) => f.to_string(),
         Value::Boolean(b) => b.to_string(),

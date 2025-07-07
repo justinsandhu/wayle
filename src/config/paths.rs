@@ -18,7 +18,7 @@ impl ConfigPaths {
     /// Returns an error if neither `XDG_CONFIG_HOME` nor `HOME` environment variables are set
     pub fn config_dir() -> Result<PathBuf, std::io::Error> {
         let config_home = env::var("XDG_CONFIG_HOME")
-            .or_else(|_| env::var("HOME").map(|home| format!("{}/.config", home)))
+            .or_else(|_| env::var("HOME").map(|home| format!("{home}/.config")))
             .map_err(|_| {
                 std::io::Error::new(
                     std::io::ErrorKind::NotFound,

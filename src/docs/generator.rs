@@ -44,7 +44,7 @@ impl DocsGenerator {
     pub fn generate_all(&self) -> Result<(), DocsError> {
         fs::create_dir_all(&self.output_dir).map_err(|err| DocsError::FileWriteError {
             path: std::path::PathBuf::from(&self.output_dir),
-            details: format!("Failed to create output directory: {}", err),
+            details: format!("Failed to create output directory: {err}"),
         })?;
 
         let modules = ModuleRegistry::get_all();

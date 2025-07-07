@@ -52,7 +52,7 @@ impl Config {
 
         let canonical_path = path.canonicalize().map_err(|e| WayleError::IoError {
             path: path.to_path_buf(),
-            details: format!("Failed to resolve path: {}", e),
+            details: format!("Failed to resolve path: {e}"),
         })?;
 
         let mut detector = CircularDetector::new();

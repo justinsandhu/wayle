@@ -212,12 +212,12 @@ pub(super) fn insert_value(
         Value::Array(arr) => {
             let index = key
                 .parse::<usize>()
-                .map_err(|_| ConfigError::InvalidPath(format!("Invalid array index '{}'", key)))?;
+                .map_err(|_| ConfigError::InvalidPath(format!("Invalid array index '{key}'")))?;
 
             arr.get_mut(index)
                 .map(|elem| *elem = new_value)
                 .ok_or_else(|| {
-                    ConfigError::InvalidPath(format!("Array index {} out of bounds", index))
+                    ConfigError::InvalidPath(format!("Array index {index} out of bounds"))
                 })
         }
         _ => Err(ConfigError::InvalidPath(format!(

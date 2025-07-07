@@ -106,14 +106,14 @@ impl CommandRegistry {
             self.categories
                 .get(category)
                 .ok_or_else(|| CliError::CommandNotFound {
-                    command: format!("{} (category)", category),
+                    command: format!("{category} (category)"),
                 })?;
 
         let found_command =
             found_category
                 .get(command_name)
                 .ok_or_else(|| CliError::CommandNotFound {
-                    command: format!("{} {}", category, command_name),
+                    command: format!("{category} {command_name}"),
                 })?;
 
         Self::validate_args(&found_command.metadata(), args)?;

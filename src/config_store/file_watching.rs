@@ -48,18 +48,18 @@ impl ConfigStore {
             }
         })
         .map_err(|e| ConfigError::FileWatcherInitError {
-            details: format!("Failed to create watcher: {}", e),
+            details: format!("Failed to create watcher: {e}"),
         })?;
 
         let config_dir =
             ConfigPaths::config_dir().map_err(|e| ConfigError::FileWatcherInitError {
-                details: format!("Failed to get config directory: {}", e),
+                details: format!("Failed to get config directory: {e}"),
             })?;
 
         watcher
             .watch(&config_dir, RecursiveMode::NonRecursive)
             .map_err(|e| ConfigError::FileWatcherInitError {
-                details: format!("Failed to watch config directory: {}", e),
+                details: format!("Failed to watch config directory: {e}"),
             })?;
 
         let store = self.clone();
@@ -135,7 +135,7 @@ async fn file_watch_loop(
                 // Timeout - check if we should process pending changes
                 if pending_changes && last_change.elapsed() >= debounce_duration {
                     if let Err(e) = store.reload_from_files() {
-                        eprintln!("Failed to reload config: {}", e);
+                        eprintln!("Failed to reload config: {e}");
                     }
                     pending_changes = false;
                 }
