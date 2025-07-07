@@ -16,6 +16,9 @@ tokio = { version = "1", features = ["full"] }
 regex = "1"
 futures = "0"
 relm4 = { version = "0" }
+async-trait = "0.1"
+zbus = "5"
+async-stream = "0.3"
 
 [dev-dependencies]
 tempfile = "3"

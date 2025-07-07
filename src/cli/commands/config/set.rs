@@ -7,6 +7,8 @@ use crate::{
     },
     config_store::{ConfigError, ConfigStore},
 };
+use async_trait::async_trait;
+use toml;
 
 pub struct SetCommand {
     config_store: Arc<ConfigStore>,
@@ -39,8 +41,9 @@ impl SetCommand {
     }
 }
 
+#[async_trait]
 impl Command for SetCommand {
-    fn execute(&self, args: &[String]) -> CommandResult {
+    async fn execute(&self, args: &[String]) -> CommandResult {
         let path = args.first().ok_or(CliError::MissingPath)?;
 
         let value_str = args.get(1).ok_or(CliError::MissingValue)?;

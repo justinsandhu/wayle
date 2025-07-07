@@ -8,6 +8,7 @@ use crate::{
     },
     config_store::ConfigStore,
 };
+use async_trait::async_trait;
 
 pub struct WatchCommand {
     config_store: Arc<ConfigStore>,
@@ -19,8 +20,9 @@ impl WatchCommand {
     }
 }
 
+#[async_trait]
 impl Command for WatchCommand {
-    fn execute(&self, args: &[String]) -> CommandResult {
+    async fn execute(&self, args: &[String]) -> CommandResult {
         let path = args.first().ok_or(CliError::MissingPath)?;
 
         println!("Watching changes on path '{}'...", path);
@@ -34,15 +36,17 @@ impl Command for WatchCommand {
             }
         })?;
 
-        let subscription = self.config_store.subscribe_to_path(path).map_err(|e| {
-            CliError::ConfigOperationFailed {
+        let mut subscription = self
+            .config_store
+            .subscribe_to_path(path)
+            .await
+            .map_err(|e| CliError::ConfigOperationFailed {
                 operation: "subscribe to path".to_string(),
                 path: path.clone(),
                 details: e.to_string(),
-            }
-        })?;
+            })?;
 
-        while let Ok(change) = subscription.receiver().recv() {
+        while let Some(change) = subscription.receiver_mut().recv().await {
             println!(
                 "[{}s] {} -> {}",
                 change.timestamp.elapsed().as_secs(),

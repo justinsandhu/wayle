@@ -42,12 +42,12 @@ impl CliService {
     /// # Errors
     /// Returns `CliError::CommandNotFound` if the command doesn't exist in the category.
     /// Other errors may be returned by the command's execute method.
-    pub fn execute_command(&self, category: &str, command: &str, args: &[String]) -> CommandResult {
+    pub async fn execute_command(&self, category: &str, command: &str, args: &[String]) -> CommandResult {
         if self.is_help_request(category, command, args) {
             return self.handle_help_request(category, command, args);
         }
 
-        self.registry.execute(category, command, args)
+        self.registry.execute(category, command, args).await
     }
 
     fn is_help_request(&self, category: &str, command: &str, args: &[String]) -> bool {

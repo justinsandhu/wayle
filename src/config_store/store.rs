@@ -138,8 +138,8 @@ impl ConfigStore {
     ///
     /// # Errors
     /// Returns `ConfigError::ServiceUnavailable` if the broadcast service is unavailable.
-    pub fn subscribe_to_path(&self, pattern: &str) -> Result<Subscription, ConfigError> {
-        self.broadcast_service.subscribe(pattern)
+    pub async fn subscribe_to_path(&self, pattern: &str) -> Result<Subscription, ConfigError> {
+        self.broadcast_service.subscribe(pattern).await
     }
 
     /// Saves the current configuration to the runtime config file
@@ -207,9 +207,12 @@ impl ConfigStore {
     }
 
     pub(super) fn broadcast_change(&self, change: ConfigChange) {
-        if let Err(e) = self.broadcast_service.broadcast(change) {
-            eprintln!("Warning: Failed to broadcast config change: {}", e);
-        }
+        let broadcast_service = self.broadcast_service.clone();
+        tokio::spawn(async move {
+            if let Err(e) = broadcast_service.broadcast(change).await {
+                eprintln!("Warning: Failed to broadcast config change: {}", e);
+            }
+        });
     }
 
     pub(super) fn update_config(&self, new_config: Config) -> Result<(), ConfigError> {

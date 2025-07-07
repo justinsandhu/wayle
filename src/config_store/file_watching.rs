@@ -6,10 +6,11 @@ use notify::{
     event::{AccessKind, AccessMode},
     recommended_watcher,
 };
-use std::{
-    sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
-    thread,
-    time::{Duration, Instant},
+use std::time::{Duration, Instant};
+use tokio::{
+    sync::mpsc::{self, Receiver},
+    task::JoinHandle,
+    time::timeout,
 };
 
 /// File watcher that monitors configuration changes.
@@ -19,37 +20,31 @@ use std::{
 pub struct FileWatcher {
     /// Keeps the watcher alive via RAII
     _watcher: Box<dyn Watcher + Send>,
-    /// Channel to signal thread shutdown
-    shutdown_tx: Sender<()>,
-    /// Background thread processing file events
-    thread: Option<thread::JoinHandle<()>>,
+    /// Background task processing file events
+    _handle: JoinHandle<()>,
 }
 
 impl Drop for FileWatcher {
     fn drop(&mut self) {
-        let _ = self.shutdown_tx.send(());
-
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
+        self._handle.abort();
     }
 }
 
 impl ConfigStore {
     /// Starts monitoring configuration files for changes and broadcasts updates.
     ///
-    /// Returns a `FileWatchHandle` that controls the file watching lifecycle.
+    /// Returns a `FileWatcher` that controls the file watching lifecycle.
     /// When the handle is dropped, file watching stops automatically.
     ///
     /// # Errors
     /// Returns `ConfigError::FileWatcherInitError` if file watching cannot be initialized
     /// or configuration directory cannot be accessed.
     pub fn start_file_watching(&self) -> Result<FileWatcher, ConfigError> {
-        let (tx, rx) = mpsc::channel();
+        let (tx, mut rx) = mpsc::channel(100);
 
         let mut watcher = recommended_watcher(move |res| {
             if let Ok(event) = res {
-                let _ = tx.send(event);
+                let _ = tx.blocking_send(event);
             }
         })
         .map_err(|e| ConfigError::FileWatcherInitError {
@@ -68,16 +63,14 @@ impl ConfigStore {
             })?;
 
         let store = self.clone();
-        let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
-        let thread = thread::spawn(move || {
-            file_watch_loop(rx, shutdown_rx, store);
+        let handle = tokio::spawn(async move {
+            file_watch_loop(&mut rx, store).await;
         });
 
         Ok(FileWatcher {
             _watcher: Box::new(watcher),
-            shutdown_tx,
-            thread: Some(thread),
+            _handle: handle,
         })
     }
 
@@ -115,10 +108,9 @@ impl ConfigStore {
     }
 }
 
-/// Main file watching loop that processes events until shutdown.
-fn file_watch_loop(
-    event_rx: Receiver<notify::Event>,
-    shutdown_rx: Receiver<()>,
+/// Main file watching loop that processes events until cancelled.
+async fn file_watch_loop(
+    event_rx: &mut Receiver<notify::Event>,
     store: ConfigStore,
 ) {
     let mut pending_changes = false;
@@ -126,27 +118,27 @@ fn file_watch_loop(
     let debounce_duration = Duration::from_millis(100);
 
     loop {
-        if shutdown_rx.try_recv().is_ok() {
-            break;
-        }
+        let timeout_result = timeout(debounce_duration, event_rx.recv()).await;
 
-        match event_rx.recv_timeout(debounce_duration) {
-            Ok(event) => {
+        match timeout_result {
+            Ok(Some(event)) => {
                 if is_relevant_event(&event) {
                     pending_changes = true;
                     last_change = Instant::now();
                 }
             }
-            Err(RecvTimeoutError::Timeout) => {
+            Ok(None) => {
+                // Channel closed
+                break;
+            }
+            Err(_) => {
+                // Timeout - check if we should process pending changes
                 if pending_changes && last_change.elapsed() >= debounce_duration {
                     if let Err(e) = store.reload_from_files() {
                         eprintln!("Failed to reload config: {}", e);
                     }
                     pending_changes = false;
                 }
-            }
-            Err(RecvTimeoutError::Disconnected) => {
-                break;
             }
         }
     }

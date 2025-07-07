@@ -1,10 +1,10 @@
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-        mpsc::{self, Receiver, Sender},
-    },
-    thread,
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+use tokio::{
+    sync::mpsc::{self, Receiver, Sender},
+    task::JoinHandle,
 };
 
 use super::{ConfigChange, ConfigError, path_ops::path_matches};
@@ -43,28 +43,30 @@ pub struct Subscription {
 /// Handle to the broadcast service
 ///
 /// This is the main interface for interacting with the configuration broadcast system.
-/// It uses an actor pattern where a dedicated thread owns all subscriber state and
+/// It uses an actor pattern where a dedicated task owns all subscriber state and
 /// processes commands via message passing.
 #[derive(Clone)]
 pub struct BroadcastService {
     command_tx: Sender<BroadcastCommand>,
     next_id: Arc<AtomicUsize>,
+    _handle: Arc<JoinHandle<()>>,
 }
 
 impl BroadcastService {
-    /// Creates a new broadcast service with its own dedicated actor thread.
+    /// Creates a new broadcast service with its own dedicated actor task.
     ///
-    /// The actor thread will run until the service is dropped or explicitly shutdown.
+    /// The actor task will run until the service is dropped or explicitly shutdown.
     pub fn new() -> Self {
-        let (command_tx, command_rx) = mpsc::channel();
+        let (command_tx, mut command_rx) = mpsc::channel(100);
 
-        thread::spawn(move || {
-            broadcast_actor_loop(command_rx);
+        let handle = tokio::spawn(async move {
+            broadcast_actor_loop(&mut command_rx).await;
         });
 
         Self {
             command_tx,
             next_id: Arc::new(AtomicUsize::new(1)),
+            _handle: Arc::new(handle),
         }
     }
 
@@ -79,8 +81,8 @@ impl BroadcastService {
     ///
     /// # Errors
     /// Returns `ConfigError::ServiceUnavailable` if the broadcast service is not running.
-    pub fn subscribe(&self, pattern: &str) -> Result<Subscription, ConfigError> {
-        let (tx, rx) = mpsc::channel();
+    pub async fn subscribe(&self, pattern: &str) -> Result<Subscription, ConfigError> {
+        let (tx, rx) = mpsc::channel(100);
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 
         self.command_tx
@@ -89,6 +91,7 @@ impl BroadcastService {
                 pattern: pattern.to_string(),
                 sender: tx,
             })
+            .await
             .map_err(|_| ConfigError::ServiceUnavailable {
                 service: "broadcast".to_string(),
                 details: "Broadcast service is not running".to_string(),
@@ -111,9 +114,10 @@ impl BroadcastService {
     ///
     /// # Errors
     /// Returns `ConfigError::ServiceUnavailable` if the broadcast service is not running.
-    pub fn broadcast(&self, change: ConfigChange) -> Result<(), ConfigError> {
+    pub async fn broadcast(&self, change: ConfigChange) -> Result<(), ConfigError> {
         self.command_tx
             .send(BroadcastCommand::Broadcast(change))
+            .await
             .map_err(|_| ConfigError::ServiceUnavailable {
                 service: "broadcast".to_string(),
                 details: "Broadcast service is not running".to_string(),
@@ -129,6 +133,12 @@ impl Subscription {
         &self.receiver
     }
 
+    /// Get a mutable reference to the receiver for configuration changes.
+    ///
+    /// This is needed for async receiving operations.
+    pub fn receiver_mut(&mut self) -> &mut Receiver<ConfigChange> {
+        &mut self.receiver
+    }
 }
 
 impl Drop for Subscription {
@@ -136,18 +146,18 @@ impl Drop for Subscription {
         let _ = self
             .service
             .command_tx
-            .send(BroadcastCommand::Unsubscribe { id: self.id });
+            .try_send(BroadcastCommand::Unsubscribe { id: self.id });
     }
 }
 
 /// The main actor loop that processes broadcast commands.
 ///
-/// This function runs in a dedicated thread and owns all subscriber state.
+/// This function runs in a dedicated task and owns all subscriber state.
 /// It processes commands sequentially, ensuring no race conditions or lock contention.
-fn broadcast_actor_loop(command_rx: Receiver<BroadcastCommand>) {
+async fn broadcast_actor_loop(command_rx: &mut Receiver<BroadcastCommand>) {
     let mut subscriptions = Vec::new();
 
-    while let Ok(command) = command_rx.recv() {
+    while let Some(command) = command_rx.recv().await {
         match command {
             BroadcastCommand::Subscribe {
                 id,
@@ -168,7 +178,7 @@ fn broadcast_actor_loop(command_rx: Receiver<BroadcastCommand>) {
             BroadcastCommand::Broadcast(change) => {
                 subscriptions.retain(|sub| {
                     if path_matches(&change.path, &sub.pattern) {
-                        sub.sender.send(change.clone()).is_ok()
+                        sub.sender.try_send(change.clone()).is_ok()
                     } else {
                         true
                     }

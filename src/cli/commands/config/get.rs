@@ -8,6 +8,7 @@ use crate::{
     },
     config_store::{ConfigError, ConfigStore},
 };
+use async_trait::async_trait;
 
 /// Command for retrieving configuration values from the config store.
 ///
@@ -37,6 +38,7 @@ impl GetCommand {
     }
 }
 
+#[async_trait]
 impl Command for GetCommand {
     /// Retrieves and formats a configuration value from the specified path.
     ///
@@ -49,7 +51,7 @@ impl Command for GetCommand {
     /// * `CliError::MissingPath` - If no path argument is provided
     /// * `CliError::ConfigPathNotFound` - If the configuration path doesn't exist
     /// * `CliError::ConfigOperationFailed` - If the config store operation fails
-    fn execute(&self, args: &[String]) -> CommandResult {
+    async fn execute(&self, args: &[String]) -> CommandResult {
         let path = args.first().ok_or(CliError::MissingPath)?;
 
         let value = self.config_store.get_by_path(path).map_err(|e| match e {

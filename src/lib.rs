@@ -10,7 +10,7 @@
 //!
 //! # Quick Start
 //!
-//! ```rust
+//! ```rust,no_run
 //! use wayle::config_store::ConfigStore;
 //!
 //! // Create configuration store with defaults

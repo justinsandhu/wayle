@@ -101,16 +101,16 @@ fn format_toml_value_nested_structures() {
     assert_eq!(format_toml_value(&value), "[2]");
 }
 
-#[test]
-fn command_registry_creation() {
+#[tokio::test]
+async fn command_registry_creation() {
     let config_store = Arc::new(ConfigStore::with_defaults());
     let registry = CommandRegistry::new(config_store);
 
     drop(registry);
 }
 
-#[test]
-fn command_registry_categories() {
+#[tokio::test]
+async fn command_registry_categories() {
     let config_store = Arc::new(ConfigStore::with_defaults());
     let registry = CommandRegistry::new(config_store);
 

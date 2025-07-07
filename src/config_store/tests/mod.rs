@@ -90,8 +90,8 @@ fn config_error_variants() {
     assert!(matches!(error, ConfigError::ConversionError { .. }));
 }
 
-#[test]
-fn config_store_with_defaults() {
+#[tokio::test]
+async fn config_store_with_defaults() {
     let store = ConfigStore::with_defaults();
     let config = store.get_current();
 
@@ -99,8 +99,8 @@ fn config_store_with_defaults() {
     assert!(!format!("{:?}", config.modules).is_empty());
 }
 
-#[test]
-fn config_store_clone() {
+#[tokio::test]
+async fn config_store_clone() {
     let store1 = ConfigStore::with_defaults();
     let store2 = store1.clone();
 
@@ -110,17 +110,17 @@ fn config_store_clone() {
     assert_eq!(format!("{:?}", config1), format!("{:?}", config2));
 }
 
-#[test]
-fn config_store_subscription() {
+#[tokio::test]
+async fn config_store_subscription() {
     let store = ConfigStore::with_defaults();
 
-    let sub1 = store.subscribe_to_path("general.*").unwrap();
-    let sub2 = store.subscribe_to_path("modules.*").unwrap();
-    let sub3 = store.subscribe_to_path("*").unwrap();
+    let mut sub1 = store.subscribe_to_path("general.*").await.unwrap();
+    let mut sub2 = store.subscribe_to_path("modules.*").await.unwrap();
+    let mut sub3 = store.subscribe_to_path("*").await.unwrap();
 
-    assert!(sub1.receiver().try_recv().is_err());
-    assert!(sub2.receiver().try_recv().is_err());
-    assert!(sub3.receiver().try_recv().is_err());
+    assert!(sub1.receiver_mut().try_recv().is_err());
+    assert!(sub2.receiver_mut().try_recv().is_err());
+    assert!(sub3.receiver_mut().try_recv().is_err());
 }
 
 #[test]
@@ -239,14 +239,14 @@ fn toml_array_operations() {
     }
 }
 
-#[test]
-fn subscription_raii_cleanup() {
+#[tokio::test]
+async fn subscription_raii_cleanup() {
     let store = ConfigStore::with_defaults();
     
     {
-        let _sub1 = store.subscribe_to_path("general.*").unwrap();
-        let _sub2 = store.subscribe_to_path("modules.*").unwrap();
+        let _sub1 = store.subscribe_to_path("general.*").await.unwrap();
+        let _sub2 = store.subscribe_to_path("modules.*").await.unwrap();
     }
     
-    let _sub3 = store.subscribe_to_path("test.*").unwrap();
+    let _sub3 = store.subscribe_to_path("test.*").await.unwrap();
 }

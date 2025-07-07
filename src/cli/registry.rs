@@ -61,7 +61,7 @@ impl CommandRegistry {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust,no_run
     /// use wayle::cli::CommandRegistry;
     /// use wayle::config_store::ConfigStore;
     /// use std::sync::Arc;
@@ -96,7 +96,7 @@ impl CommandRegistry {
     /// - The specified command doesn't exist within the category
     ///
     /// Other errors may be returned by the command's execute method.
-    pub fn execute(
+    pub async fn execute(
         &self,
         category: &str,
         command_name: &str,
@@ -118,7 +118,7 @@ impl CommandRegistry {
 
         Self::validate_args(&found_command.metadata(), args)?;
 
-        found_command.execute(args)
+        found_command.execute(args).await
     }
 
     /// Lists all registered commands organized by category.

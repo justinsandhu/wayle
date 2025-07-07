@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use thiserror::Error;
 
 /// Errors that can occur during CLI command execution.
@@ -160,6 +161,7 @@ pub struct CommandMetadata {
 /// All commands implement this trait to provide consistent execution
 /// and metadata discovery. Commands receive dependencies through
 /// their constructors.
+#[async_trait]
 pub trait Command: Send + Sync {
     /// Executes the command with the provided arguments.
     ///
@@ -179,7 +181,7 @@ pub trait Command: Send + Sync {
     /// - Configuration system errors
     /// - Service unavailability
     /// - I/O failures
-    fn execute(&self, args: &[String]) -> CommandResult;
+    async fn execute(&self, args: &[String]) -> CommandResult;
 
     /// Returns the complete metadata for this command.
     ///
