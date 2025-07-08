@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 use crate::{
@@ -5,7 +7,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::MediaService,
+    services::mpris::{MediaService, MprisMediaService},
 };
 
 use super::utils::{find_player_by_identifier, get_player_display_name};
@@ -14,11 +16,18 @@ use super::utils::{find_player_by_identifier, get_player_display_name};
 ///
 /// Without arguments, shows the current active player.
 /// With an argument, sets the specified player as active.
-pub struct ActiveCommand;
+pub struct ActiveCommand {
+    media_service: Arc<MprisMediaService>,
+}
+
 impl ActiveCommand {
     /// Creates a new ActiveCommand
-    pub fn new() -> Self {
-        Self
+    ///
+    /// # Arguments
+    ///
+    /// * `media_service` - Shared reference to the media service
+    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
+        Self { media_service }
     }
 }
 
@@ -34,18 +43,11 @@ impl Command for ActiveCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let service = crate::service_manager::get_media_service()
-            .await
-            .map_err(|e| CliError::ServiceError {
-                service: "Media".to_string(),
-                details: e.to_string(),
-            })?;
-
         if let Some(identifier) = args.first() {
-            let player_id = find_player_by_identifier(&service, identifier).await?;
-            let player_name = get_player_display_name(&service, &player_id).await;
+            let player_id = find_player_by_identifier(&self.media_service, identifier).await?;
+            let player_name = get_player_display_name(&self.media_service, &player_id).await;
 
-            service
+            self.media_service
                 .set_active_player(Some(player_id))
                 .await
                 .map_err(|e| CliError::ServiceError {
@@ -55,9 +57,9 @@ impl Command for ActiveCommand {
 
             Ok(format!("Set active player to: {player_name}"))
         } else {
-            match service.active_player().await {
+            match self.media_service.active_player().await {
                 Some(player_id) => {
-                    let player_name = get_player_display_name(&service, &player_id).await;
+                    let player_name = get_player_display_name(&self.media_service, &player_id).await;
                     Ok(format!("Active player: {player_name}"))
                 }
                 None => Ok("No active player set".to_string()),

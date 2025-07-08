@@ -20,7 +20,9 @@ pub use previous::PreviousCommand;
 pub use seek::SeekCommand;
 pub use shuffle::ShuffleCommand;
 
-use crate::cli::CommandRegistry;
+use std::sync::Arc;
+
+use crate::{cli::CommandRegistry, service_manager::Services};
 
 /// Registers all media-related commands with the command registry
 ///
@@ -30,43 +32,44 @@ use crate::cli::CommandRegistry;
 /// # Arguments
 ///
 /// * `registry` - Mutable reference to the command registry
-pub fn register_commands(registry: &mut CommandRegistry) {
+/// * `services` - Application services container
+pub fn register_commands(registry: &mut CommandRegistry, services: &Services) {
     const CATEGORY_NAME: &str = "media";
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(ListCommand::new()),
+        Box::new(ListCommand::new(services.media.clone())),
     );
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(PlayPauseCommand::new()),
+        Box::new(PlayPauseCommand::new(services.media.clone())),
     );
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(NextCommand::new()),
+        Box::new(NextCommand::new(services.media.clone())),
     );
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(PreviousCommand::new()),
+        Box::new(PreviousCommand::new(services.media.clone())),
     );
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(SeekCommand::new()),
+        Box::new(SeekCommand::new(services.media.clone())),
     );
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(ShuffleCommand::new()),
+        Box::new(ShuffleCommand::new(services.media.clone())),
     );
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(LoopCommand::new()),
+        Box::new(LoopCommand::new(services.media.clone())),
     );
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(ActiveCommand::new()),
+        Box::new(ActiveCommand::new(services.media.clone())),
     );
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(InfoCommand::new()),
+        Box::new(InfoCommand::new(services.media.clone())),
     );
 }

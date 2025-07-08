@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::config_store::ConfigStore;
+use crate::{config_store::ConfigStore, service_manager::Services};
 
 use super::{
     CliError, Command,
@@ -232,8 +232,11 @@ impl CommandRegistry {
     ///
     /// This function serves as the central registration point for all CLI commands,
     /// delegating to individual modules to register their commands.
-    pub fn register_all_commands(&mut self) {
+    ///
+    /// # Arguments
+    /// * `services` - Application services container for dependency injection
+    pub fn register_all_commands(&mut self, services: &Services) {
         config::register_commands(self, self.config_store.clone());
-        media::register_commands(self);
+        media::register_commands(self, services);
     }
 }

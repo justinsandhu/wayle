@@ -18,6 +18,7 @@ pub struct PlayerDiscovery {
     events_tx: Arc<broadcast::Sender<PlayerEvent>>,
     active_player: Arc<RwLock<Option<PlayerId>>>,
     monitoring: PlayerMonitoring,
+    ignored_players: Arc<RwLock<Vec<String>>>,
 }
 
 impl PlayerDiscovery {
@@ -28,6 +29,7 @@ impl PlayerDiscovery {
         player_list_tx: Arc<broadcast::Sender<Vec<PlayerId>>>,
         events_tx: Arc<broadcast::Sender<PlayerEvent>>,
         active_player: Arc<RwLock<Option<PlayerId>>>,
+        ignored_players: Arc<RwLock<Vec<String>>>,
     ) -> Self {
         let monitoring = PlayerMonitoring::new(players.clone(), events_tx.clone());
 
@@ -38,6 +40,7 @@ impl PlayerDiscovery {
             events_tx,
             active_player,
             monitoring,
+            ignored_players,
         }
     }
 
@@ -118,6 +121,9 @@ impl PlayerDiscovery {
     /// # Errors
     /// Returns error if player proxy creation or monitoring setup fails
     pub async fn handle_player_added(&self, player_id: PlayerId) -> Result<(), MediaError> {
+        if self.should_ignore_player(player_id.bus_name()).await {
+            return Ok(());
+        }
         let base_proxy = MediaPlayer2Proxy::builder(&self.connection)
             .destination(player_id.bus_name().to_string())
             .map_err(MediaError::DbusError)?
@@ -223,6 +229,12 @@ impl PlayerDiscovery {
         self.broadcast_player_list().await;
     }
 
+    /// Check if a player should be ignored based on its bus name
+    pub async fn should_ignore_player(&self, bus_name: &str) -> bool {
+        let ignored = self.ignored_players.read().await;
+        ignored.iter().any(|pattern| bus_name.contains(pattern))
+    }
+
     async fn create_player_info(
         &self,
         player_id: &PlayerId,
@@ -320,6 +332,7 @@ impl Clone for PlayerDiscovery {
             events_tx: self.events_tx.clone(),
             active_player: self.active_player.clone(),
             monitoring: self.monitoring.clone(),
+            ignored_players: self.ignored_players.clone(),
         }
     }
 }

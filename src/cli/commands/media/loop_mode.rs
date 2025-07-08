@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 use crate::{
@@ -5,8 +7,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    service_manager,
-    services::mpris::MediaService,
+    services::mpris::{MediaService, MprisMediaService},
 };
 
 use super::utils::{get_player_display_name, get_player_id_or_active};
@@ -14,16 +15,18 @@ use super::utils::{get_player_display_name, get_player_id_or_active};
 /// Command to toggle or set loop mode
 ///
 /// Controls the active player by default, or a specific player if provided.
-pub struct LoopCommand;
+pub struct LoopCommand {
+    media_service: Arc<MprisMediaService>,
+}
 
 impl LoopCommand {
     /// Creates a new LoopCommand
     ///
     /// # Arguments
     ///
-    /// * `config_store` - Shared reference to the configuration store
-    pub fn new() -> Self {
-        Self
+    /// * `media_service` - Shared reference to the media service
+    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
+        Self { media_service }
     }
 }
 
@@ -39,18 +42,10 @@ impl Command for LoopCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let service =
-            service_manager::get_media_service()
-                .await
-                .map_err(|e| CliError::ServiceError {
-                    service: "Media".to_string(),
-                    details: e.to_string(),
-                })?;
+        let player_id = get_player_id_or_active(&self.media_service, args.first()).await?;
+        let player_name = get_player_display_name(&self.media_service, &player_id).await;
 
-        let player_id = get_player_id_or_active(&service, args.first()).await?;
-        let player_name = get_player_display_name(&service, &player_id).await;
-
-        service
+        self.media_service
             .toggle_loop(player_id.clone())
             .await
             .map_err(|e| CliError::ServiceError {

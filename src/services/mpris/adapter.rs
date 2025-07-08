@@ -39,16 +39,23 @@ pub struct MprisMediaService {
 
     /// Handle to the player discovery task
     discovery_handle: Option<tokio::task::JoinHandle<()>>,
+
+    /// List of player bus names to ignore during discovery
+    ignored_players: Arc<RwLock<Vec<String>>>,
 }
 
 impl MprisMediaService {
     /// Create a new MPRIS media service
     ///
     /// Initializes D-Bus connection and starts player discovery.
+    /// Players matching any pattern in ignored_players will be skipped during discovery.
+    ///
+    /// # Arguments
+    /// * `ignored_players` - List of patterns to match against player bus names for ignoring
     ///
     /// # Errors
     /// Returns error if D-Bus session connection fails or player discovery initialization fails
-    pub async fn new() -> Result<Self, MediaError> {
+    pub async fn new(ignored_players: Vec<String>) -> Result<Self, MediaError> {
         let connection = Connection::session().await.map_err(|e| {
             MediaError::InitializationFailed(format!("D-Bus connection failed: {e}"))
         })?;
@@ -61,6 +68,7 @@ impl MprisMediaService {
         let active_player = Arc::new(RwLock::new(persisted_active));
         let player_list_tx = Arc::new(player_list_tx);
         let events_tx = Arc::new(events_tx);
+        let ignored_players = Arc::new(RwLock::new(ignored_players));
 
         let discovery = PlayerDiscovery::new(
             connection.clone(),
@@ -68,6 +76,7 @@ impl MprisMediaService {
             player_list_tx.clone(),
             events_tx.clone(),
             active_player.clone(),
+            ignored_players.clone(),
         );
 
         let monitoring = PlayerMonitoring::new(players.clone(), events_tx.clone());
@@ -81,6 +90,7 @@ impl MprisMediaService {
             discovery,
             monitoring,
             discovery_handle: None,
+            ignored_players,
         };
 
         let discovery_clone = service.discovery.clone();
@@ -491,11 +501,14 @@ impl MediaService for MprisMediaService {
 
     async fn active_player(&self) -> Option<PlayerId> {
         let active = self.active_player.read().await;
+
         if let Some(ref player_id) = *active {
             let players = self.players.read().await;
+
             if players.contains_key(player_id) {
                 return active.clone();
             }
+
             self.find_and_set_fallback_player().await
         } else {
             None
@@ -505,6 +518,7 @@ impl MediaService for MprisMediaService {
     async fn set_active_player(&self, player_id: Option<PlayerId>) -> Result<(), Self::Error> {
         if let Some(ref id) = player_id {
             let players = self.players.read().await;
+
             if !players.contains_key(id) {
                 return Err(MediaError::PlayerNotFound(id.clone()));
             }
@@ -582,6 +596,29 @@ impl MprisMediaService {
             self.find_and_set_fallback_player().await;
         }
     }
+
+    /// Configure which players to ignore during discovery
+    ///
+    /// Players matching any of the provided patterns will be ignored.
+    /// Patterns are matched using `contains()` against the D-Bus bus name.
+    ///
+    /// # Arguments
+    /// * `patterns` - List of patterns to match against player bus names
+    pub async fn set_ignored_players(&self, patterns: Vec<String>) {
+        let mut ignored = self.ignored_players.write().await;
+        *ignored = patterns;
+    }
+
+    /// Get currently ignored player patterns
+    pub async fn get_ignored_players(&self) -> Vec<String> {
+        let ignored = self.ignored_players.read().await;
+        ignored.clone()
+    }
+
+    /// Check if a player should be ignored based on its bus name
+    pub async fn should_ignore_player(&self, bus_name: &str) -> bool {
+        self.discovery.should_ignore_player(bus_name).await
+    }
 }
 
 impl Clone for MprisMediaService {
@@ -595,6 +632,7 @@ impl Clone for MprisMediaService {
             discovery: self.discovery.clone(),
             monitoring: self.monitoring.clone(),
             discovery_handle: None,
+            ignored_players: self.ignored_players.clone(),
         }
     }
 }
@@ -605,11 +643,17 @@ impl Drop for MprisMediaService {
             handle.abort();
         }
 
-        if let Ok(mut players) = self.players.try_write() {
-            for (_, mut tracker) in players.drain() {
-                if let Some(handle) = tracker.monitoring_handle.take() {
-                    handle.abort();
-                }
+        let mut players = match self.players.try_write() {
+            Ok(players) => players,
+            Err(_) => {
+                eprintln!("Warning: Failed to acquire write lock during drop");
+                return;
+            }
+        };
+
+        for (_, mut tracker) in players.drain() {
+            if let Some(handle) = tracker.monitoring_handle.take() {
+                handle.abort();
             }
         }
     }

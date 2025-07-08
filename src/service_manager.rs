@@ -1,28 +1,36 @@
 use std::sync::Arc;
 
-use tokio::sync::OnceCell;
-
+use crate::config_store::ConfigStore;
 use crate::services::mpris::MprisMediaService;
 
-/// Global media service instance
-static MEDIA_SERVICE: OnceCell<Arc<MprisMediaService>> = OnceCell::const_new();
-
-/// Gets or creates the media service instance
+/// Container for all application services
 ///
-/// Creates the service on first call, then returns the same instance
-/// for all subsequent calls to maintain persistent connections.
-///
-/// # Errors
-///
-/// Returns error if media service initialization fails on first call
-pub async fn get_media_service() -> Result<Arc<MprisMediaService>, Box<dyn std::error::Error>> {
-    let service = MEDIA_SERVICE
-        .get_or_try_init(|| async {
-            let service = MprisMediaService::new().await?;
-            Ok::<_, Box<dyn std::error::Error>>(Arc::new(service))
-        })
-        .await?;
-
-    Ok(service.clone())
+/// Holds references to all initialized services that can be shared
+/// across the application. Services are created once during startup
+/// and then shared via Arc references.
+pub struct Services {
+    /// Media player service for MPRIS control
+    pub media: Arc<MprisMediaService>,
 }
 
+impl Services {
+    /// Create all application services
+    ///
+    /// Initializes all required services using the provided configuration.
+    /// Services are created with proper dependency injection from config.
+    ///
+    /// # Arguments
+    /// * `config_store` - Configuration store for loading service settings
+    ///
+    /// # Errors
+    /// Returns error if any service initialization fails
+    pub async fn new(config_store: &ConfigStore) -> Result<Self, Box<dyn std::error::Error>> {
+        let config = config_store.get_current();
+
+        let media_service = MprisMediaService::new(config.media.ignored_players).await?;
+
+        Ok(Self {
+            media: Arc::new(media_service),
+        })
+    }
+}

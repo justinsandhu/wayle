@@ -1,26 +1,29 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use futures::StreamExt;
 use tokio::pin;
 
 use crate::{
     cli::{CliError, Command, CommandResult, types::CommandMetadata},
-    service_manager,
-    services::mpris::{MediaService, PlaybackState},
+    services::mpris::{MediaService, MprisMediaService, PlaybackState},
 };
 
 /// Command to list all available media players
 ///
 /// Shows player index, name, and current playback state
-pub struct ListCommand;
+pub struct ListCommand {
+    media_service: Arc<MprisMediaService>,
+}
 
 impl ListCommand {
     /// Creates a new ListCommand
     ///
     /// # Arguments
     ///
-    /// * `config_store` - Shared reference to the configuration store
-    pub fn new() -> Self {
-        Self
+    /// * `media_service` - Shared reference to the media service
+    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
+        Self { media_service }
     }
 }
 
@@ -36,15 +39,7 @@ impl Command for ListCommand {
     ///
     /// Returns CliError if media service initialization fails
     async fn execute(&self, _args: &[String]) -> CommandResult {
-        let service =
-            service_manager::get_media_service()
-                .await
-                .map_err(|e| CliError::ServiceError {
-                    service: "Media".to_string(),
-                    details: e.to_string(),
-                })?;
-
-        let players_stream = service.players();
+        let players_stream = self.media_service.players();
         pin!(players_stream);
         let players = players_stream
             .next()
@@ -58,7 +53,7 @@ impl Command for ListCommand {
             return Ok("No media players found".to_string());
         }
 
-        let active_player = service.active_player().await;
+        let active_player = self.media_service.active_player().await;
         let mut output = format!("Found {} media player(s):\n\n", players.len());
 
         for (index, player_id) in players.iter().enumerate() {
@@ -66,7 +61,7 @@ impl Command for ListCommand {
             let is_active = active_player.as_ref() == Some(player_id);
             let active_marker = if is_active { " (active)" } else { "" };
 
-            let info_stream = service.player_info(player_id.clone());
+            let info_stream = self.media_service.player_info(player_id.clone());
             pin!(info_stream);
             let identity = if let Some(Ok(info)) = info_stream.next().await {
                 info.identity
@@ -74,7 +69,7 @@ impl Command for ListCommand {
                 player_id.bus_name().to_string()
             };
 
-            let state_stream = service.playback_state(player_id.clone());
+            let state_stream = self.media_service.playback_state(player_id.clone());
             pin!(state_stream);
             let playback_state = if let Some(state) = state_stream.next().await {
                 match state {
@@ -86,7 +81,7 @@ impl Command for ListCommand {
                 "Unknown"
             };
 
-            let metadata_stream = service.metadata(player_id.clone());
+            let metadata_stream = self.media_service.metadata(player_id.clone());
             pin!(metadata_stream);
             let track_info = if let Some(metadata) = metadata_stream.next().await {
                 if !metadata.title.is_empty() {

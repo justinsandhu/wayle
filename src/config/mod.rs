@@ -8,6 +8,7 @@ mod battery;
 mod clock;
 mod general;
 mod loading;
+mod media;
 mod modules;
 mod paths;
 mod styling;
@@ -16,6 +17,7 @@ mod styling;
 mod tests;
 
 pub use clock::ClockConfig;
+pub use media::MediaConfig;
 pub use paths::ConfigPaths;
 pub use styling::*;
 
@@ -35,4 +37,7 @@ pub struct Config {
 
     /// Module-specific configurations.
     pub modules: ModulesConfig,
+
+    /// Media service configuration.
+    pub media: MediaConfig,
 }

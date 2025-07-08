@@ -9,6 +9,7 @@ use wayle::{
     cli::{CliService, formatting::format_error},
     config::ConfigPaths,
     config_store::ConfigStore,
+    service_manager::Services,
 };
 
 #[tokio::main]
@@ -41,7 +42,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Returns error if command execution fails or config store initialization fails.
 async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let config_store = ConfigStore::load()?;
-    let cli_service = CliService::new(config_store);
+    let services = Services::new(&config_store).await?;
+    let cli_service = CliService::new(config_store, &services);
 
     let result = {
         let category = args.first().map(|s| s.as_str()).unwrap_or("help");

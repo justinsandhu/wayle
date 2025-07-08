@@ -8,6 +8,7 @@ use crate::{
     config_store::{ConfigError, ConfigStore},
 };
 use async_trait::async_trait;
+use serde_json;
 use toml;
 
 pub struct SetCommand {
@@ -25,6 +26,12 @@ impl SetCommand {
     }
 
     fn parse_config_value(&self, value_str: &str) -> toml::Value {
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(value_str) {
+            if let Ok(toml_value) = toml::Value::try_from(json_value) {
+                return toml_value;
+            }
+        }
+
         if let Ok(b) = value_str.parse::<bool>() {
             return toml::Value::Boolean(b);
         }
