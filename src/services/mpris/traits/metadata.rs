@@ -41,10 +41,8 @@ impl From<HashMap<String, OwnedValue>> for TrackMetadata {
         let mut track = Self::default();
 
         if let Some(title) = metadata.get("xesam:title") {
-            if let Ok(title_str) = title.downcast_ref::<String>() {
-                track.title = title_str.clone();
-            } else if let Ok(title_str) = title.downcast_ref::<&str>() {
-                track.title = title_str.to_string();
+            if let Ok(title_str) = String::try_from(title.clone()) {
+                track.title = title_str;
             }
         }
 
@@ -52,10 +50,10 @@ impl From<HashMap<String, OwnedValue>> for TrackMetadata {
             if let Ok(array) = <&zbus::zvariant::Array>::try_from(artist) {
                 let artists: Vec<String> = array
                     .iter()
-                    .filter_map(|v| {
-                        if let Ok(s) = v.downcast_ref::<String>() {
+                    .filter_map(|artist| {
+                        if let Ok(s) = artist.downcast_ref::<String>() {
                             Some(s.clone())
-                        } else if let Ok(s) = v.downcast_ref::<&str>() {
+                        } else if let Ok(s) = artist.downcast_ref::<&str>() {
                             Some(s.to_string())
                         } else {
                             None
@@ -73,34 +71,28 @@ impl From<HashMap<String, OwnedValue>> for TrackMetadata {
         }
 
         if let Some(album) = metadata.get("xesam:album") {
-            if let Ok(album_str) = album.downcast_ref::<String>() {
-                track.album = album_str.clone();
-            } else if let Ok(album_str) = album.downcast_ref::<&str>() {
-                track.album = album_str.to_string();
+            if let Ok(album_str) = String::try_from(album.clone()) {
+                track.album = album_str;
             }
         }
 
         if let Some(art_url) = metadata.get("mpris:artUrl") {
-            if let Ok(url_str) = art_url.downcast_ref::<String>() {
-                track.artwork_url = Some(url_str.clone());
-            } else if let Ok(url_str) = art_url.downcast_ref::<&str>() {
-                track.artwork_url = Some(url_str.to_string());
+            if let Ok(url_str) = String::try_from(art_url.clone()) {
+                track.artwork_url = Some(url_str);
             }
         }
 
         if let Some(length) = metadata.get("mpris:length") {
-            if let Ok(length_micros) = length.downcast_ref::<i64>() {
+            if let Ok(length_micros) = u64::try_from(length.clone()) {
                 if length_micros > 0 {
-                    track.length = Some(Duration::from_micros(length_micros as u64));
+                    track.length = Some(Duration::from_micros(length_micros));
                 }
             }
         }
 
         if let Some(track_id) = metadata.get("mpris:trackid") {
-            if let Ok(id_str) = track_id.downcast_ref::<String>() {
-                track.track_id = Some(id_str.clone());
-            } else if let Ok(id_str) = track_id.downcast_ref::<&str>() {
-                track.track_id = Some(id_str.to_string());
+            if let Ok(id_str) = String::try_from(track_id.clone()) {
+                track.track_id = Some(id_str);
             }
         }
 
