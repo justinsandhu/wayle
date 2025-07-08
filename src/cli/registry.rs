@@ -4,7 +4,7 @@ use crate::config_store::ConfigStore;
 
 use super::{
     CliError, Command,
-    commands::config::{self},
+    commands::{config, media},
     types::CommandMetadata,
 };
 
@@ -234,5 +234,6 @@ impl CommandRegistry {
     /// delegating to individual modules to register their commands.
     pub fn register_all_commands(&mut self) {
         config::register_commands(self, self.config_store.clone());
+        media::register_commands(self);
     }
 }

@@ -80,6 +80,42 @@ pub enum CliError {
         details: String,
     },
 
+    /// Service initialization or operation failed
+    #[error("service '{service}' error: {details}")]
+    ServiceError {
+        /// The service that encountered an error
+        service: String,
+        /// Error details
+        details: String,
+    },
+
+    /// Operation timed out
+    #[error("operation '{operation}' timed out after {timeout_secs} seconds")]
+    OperationTimeout {
+        /// The operation that timed out
+        operation: String,
+        /// Timeout duration in seconds
+        timeout_secs: u64,
+    },
+
+    /// Invalid argument provided
+    #[error("invalid argument '{arg}': {reason}")]
+    InvalidArgument {
+        /// The argument name that was invalid
+        arg: String,
+        /// Reason why the argument is invalid
+        reason: String,
+    },
+
+    /// Missing required argument
+    #[error("missing required argument '{arg}' for command '{command}'")]
+    MissingArgument {
+        /// The argument name that is missing
+        arg: String,
+        /// The command that requires the argument
+        command: String,
+    },
+
     /// I/O operation failed
     #[error(transparent)]
     Io(#[from] std::io::Error),

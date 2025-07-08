@@ -59,15 +59,11 @@ impl CliService {
 
     fn handle_help_request(&self, category: &str, command: &str, args: &[String]) -> CommandResult {
         match (category, command, args.first().map(|s| s.as_str())) {
-            // wayle help (general only)
             ("help", "", None) => self.generate_general_help(),
-            // wayle <category> (no command specified)
             (category_name, "", None) if category_name != "help" => {
                 self.generate_category_help(category_name)
             }
-            // wayle <category> help
             (category_name, "help", None) => self.generate_category_help(category_name),
-            // wayle <category> <command> help
             (category_name, command_name, Some("help")) => {
                 self.generate_command_help(category_name, command_name)
             }

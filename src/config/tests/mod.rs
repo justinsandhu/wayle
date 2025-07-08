@@ -49,7 +49,7 @@ fn config_serialize_roundtrip() {
 
     let deserialized: Config = toml::from_str(&toml_str).unwrap();
 
-    assert_eq!(format!("{:?}", original), format!("{:?}", deserialized));
+    assert_eq!(format!("{original:?}"), format!("{deserialized:?}"));
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn config_clone() {
     let config1 = Config::default();
     let config2 = config1.clone();
 
-    assert_eq!(format!("{:?}", config1), format!("{:?}", config2));
+    assert_eq!(format!("{config1:?}"), format!("{config2:?}"));
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn config_serde_traits() {
     let _serialized = toml::to_string(&config).unwrap();
     let _cloned = config.clone();
 
-    let debug_str = format!("{:?}", config);
+    let debug_str = format!("{config:?}");
     assert!(!debug_str.is_empty());
 }
 
@@ -133,7 +133,7 @@ fn config_toml_value_types() {
 
     let config: Config = toml::from_str(toml_str).unwrap();
 
-    assert!(!format!("{:?}", config).is_empty());
+    assert!(!format!("{config:?}").is_empty());
 }
 
 #[test]
@@ -165,6 +165,6 @@ fn config_unknown_fields() {
     "#;
 
     let config: Config = toml::from_str(toml_with_unknown).unwrap();
-    assert!(!format!("{:?}", config).is_empty());
+    assert!(!format!("{config:?}").is_empty());
 }
 

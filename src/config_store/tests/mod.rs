@@ -107,7 +107,7 @@ async fn config_store_clone() {
     let config1 = store1.get_current();
     let config2 = store2.get_current();
 
-    assert_eq!(format!("{:?}", config1), format!("{:?}", config2));
+    assert_eq!(format!("{config1:?}"), format!("{config2:?}"));
 }
 
 #[tokio::test]

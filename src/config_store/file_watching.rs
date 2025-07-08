@@ -128,11 +128,9 @@ async fn file_watch_loop(
                 }
             }
             Ok(None) => {
-                // Channel closed
                 break;
             }
             Err(_) => {
-                // Timeout - check if we should process pending changes
                 if pending_changes && last_change.elapsed() >= debounce_duration {
                     if let Err(e) = store.reload_from_files() {
                         eprintln!("Failed to reload config: {e}");
