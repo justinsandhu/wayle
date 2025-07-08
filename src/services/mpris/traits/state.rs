@@ -1,9 +1,6 @@
 use std::time::Duration;
 
-use super::{
-    PlaybackState, LoopMode, ShuffleMode, 
-    PlayerInfo, TrackMetadata,
-};
+use super::{LoopMode, PlaybackState, PlayerInfo, ShuffleMode, TrackMetadata};
 
 /// Complete state of a media player
 #[derive(Debug, Clone)]

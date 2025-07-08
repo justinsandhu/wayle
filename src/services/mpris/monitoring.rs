@@ -4,9 +4,12 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use tokio::sync::{RwLock, broadcast};
-use zbus::{zvariant::OwnedValue, proxy::PropertyChanged};
+use zbus::{proxy::PropertyChanged, zvariant::OwnedValue};
 
-use super::{MediaPlayer2PlayerProxy, MediaError, PlayerId, PlayerEvent, TrackMetadata, PlaybackState, LoopMode, ShuffleMode, state::PlayerStateTracker, utils};
+use super::{
+    LoopMode, MediaError, MediaPlayer2PlayerProxy, PlaybackState, PlayerEvent, PlayerId,
+    ShuffleMode, TrackMetadata, state::PlayerStateTracker, utils,
+};
 
 /// Handles player property monitoring and state updates
 pub struct PlayerMonitoring {
@@ -20,10 +23,7 @@ impl PlayerMonitoring {
         players: Arc<RwLock<HashMap<PlayerId, PlayerStateTracker>>>,
         events_tx: Arc<broadcast::Sender<PlayerEvent>>,
     ) -> Self {
-        Self {
-            players,
-            events_tx,
-        }
+        Self { players, events_tx }
     }
 
     /// Start monitoring a player's properties

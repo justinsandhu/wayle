@@ -65,7 +65,7 @@ impl CommandRegistry {
     /// use wayle::cli::CommandRegistry;
     /// use wayle::config_store::ConfigStore;
     /// use std::sync::Arc;
-    /// 
+    ///
     /// let config_store = Arc::new(ConfigStore::with_defaults());
     /// let mut registry = CommandRegistry::new(config_store);
     /// // registry.register_command("config", Box::new(SomeCommand::new()));

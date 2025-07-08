@@ -98,4 +98,3 @@ impl From<ShuffleMode> for bool {
         }
     }
 }
-

@@ -61,4 +61,3 @@ pub enum PlayerEvent {
         capabilities: PlayerCapabilities,
     },
 }
-

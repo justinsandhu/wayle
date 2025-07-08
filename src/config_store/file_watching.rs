@@ -109,10 +109,7 @@ impl ConfigStore {
 }
 
 /// Main file watching loop that processes events until cancelled.
-async fn file_watch_loop(
-    event_rx: &mut Receiver<notify::Event>,
-    store: ConfigStore,
-) {
+async fn file_watch_loop(event_rx: &mut Receiver<notify::Event>, store: ConfigStore) {
     let mut pending_changes = false;
     let mut last_change = Instant::now();
     let debounce_duration = Duration::from_millis(100);

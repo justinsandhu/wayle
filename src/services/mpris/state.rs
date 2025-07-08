@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use super::{MediaPlayer2PlayerProxy, PlayerInfo, TrackMetadata, PlaybackState, LoopMode, ShuffleMode};
+use super::{
+    LoopMode, MediaPlayer2PlayerProxy, PlaybackState, PlayerInfo, ShuffleMode, TrackMetadata,
+};
 
 /// Tracks the current state of a media player
 #[derive(Debug)]

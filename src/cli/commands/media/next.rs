@@ -75,4 +75,3 @@ impl Command for NextCommand {
         }
     }
 }
-

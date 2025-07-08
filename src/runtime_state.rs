@@ -23,7 +23,6 @@ impl Default for RuntimeState {
     }
 }
 
-
 impl RuntimeState {
     /// Get the runtime state file path
     fn state_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -87,6 +86,4 @@ impl RuntimeState {
 
         Ok(())
     }
-
 }
-

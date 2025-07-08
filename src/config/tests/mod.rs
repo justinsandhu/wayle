@@ -167,4 +167,3 @@ fn config_unknown_fields() {
     let config: Config = toml::from_str(toml_with_unknown).unwrap();
     assert!(!format!("{config:?}").is_empty());
 }
-

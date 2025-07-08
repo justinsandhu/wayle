@@ -10,7 +10,8 @@ use crate::{
         types::{ArgType, CommandArg, CommandMetadata},
     },
     services::mpris::{
-        LoopMode, MediaService, MprisMediaService, PlaybackState, PlayerId, ShuffleMode, TrackMetadata,
+        LoopMode, MediaService, MprisMediaService, PlaybackState, PlayerId, ShuffleMode,
+        TrackMetadata,
     },
 };
 

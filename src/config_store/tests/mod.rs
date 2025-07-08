@@ -242,11 +242,11 @@ fn toml_array_operations() {
 #[tokio::test]
 async fn subscription_raii_cleanup() {
     let store = ConfigStore::with_defaults();
-    
+
     {
         let _sub1 = store.subscribe_to_path("general.*").await.unwrap();
         let _sub2 = store.subscribe_to_path("modules.*").await.unwrap();
     }
-    
+
     let _sub3 = store.subscribe_to_path("test.*").await.unwrap();
 }

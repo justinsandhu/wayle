@@ -93,11 +93,7 @@ pub trait MediaService: Clone + Send + Sync + 'static {
     /// Returns None if no player is active, otherwise returns the result of the action
     async fn control_active_player<F, R>(&self, action: F) -> Option<Result<R, Self::Error>>
     where
-        F: FnOnce(
-                PlayerId,
-            ) -> Pin<
-                Box<dyn Future<Output = Result<R, Self::Error>> + Send>,
-            > + Send,
+        F: FnOnce(PlayerId) -> Pin<Box<dyn Future<Output = Result<R, Self::Error>> + Send>> + Send,
         R: Send;
 }
 
