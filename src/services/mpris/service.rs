@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures::Stream;
 use std::{error::Error, future::Future, pin::Pin, time::Duration};
 
-use super::traits::*;
+use super::*;
 
 #[async_trait]
 /// Reactive media service interface

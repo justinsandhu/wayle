@@ -1,8 +1,7 @@
 use std::time::Duration;
 
-use super::{
-    LoopMode, PlaybackState, PlayerCapabilities, PlayerId, PlayerInfo, ShuffleMode, TrackMetadata,
-};
+use super::{LoopMode, PlaybackState, PlayerCapabilities, PlayerId, PlayerInfo, ShuffleMode};
+use crate::services::mpris::TrackMetadata;
 
 /// Events emitted by media players
 #[derive(Debug, Clone)]
