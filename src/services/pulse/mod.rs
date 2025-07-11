@@ -35,108 +35,9 @@ pub use volume::{Volume, VolumeError};
 use backend::{PulseBackend, PulseCommand};
 use device::DeviceKey;
 
-/// PulseAudio service builder for idiomatic initialization
-pub struct PulseServiceBuilder {
-    buffer_size: Option<usize>,
-    device_buffer_size: Option<usize>,
-    stream_buffer_size: Option<usize>,
-    events_buffer_size: Option<usize>,
-}
-
-impl Default for PulseServiceBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PulseServiceBuilder {
-    /// Create a new builder with default settings
-    pub fn new() -> Self {
-        Self {
-            buffer_size: None,
-            device_buffer_size: None,
-            stream_buffer_size: None,
-            events_buffer_size: None,
-        }
-    }
-
-    /// Set buffer size for all channels (default: 100)
-    pub fn buffer_size(mut self, size: usize) -> Self {
-        self.buffer_size = Some(size);
-        self
-    }
-
-    /// Set device list buffer size (default: 100)
-    pub fn device_buffer_size(mut self, size: usize) -> Self {
-        self.device_buffer_size = Some(size);
-        self
-    }
-
-    /// Set stream list buffer size (default: 100)
-    pub fn stream_buffer_size(mut self, size: usize) -> Self {
-        self.stream_buffer_size = Some(size);
-        self
-    }
-
-    /// Set events buffer size (default: 100)
-    pub fn events_buffer_size(mut self, size: usize) -> Self {
-        self.events_buffer_size = Some(size);
-        self
-    }
-
-    /// Build the PulseAudio service
-    ///
-    /// # Errors
-    /// Returns error if PulseAudio connection fails or service initialization fails
-    pub async fn build(self) -> Result<PulseService, PulseError> {
-        let device_buffer_size = self.device_buffer_size.or(self.buffer_size).unwrap_or(100);
-        let stream_buffer_size = self.stream_buffer_size.or(self.buffer_size).unwrap_or(100);
-        let events_buffer_size = self.events_buffer_size.or(self.buffer_size).unwrap_or(100);
-
-        let (command_tx, command_rx) = mpsc::unbounded_channel();
-
-        let (device_list_tx, _) = broadcast::channel(device_buffer_size);
-        let (stream_list_tx, _) = broadcast::channel(stream_buffer_size);
-        let (events_tx, _) = broadcast::channel(events_buffer_size);
-
-        let devices = Arc::new(RwLock::new(HashMap::new()));
-        let streams = Arc::new(RwLock::new(HashMap::new()));
-        let default_input = Arc::new(RwLock::new(None));
-        let default_output = Arc::new(RwLock::new(None));
-        let server_info = Arc::new(RwLock::new(None));
-
-        let monitoring_handle = PulseBackend::spawn_monitoring_task(
-            command_rx,
-            device_list_tx.clone(),
-            stream_list_tx.clone(),
-            events_tx.clone(),
-            devices.clone(),
-            streams.clone(),
-            default_input.clone(),
-            default_output.clone(),
-            server_info.clone(),
-        )
-        .await?;
-
-        Ok(PulseService {
-            command_tx,
-            device_list_tx: Arc::new(device_list_tx),
-            stream_list_tx: Arc::new(stream_list_tx),
-            events_tx: Arc::new(events_tx),
-            devices,
-            streams,
-            default_input,
-            default_output,
-            server_info,
-            monitoring_handle: Some(monitoring_handle),
-        })
-    }
-}
-
 /// PulseAudio service implementation
 ///
 /// Provides device and stream management through PulseAudio backend.
-/// Create instances using `PulseServiceBuilder` for proper initialization.
 pub struct PulseService {
     command_tx: mpsc::UnboundedSender<PulseCommand>,
 
@@ -173,17 +74,50 @@ impl Clone for PulseService {
 impl PulseService {
     /// Create a new PulseAudio service with default settings
     ///
-    /// For custom configuration, use `PulseServiceBuilder` instead.
-    ///
     /// # Errors
     /// Returns error if PulseAudio connection fails or service initialization fails
     pub async fn new() -> Result<Self, PulseError> {
-        PulseServiceBuilder::new().build().await
-    }
+        const DEVICE_BUFFER_SIZE: usize = 100;
+        const STREAM_BUFFER_SIZE: usize = 100;
+        const EVENTS_BUFFER_SIZE: usize = 100;
 
-    /// Create a service builder for custom configuration
-    pub fn builder() -> PulseServiceBuilder {
-        PulseServiceBuilder::new()
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
+
+        let (device_list_tx, _) = broadcast::channel(DEVICE_BUFFER_SIZE);
+        let (stream_list_tx, _) = broadcast::channel(STREAM_BUFFER_SIZE);
+        let (events_tx, _) = broadcast::channel(EVENTS_BUFFER_SIZE);
+
+        let devices = Arc::new(RwLock::new(HashMap::new()));
+        let streams = Arc::new(RwLock::new(HashMap::new()));
+        let default_input = Arc::new(RwLock::new(None));
+        let default_output = Arc::new(RwLock::new(None));
+        let server_info = Arc::new(RwLock::new(None));
+
+        let monitoring_handle = PulseBackend::spawn_monitoring_task(
+            command_rx,
+            device_list_tx.clone(),
+            stream_list_tx.clone(),
+            events_tx.clone(),
+            devices.clone(),
+            streams.clone(),
+            default_input.clone(),
+            default_output.clone(),
+            server_info.clone(),
+        )
+        .await?;
+
+        Ok(PulseService {
+            command_tx,
+            device_list_tx: Arc::new(device_list_tx),
+            stream_list_tx: Arc::new(stream_list_tx),
+            events_tx: Arc::new(events_tx),
+            devices,
+            streams,
+            default_input,
+            default_output,
+            server_info,
+            monitoring_handle: Some(monitoring_handle),
+        })
     }
 
     /// Gracefully shutdown the service
