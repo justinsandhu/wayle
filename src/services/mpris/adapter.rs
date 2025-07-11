@@ -8,7 +8,7 @@ use zbus::{Connection, zvariant::ObjectPath};
 
 use super::{
     MediaPlayer2PlayerProxy, MediaService, discovery::PlayerDiscovery,
-    monitoring::PlayerMonitoring, state::PlayerStateTracker, utils, *,
+    monitoring::PlayerMonitoring, player::PlayerStateTracker, utils, *,
 };
 
 /// MPRIS-based media service implementation

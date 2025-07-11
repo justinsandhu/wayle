@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::config_store::ConfigStore;
-use crate::services::audio::PulseAudioService;
 use crate::services::mpris::MprisMediaService;
 
 /// Container for all application services
@@ -12,8 +11,6 @@ use crate::services::mpris::MprisMediaService;
 pub struct Services {
     /// Media player service for MPRIS control
     pub media: Arc<MprisMediaService>,
-    /// Audio service for volume and device control
-    pub audio: Arc<PulseAudioService>,
 }
 
 impl Services {
@@ -31,11 +28,9 @@ impl Services {
         let config = config_store.get_current();
 
         let media_service = MprisMediaService::new(config.media.ignored_players).await?;
-        let audio_service = PulseAudioService::new().await?;
 
         Ok(Self {
             media: Arc::new(media_service),
-            audio: Arc::new(audio_service),
         })
     }
 }

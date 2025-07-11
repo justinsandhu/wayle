@@ -10,6 +10,10 @@ pub mod pulse;
 pub mod service;
 /// Audio stream management
 pub mod stream;
+/// Test module for PulseAudio reactive streams
+pub mod test_pulse;
+/// Tokio mainloop for PulseAudio
+pub mod tokio_mainloop;
 /// Volume control types
 pub mod volume;
 

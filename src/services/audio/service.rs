@@ -2,11 +2,11 @@ use async_trait::async_trait;
 use futures::Stream;
 use std::{error::Error, pin::Pin};
 
-use super::{AudioEvent, DeviceIndex, DeviceInfo, StreamIndex, StreamInfo, Volume};
+use super::{AudioEvent, DeviceIndex, DeviceInfo, StreamIndex, StreamInfo};
 
 #[async_trait]
 /// Reactive audio service interface
-/// 
+///
 /// Provides streaming data for UI reactivity and control methods for user actions.
 /// All streams automatically handle device/stream lifecycle and provide clean domain objects.
 pub trait AudioService: Clone + Send + Sync + 'static {
@@ -33,22 +33,4 @@ pub trait AudioService: Clone + Send + Sync + 'static {
 
     /// Get current stream information
     async fn stream(&self, stream: StreamIndex) -> Result<StreamInfo, Self::Error>;
-
-    /// Set device volume
-    async fn set_device_volume(&self, device: DeviceIndex, volume: Volume) -> Result<(), Self::Error>;
-
-    /// Set device mute state
-    async fn set_device_mute(&self, device: DeviceIndex, muted: bool) -> Result<(), Self::Error>;
-
-    /// Set default device
-    async fn set_default_device(&self, device: DeviceIndex) -> Result<(), Self::Error>;
-
-    /// Set stream volume
-    async fn set_stream_volume(&self, stream: StreamIndex, volume: Volume) -> Result<(), Self::Error>;
-
-    /// Set stream mute state
-    async fn set_stream_mute(&self, stream: StreamIndex, muted: bool) -> Result<(), Self::Error>;
-
-    /// Move stream to different device
-    async fn move_stream(&self, stream: StreamIndex, device: DeviceIndex) -> Result<(), Self::Error>;
 }

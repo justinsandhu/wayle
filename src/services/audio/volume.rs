@@ -6,18 +6,18 @@ pub struct Volume {
 
 impl Volume {
     /// Create a new volume with the given channel volumes
-    /// 
+    ///
     /// # Arguments
     /// * `volumes` - Volume levels for each channel (0.0 to 10.0)
-    /// 
+    ///
     /// # Errors
     /// Returns error if any volume is outside valid range
     pub fn new(volumes: Vec<f64>) -> Result<Self, VolumeError> {
         for (i, &vol) in volumes.iter().enumerate() {
             if vol < 0.0 || vol > 10.0 {
-                return Err(VolumeError::InvalidVolume { 
-                    channel: i, 
-                    volume: vol 
+                return Err(VolumeError::InvalidVolume {
+                    channel: i,
+                    volume: vol,
                 });
             }
         }

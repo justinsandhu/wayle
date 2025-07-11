@@ -20,6 +20,7 @@ async-trait = "0.1"
 zbus = "5"
 async-stream = "0.3"
 libpulse-binding = "2.28"
+libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
