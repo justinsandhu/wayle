@@ -1,6 +1,8 @@
-use crate::services::audio::{AudioService, PulseAudioService};
+use crate::services::audio::{AudioService, core::PulseAudioService};
 use futures::StreamExt;
 
+/// Test function for PulseAudio reactive streams
+#[allow(missing_docs)]
 pub async fn test_pulse_reactive_streams() {
     println!("Creating PulseAudio service...");
 

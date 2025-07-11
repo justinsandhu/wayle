@@ -14,7 +14,7 @@ impl Volume {
     /// Returns error if any volume is outside valid range
     pub fn new(volumes: Vec<f64>) -> Result<Self, VolumeError> {
         for (i, &vol) in volumes.iter().enumerate() {
-            if vol < 0.0 || vol > 10.0 {
+            if !(0.0..=10.0).contains(&vol) {
                 return Err(VolumeError::InvalidVolume {
                     channel: i,
                     volume: vol,
@@ -25,11 +25,17 @@ impl Volume {
     }
 
     /// Create a mono volume
+    ///
+    /// # Errors
+    /// Returns error if volume is outside valid range 0.0-10.0
     pub fn mono(volume: f64) -> Result<Self, VolumeError> {
         Self::new(vec![volume])
     }
 
     /// Create a stereo volume
+    ///
+    /// # Errors
+    /// Returns error if either volume is outside valid range 0.0-10.0
     pub fn stereo(left: f64, right: f64) -> Result<Self, VolumeError> {
         Self::new(vec![left, right])
     }
@@ -40,8 +46,11 @@ impl Volume {
     }
 
     /// Set volume for a specific channel
+    ///
+    /// # Errors
+    /// Returns error if volume is outside valid range 0.0-10.0 or channel doesn't exist
     pub fn set_channel(&mut self, channel: usize, volume: f64) -> Result<(), VolumeError> {
-        if volume < 0.0 || volume > 10.0 {
+        if !(0.0..=10.0).contains(&volume) {
             return Err(VolumeError::InvalidVolume { channel, volume });
         }
         if let Some(vol) = self.volumes.get_mut(channel) {

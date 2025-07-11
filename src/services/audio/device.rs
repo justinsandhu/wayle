@@ -99,6 +99,7 @@ pub struct DeviceInfo {
 
 impl DeviceInfo {
     /// Create a new DeviceInfo with proper key generation
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         index: u32,
         device_type: DeviceType,
