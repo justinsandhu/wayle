@@ -1,4 +1,4 @@
-use crate::services::audio::{AudioService, core::PulseAudioService};
+use crate::services::audio::{AudioService, PulseAudioService};
 use futures::StreamExt;
 
 /// Test function for PulseAudio reactive streams
