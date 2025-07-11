@@ -6,7 +6,7 @@ use tokio::pin;
 
 use crate::{
     cli::{
-        CliError, Command, CommandResult,
+        Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
     services::mpris::{

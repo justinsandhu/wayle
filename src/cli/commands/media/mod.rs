@@ -20,7 +20,6 @@ pub use previous::PreviousCommand;
 pub use seek::SeekCommand;
 pub use shuffle::ShuffleCommand;
 
-use std::sync::Arc;
 
 use crate::{cli::CommandRegistry, service_manager::Services};
 

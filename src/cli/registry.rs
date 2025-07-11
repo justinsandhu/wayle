@@ -4,7 +4,7 @@ use crate::{config_store::ConfigStore, service_manager::Services};
 
 use super::{
     CliError, Command,
-    commands::{audio, config, media},
+    commands::{config, media},
     types::CommandMetadata,
 };
 
@@ -238,6 +238,5 @@ impl CommandRegistry {
     pub fn register_all_commands(&mut self, services: &Services) {
         config::register_commands(self, self.config_store.clone());
         media::register_commands(self, services);
-        audio::register_commands(self, services);
     }
 }
