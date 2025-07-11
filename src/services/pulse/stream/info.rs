@@ -1,4 +1,4 @@
-use super::{DeviceIndex, Volume};
+use crate::services::pulse::{device::DeviceIndex, volume::Volume};
 
 /// Audio stream index
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -28,6 +28,34 @@ pub enum StreamState {
     Terminated,
 }
 
+/// Audio sample format
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SampleFormat {
+    /// 8-bit unsigned
+    U8,
+    /// 16-bit signed little-endian
+    S16LE,
+    /// 24-bit signed little-endian
+    S24LE,
+    /// 32-bit signed little-endian
+    S32LE,
+    /// 32-bit float little-endian
+    F32LE,
+    /// Unknown format
+    Unknown,
+}
+
+/// Audio stream format
+#[derive(Debug, Clone, PartialEq)]
+pub struct StreamFormat {
+    /// Sample rate in Hz
+    pub sample_rate: u32,
+    /// Number of channels
+    pub channels: u8,
+    /// Sample format
+    pub sample_format: SampleFormat,
+}
+
 /// Audio stream information
 #[derive(Debug, Clone)]
 pub struct StreamInfo {
@@ -51,30 +79,3 @@ pub struct StreamInfo {
     pub format: StreamFormat,
 }
 
-/// Audio stream format
-#[derive(Debug, Clone, PartialEq)]
-pub struct StreamFormat {
-    /// Sample rate in Hz
-    pub sample_rate: u32,
-    /// Number of channels
-    pub channels: u8,
-    /// Sample format
-    pub sample_format: SampleFormat,
-}
-
-/// Audio sample format
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SampleFormat {
-    /// 8-bit unsigned
-    U8,
-    /// 16-bit signed little-endian
-    S16LE,
-    /// 24-bit signed little-endian
-    S24LE,
-    /// 32-bit signed little-endian
-    S32LE,
-    /// 32-bit float little-endian
-    F32LE,
-    /// Unknown format
-    Unknown,
-}

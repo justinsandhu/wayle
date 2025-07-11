@@ -2,13 +2,15 @@ use async_trait::async_trait;
 use futures::Stream;
 use std::{error::Error, future::Future, pin::Pin, time::Duration};
 
-use super::*;
+use super::{
+    LoopMode, PlaybackState, PlayerId, PlayerInfo, PlayerState, ShuffleMode, TrackMetadata,
+};
 
-#[async_trait]
 /// Reactive media service interface
 ///
 /// Provides streaming data for UI reactivity and control methods for user actions.
 /// All streams automatically handle player lifecycle and provide clean domain objects.
+#[async_trait]
 pub trait MediaService: Clone + Send + Sync + 'static {
     /// Error type for media operations
     type Error: Error + Send + Sync + 'static;
@@ -96,40 +98,3 @@ pub trait MediaService: Clone + Send + Sync + 'static {
         F: FnOnce(PlayerId) -> Pin<Box<dyn Future<Output = Result<R, Self::Error>> + Send>> + Send,
         R: Send;
 }
-
-/// Extension trait providing convenience methods for media service operations
-#[allow(async_fn_in_trait)]
-pub trait MediaServiceExt: MediaService {
-    /// Start playback for a specific player
-    ///
-    /// # Errors
-    /// Returns error if player is not found or doesn't support play operations
-    async fn play(&self, player_id: PlayerId) -> Result<(), Self::Error> {
-        self.play_pause(player_id).await
-    }
-
-    /// Pause playback for a specific player
-    ///
-    /// # Errors
-    /// Returns error if player is not found or doesn't support pause operations
-    async fn pause(&self, player_id: PlayerId) -> Result<(), Self::Error> {
-        self.play_pause(player_id).await
-    }
-
-    /// Toggle playback for the currently active player
-    ///
-    /// # Errors
-    /// Returns error if no player is active or the operation fails
-    async fn toggle_active_playback(&self) -> Result<(), Self::Error>
-    where
-        Self::Error: From<MediaError>,
-    {
-        if let Some(player_id) = self.active_player().await {
-            self.play_pause(player_id).await
-        } else {
-            Err(MediaError::PlayerNotFound(PlayerId("no_active_player".to_string())).into())
-        }
-    }
-}
-
-impl<T: MediaService> MediaServiceExt for T {}

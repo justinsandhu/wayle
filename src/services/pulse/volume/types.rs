@@ -1,3 +1,5 @@
+use super::VolumeError;
+
 /// Multi-channel volume with validation
 #[derive(Debug, Clone, PartialEq)]
 pub struct Volume {
@@ -41,7 +43,7 @@ impl Volume {
     }
 
     /// Get volume for a specific channel
-    pub fn get_channel(&self, channel: usize) -> Option<f64> {
+    pub fn channel(&self, channel: usize) -> Option<f64> {
         self.volumes.get(channel).copied()
     }
 
@@ -79,23 +81,4 @@ impl Volume {
     pub fn as_slice(&self) -> &[f64] {
         &self.volumes
     }
-}
-
-/// Volume-related errors
-#[derive(thiserror::Error, Debug, Clone, PartialEq)]
-pub enum VolumeError {
-    /// Invalid volume level
-    #[error("Invalid volume {volume} for channel {channel} (must be 0.0-10.0)")]
-    InvalidVolume {
-        /// Channel index
-        channel: usize,
-        /// Invalid volume value
-        volume: f64,
-    },
-    /// Invalid channel index
-    #[error("Invalid channel index {channel}")]
-    InvalidChannel {
-        /// Channel index
-        channel: usize,
-    },
 }

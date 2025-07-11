@@ -3,7 +3,7 @@
 //! This binary is designed to always start successfully, even if dependencies are missing,
 //! so it can provide diagnostic information to help users resolve issues.
 
-use std::fs;
+use std::{env, error::Error, fs, process};
 
 use wayle::{
     cli::{CliService, formatting::format_error},
@@ -13,8 +13,8 @@ use wayle::{
 };
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().collect();
+async fn main() -> Result<(), Box<dyn Error>> {
+    let args: Vec<String> = env::args().collect();
     ensure_wayle_directories()?;
 
     match args.get(1).map(|s| s.as_str()) {
@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// # Errors
 /// Returns error if command execution fails or config store initialization fails.
-async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn Error>> {
     let config_store = ConfigStore::load()?;
     let services = Services::new(&config_store).await?;
     let cli_service = CliService::new(config_store, &services);
@@ -64,12 +64,12 @@ async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn std::error::Erro
         }
         Err(e) => {
             eprintln!("{}", format_error(&e.to_string()));
-            std::process::exit(1);
+            process::exit(1);
         }
     }
 }
 
-fn ensure_wayle_directories() -> Result<(), Box<dyn std::error::Error>> {
+fn ensure_wayle_directories() -> Result<(), Box<dyn Error>> {
     let config_dir = ConfigPaths::config_dir()?;
     fs::create_dir_all(&config_dir)?;
     Ok(())

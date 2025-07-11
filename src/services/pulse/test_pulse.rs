@@ -1,4 +1,4 @@
-use crate::services::audio::{AudioService, PulseAudioService};
+use crate::services::pulse::{DeviceStreams, DeviceType, PulseService};
 use futures::StreamExt;
 
 /// Test function for PulseAudio reactive streams
@@ -6,7 +6,7 @@ use futures::StreamExt;
 pub async fn test_pulse_reactive_streams() {
     println!("Creating PulseAudio service...");
 
-    let service = match PulseAudioService::new().await {
+    let service = match PulseService::new().await {
         Ok(service) => {
             println!("✅ PulseAudio service created successfully");
             service
@@ -31,8 +31,8 @@ pub async fn test_pulse_reactive_streams() {
                     device.index.0,
                     device.description,
                     match device.device_type {
-                        crate::services::audio::DeviceType::Input => "Input",
-                        crate::services::audio::DeviceType::Output => "Output",
+                        DeviceType::Input => "Input",
+                        DeviceType::Output => "Output",
                     }
                 );
             }

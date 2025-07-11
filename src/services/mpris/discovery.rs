@@ -7,7 +7,7 @@ use zbus::{Connection, fdo};
 use super::{
     LoopMode, MediaError, MediaPlayer2PlayerProxy, MediaPlayer2Proxy, PlaybackState,
     PlayerCapabilities, PlayerEvent, PlayerId, PlayerInfo, ShuffleMode, TrackMetadata,
-    monitoring::PlayerMonitoring, state::PlayerStateTracker, utils,
+    monitoring::PlayerMonitoring, player::state::PlayerStateTracker, utils,
 };
 
 /// Handles player discovery and lifecycle management

@@ -3,6 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use zbus::Connection;
 
+use crate::runtime_state::RuntimeState;
+
 use super::{
     MediaError, PlayerId, PlayerStateTracker, discovery::PlayerDiscovery,
     monitoring::PlayerMonitoring,
@@ -54,6 +56,9 @@ impl PlayerManager {
     }
 
     /// Start player discovery
+    ///
+    /// # Errors
+    /// Returns error if discovery initialization fails
     pub async fn start_discovery(&mut self) -> Result<(), MediaError> {
         let discovery_clone = self.discovery.clone();
         let discovery_handle = tokio::spawn(async move {
@@ -71,7 +76,7 @@ impl PlayerManager {
     /// Load active player from runtime state file
     pub async fn load_active_player_from_file() -> Option<PlayerId> {
         if let Ok(Some(player_bus_name)) =
-            crate::runtime_state::RuntimeState::get_active_player().await
+            RuntimeState::get_active_player().await
         {
             Some(PlayerId::from_bus_name(&player_bus_name))
         } else {
@@ -82,7 +87,7 @@ impl PlayerManager {
     /// Save active player to runtime state file
     pub async fn save_active_player_to_file(&self, player_id: Option<PlayerId>) {
         let player_bus_name = player_id.map(|p| p.bus_name().to_string());
-        let _ = crate::runtime_state::RuntimeState::set_active_player(player_bus_name).await;
+        let _ = RuntimeState::set_active_player(player_bus_name).await;
     }
 
     /// Find and set a fallback player when the current active player is invalid

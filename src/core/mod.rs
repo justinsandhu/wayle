@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{fmt, io, path::{Path, PathBuf}, result};
 
 use thiserror::Error;
 
@@ -32,14 +32,14 @@ pub enum WayleError {
     #[error("I/O error on '{path}': {details}")]
     IoError {
         /// Path where I/O error occurred
-        path: std::path::PathBuf,
+        path: PathBuf,
         /// I/O error details
         details: String,
     },
 
     /// Standard I/O operation error (for compatibility)
     #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
 
     /// TOML parsing error with location context
     #[error("failed to parse TOML at '{location}': {details}")]
@@ -54,7 +54,7 @@ pub enum WayleError {
     #[error("failed to import '{path}': {details}")]
     ImportError {
         /// Path of file being imported
-        path: std::path::PathBuf,
+        path: PathBuf,
         /// Import error details
         details: String,
     },
@@ -64,7 +64,7 @@ pub enum WayleError {
 ///
 /// This type alias simplifies error handling by defaulting the error type
 /// to `WayleError` for all Wayle operations.
-pub type Result<T> = std::result::Result<T, WayleError>;
+pub type Result<T> = result::Result<T, WayleError>;
 
 impl WayleError {
     /// Creates a TOML parsing error with optional file path context.
@@ -73,7 +73,7 @@ impl WayleError {
     ///
     /// * `error` - The underlying parsing error
     /// * `path` - Optional path to the file that failed to parse
-    pub fn toml_parse(error: impl std::fmt::Display, path: Option<&Path>) -> Self {
+    pub fn toml_parse(error: impl fmt::Display, path: Option<&Path>) -> Self {
         let location = match path {
             Some(p) => {
                 let clean_path = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
@@ -94,7 +94,7 @@ impl WayleError {
     ///
     /// * `error` - The underlying import error
     /// * `path` - Path to the file that failed to import
-    pub fn import(error: impl std::fmt::Display, path: &Path) -> Self {
+    pub fn import(error: impl fmt::Display, path: &Path) -> Self {
         let clean_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         WayleError::ImportError {

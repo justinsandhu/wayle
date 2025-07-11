@@ -8,7 +8,7 @@ use zbus::{proxy::PropertyChanged, zvariant::OwnedValue};
 
 use super::{
     LoopMode, MediaError, MediaPlayer2PlayerProxy, PlaybackState, PlayerEvent, PlayerId,
-    ShuffleMode, TrackMetadata, state::PlayerStateTracker, utils,
+    ShuffleMode, TrackMetadata, player::state::PlayerStateTracker, utils,
 };
 
 /// Handles player property monitoring and state updates

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{error::Error, sync::Arc};
 
 use crate::config_store::ConfigStore;
 use crate::services::mpris::MprisMediaService;
@@ -24,7 +24,7 @@ impl Services {
     ///
     /// # Errors
     /// Returns error if any service initialization fails
-    pub async fn new(config_store: &ConfigStore) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(config_store: &ConfigStore) -> Result<Self, Box<dyn Error>> {
         let config = config_store.get_current();
 
         let media_service = MprisMediaService::new(config.media.ignored_players).await?;

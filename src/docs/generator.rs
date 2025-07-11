@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs, path::{Path, PathBuf}};
 
 use crate::docs::generate_module_page;
 
@@ -43,7 +43,7 @@ impl DocsGenerator {
     /// Returns `DocsError::FileWrite` if direction creation failes.
     pub fn generate_all(&self) -> Result<(), DocsError> {
         fs::create_dir_all(&self.output_dir).map_err(|err| DocsError::FileWriteError {
-            path: std::path::PathBuf::from(&self.output_dir),
+            path: PathBuf::from(&self.output_dir),
             details: format!("Failed to create output directory: {err}"),
         })?;
 
@@ -99,7 +99,7 @@ pub enum DocsError {
     #[error("failed to write documentation to '{path}': {details}")]
     FileWriteError {
         /// Path where write failed
-        path: std::path::PathBuf,
+        path: PathBuf,
         /// Write error details
         details: String,
     },

@@ -4,7 +4,10 @@ pub mod events;
 pub mod info;
 /// Player state management
 pub mod state;
+/// Player reactive data streams
+pub mod streams;
 
 pub use events::*;
 pub use info::*;
 pub use state::*;
+pub use streams::*;
