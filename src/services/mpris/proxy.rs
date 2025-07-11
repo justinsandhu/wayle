@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::collections::HashMap;
 use zbus::{Result, proxy, zvariant::ObjectPath};
 
@@ -60,6 +62,7 @@ pub trait MediaPlayer2 {
 /// MPRIS MediaPlayer2.Player interface proxy
 ///
 /// Provides access to the playback control interface for media players
+#[allow(missing_docs)]
 #[proxy(
     interface = "org.mpris.MediaPlayer2.Player",
     default_service = "org.mpris.MediaPlayer2",

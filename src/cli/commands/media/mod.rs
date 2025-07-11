@@ -20,7 +20,6 @@ pub use previous::PreviousCommand;
 pub use seek::SeekCommand;
 pub use shuffle::ShuffleCommand;
 
-
 use crate::{cli::CommandRegistry, service_manager::Services};
 
 /// Registers all media-related commands with the command registry
