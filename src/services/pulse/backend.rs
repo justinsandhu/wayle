@@ -413,11 +413,7 @@ impl PulseBackend {
                 Self::broadcast_device_list(device_list_tx, devices);
             }
             Operation::New => {
-                if let Ok(devices_guard) = devices.read() {
-                    if let Some(new_device) = devices_guard.get(&device_key).cloned() {
-                        let _ = events_tx.send(AudioEvent::DeviceAdded(new_device));
-                    }
-                }
+                let _ = command_tx.send(PulseCommand::TriggerDeviceDiscovery);
                 Self::broadcast_device_list(device_list_tx, devices);
             }
             Operation::Changed => {
@@ -526,6 +522,7 @@ impl PulseBackend {
 
                 if let Ok(mut devices_guard) = devices_clone_for_sink.write() {
                     let device_key = device_info.key.clone();
+                    let is_new_device = !devices_guard.contains_key(&device_key);
 
                     if let Some(existing_device) = devices_guard.get(&device_key) {
                         if existing_device.volume.as_slice() != device_info.volume.as_slice() {
@@ -544,7 +541,11 @@ impl PulseBackend {
                         }
                     }
 
-                    devices_guard.insert(device_key, device_info);
+                    devices_guard.insert(device_key, device_info.clone());
+
+                    if is_new_device {
+                        let _ = events_tx_clone_for_sink.send(AudioEvent::DeviceAdded(device_info));
+                    }
                 }
             }
             ListResult::End => {
@@ -603,6 +604,7 @@ impl PulseBackend {
 
                 if let Ok(mut devices_guard) = devices_clone_for_source.write() {
                     let device_key = device_info.key.clone();
+                    let is_new_device = !devices_guard.contains_key(&device_key);
 
                     if let Some(existing_device) = devices_guard.get(&device_key) {
                         if existing_device.volume.as_slice() != device_info.volume.as_slice() {
@@ -622,7 +624,12 @@ impl PulseBackend {
                         }
                     }
 
-                    devices_guard.insert(device_key, device_info);
+                    devices_guard.insert(device_key, device_info.clone());
+
+                    if is_new_device {
+                        let _ =
+                            events_tx_clone_for_source.send(AudioEvent::DeviceAdded(device_info));
+                    }
                 }
             }
             ListResult::End => {
