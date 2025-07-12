@@ -145,7 +145,6 @@ impl Drop for PulseService {
     }
 }
 
-// Implement the focused domain traits
 #[async_trait]
 impl DeviceManager for PulseService {
     type Error = PulseError;
@@ -195,16 +194,16 @@ impl DeviceManager for PulseService {
     }
 
     async fn set_default_input(&self, device: DeviceIndex) -> Result<(), Self::Error> {
-        let _ = self
-            .command_tx
-            .send(PulseCommand::SetDefaultInput { device });
+        self.command_tx
+            .send(PulseCommand::SetDefaultInput { device })
+            .map_err(|_| PulseError::ThreadCommunication)?;
         Ok(())
     }
 
     async fn set_default_output(&self, device: DeviceIndex) -> Result<(), Self::Error> {
-        let _ = self
-            .command_tx
-            .send(PulseCommand::SetDefaultOutput { device });
+        self.command_tx
+            .send(PulseCommand::SetDefaultOutput { device })
+            .map_err(|_| PulseError::ThreadCommunication)?;
         Ok(())
     }
 }
@@ -218,18 +217,20 @@ impl DeviceVolumeController for PulseService {
         device: DeviceIndex,
         volume: Volume,
     ) -> Result<(), Self::Error> {
-        let pulse_volume = PulseBackend::convert_volume_to_pulse(&volume)?;
-        let _ = self.command_tx.send(PulseCommand::SetDeviceVolume {
-            device,
-            volume: pulse_volume,
-        });
+        let pulse_volume = PulseBackend::convert_volume_to_pulse(&volume);
+        self.command_tx
+            .send(PulseCommand::SetDeviceVolume {
+                device,
+                volume: pulse_volume,
+            })
+            .map_err(|_| PulseError::ThreadCommunication)?;
         Ok(())
     }
 
     async fn set_device_mute(&self, device: DeviceIndex, muted: bool) -> Result<(), Self::Error> {
-        let _ = self
-            .command_tx
-            .send(PulseCommand::SetDeviceMute { device, muted });
+        self.command_tx
+            .send(PulseCommand::SetDeviceMute { device, muted })
+            .map_err(|_| PulseError::ThreadCommunication)?;
         Ok(())
     }
 }
@@ -254,9 +255,9 @@ impl StreamManager for PulseService {
         stream: StreamIndex,
         device: DeviceIndex,
     ) -> Result<(), Self::Error> {
-        let _ = self
-            .command_tx
-            .send(PulseCommand::MoveStream { stream, device });
+        self.command_tx
+            .send(PulseCommand::MoveStream { stream, device })
+            .map_err(|_| PulseError::ThreadCommunication)?;
         Ok(())
     }
 }
@@ -270,18 +271,20 @@ impl StreamVolumeController for PulseService {
         stream: StreamIndex,
         volume: Volume,
     ) -> Result<(), Self::Error> {
-        let pulse_volume = PulseBackend::convert_volume_to_pulse(&volume)?;
-        let _ = self.command_tx.send(PulseCommand::SetStreamVolume {
-            stream,
-            volume: pulse_volume,
-        });
+        let pulse_volume = PulseBackend::convert_volume_to_pulse(&volume);
+        self.command_tx
+            .send(PulseCommand::SetStreamVolume {
+                stream,
+                volume: pulse_volume,
+            })
+            .map_err(|_| PulseError::ThreadCommunication)?;
         Ok(())
     }
 
     async fn set_stream_mute(&self, stream: StreamIndex, muted: bool) -> Result<(), Self::Error> {
-        let _ = self
-            .command_tx
-            .send(PulseCommand::SetStreamMute { stream, muted });
+        self.command_tx
+            .send(PulseCommand::SetStreamMute { stream, muted })
+            .map_err(|_| PulseError::ThreadCommunication)?;
         Ok(())
     }
 }

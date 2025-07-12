@@ -1,4 +1,5 @@
 use std::fmt;
+use crate::services::pulse::Volume;
 
 /// Device index identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -92,6 +93,8 @@ pub struct DeviceInfo {
     pub state: DeviceState,
     /// Whether device is muted
     pub muted: bool,
+    /// Device volume
+    pub volume: Volume,
     /// Available ports
     pub ports: Vec<DevicePort>,
     /// Currently active port
@@ -110,6 +113,7 @@ impl DeviceInfo {
         description: String,
         state: DeviceState,
         muted: bool,
+        volume: Volume,
         ports: Vec<DevicePort>,
         active_port: Option<String>,
     ) -> Self {
@@ -123,6 +127,7 @@ impl DeviceInfo {
             description,
             state,
             muted,
+            volume,
             ports,
             active_port,
             key,
