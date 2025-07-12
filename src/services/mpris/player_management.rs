@@ -75,9 +75,7 @@ impl PlayerManager {
 
     /// Load active player from runtime state file
     pub async fn load_active_player_from_file() -> Option<PlayerId> {
-        if let Ok(Some(player_bus_name)) =
-            RuntimeState::get_active_player().await
-        {
+        if let Ok(Some(player_bus_name)) = RuntimeState::get_active_player().await {
             Some(PlayerId::from_bus_name(&player_bus_name))
         } else {
             None

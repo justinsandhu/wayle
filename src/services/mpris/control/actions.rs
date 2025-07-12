@@ -5,7 +5,8 @@ use tokio::sync::RwLock;
 use zbus::zvariant::ObjectPath;
 
 use crate::services::mpris::{
-    LoopMode, MediaError, MediaPlayer2PlayerProxy, PlayerId, PlayerStateTracker, MprisMediaService, utils,
+    LoopMode, MediaError, MediaPlayer2PlayerProxy, MprisMediaService, PlayerId, PlayerStateTracker,
+    utils,
 };
 
 /// Media control operations struct

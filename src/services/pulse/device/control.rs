@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use futures::Stream;
 
 use super::{DeviceIndex, DeviceInfo, DeviceType};
-use crate::services::pulse::{volume::Volume, AudioEvent, PulseService};
+use crate::services::pulse::{AudioEvent, PulseService, volume::Volume};
 
 /// Device management operations
 #[async_trait]
@@ -22,7 +22,10 @@ pub trait DeviceManager {
     ///
     /// # Errors
     /// Returns error if communication with audio backend fails
-    async fn devices_by_type(&self, device_type: DeviceType) -> Result<Vec<DeviceInfo>, Self::Error>;
+    async fn devices_by_type(
+        &self,
+        device_type: DeviceType,
+    ) -> Result<Vec<DeviceInfo>, Self::Error>;
 
     /// Get current default input device
     ///
@@ -59,7 +62,11 @@ pub trait DeviceVolumeController {
     ///
     /// # Errors
     /// Returns error if device is not found, volume is invalid, or operation fails
-    async fn set_device_volume(&self, device: DeviceIndex, volume: Volume) -> Result<(), Self::Error>;
+    async fn set_device_volume(
+        &self,
+        device: DeviceIndex,
+        volume: Volume,
+    ) -> Result<(), Self::Error>;
 
     /// Set device mute state
     ///

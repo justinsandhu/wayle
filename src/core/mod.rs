@@ -1,4 +1,8 @@
-use std::{fmt, io, path::{Path, PathBuf}, result};
+use std::{
+    fmt, io,
+    path::{Path, PathBuf},
+    result,
+};
 
 use thiserror::Error;
 

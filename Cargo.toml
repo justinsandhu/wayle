@@ -21,6 +21,7 @@ zbus = "5"
 async-stream = "0.3"
 libpulse-binding = "2.28"
 libc = "0.2"
+chrono = { version = "0.4", features = ["clock"] }
 
 [dev-dependencies]
 tempfile = "3"

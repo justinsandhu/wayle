@@ -1,5 +1,5 @@
-use std::fmt;
 use crate::services::pulse::Volume;
+use std::fmt;
 
 /// Device index identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -119,7 +119,7 @@ impl DeviceInfo {
     ) -> Self {
         let index = DeviceIndex(index);
         let key = DeviceKey::new(index.0, device_type.clone());
-        
+
         Self {
             index,
             device_type,

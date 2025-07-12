@@ -103,6 +103,7 @@ impl PulseBackend {
     /// # Errors
     /// Returns error if PulseAudio connection or monitoring setup fails
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_lines)]
     pub async fn spawn_monitoring_task(
         mut command_rx: mpsc::UnboundedReceiver<PulseCommand>,
         device_list_tx: broadcast::Sender<Vec<DeviceInfo>>,
@@ -120,64 +121,107 @@ impl PulseBackend {
                     super::PulseError::ConnectionFailed(format!("Failed to create runtime: {e}"))
                 })?;
                 rt.block_on(async {
-                let mut mainloop = TokioMain::new();
-                let mut context = Context::new(&mainloop, "wayle-pulse").ok_or_else(|| {
-                    super::PulseError::ConnectionFailed("Failed to create context".to_string())
-                })?;
+                    let mut mainloop = TokioMain::new();
+                    let mut context = Context::new(&mainloop, "wayle-pulse").ok_or_else(|| {
+                        super::PulseError::ConnectionFailed("Failed to create context".to_string())
+                    })?;
 
-                context
-                    .connect(None, ContextFlags::NOFLAGS, None)
-                    .map_err(|e| super::PulseError::ConnectionFailed(format!("Connection failed: {e}")))?;
+                    context
+                        .connect(None, ContextFlags::NOFLAGS, None)
+                        .map_err(|e| {
+                            super::PulseError::ConnectionFailed(format!("Connection failed: {e}"))
+                        })?;
 
-                mainloop.wait_for_ready(&context).await.map_err(|e| {
-                    super::PulseError::ConnectionFailed(format!("Context failed to become ready: {e:?}"))
-                })?;
+                    mainloop.wait_for_ready(&context).await.map_err(|e| {
+                        super::PulseError::ConnectionFailed(format!(
+                            "Context failed to become ready: {e:?}"
+                        ))
+                    })?;
 
-                let (change_tx, mut change_rx) = mpsc::unbounded_channel::<ChangeNotification>();
+                    let (change_tx, mut change_rx) =
+                        mpsc::unbounded_channel::<ChangeNotification>();
+                    let (internal_command_tx, mut internal_command_rx) =
+                        mpsc::unbounded_channel::<PulseCommand>();
 
-                Self::setup_event_subscription(&mut context, change_tx)?;
+                    Self::setup_event_subscription(
+                        &mut context,
+                        change_tx,
+                        internal_command_tx.clone(),
+                    )?;
 
-                let devices_clone = Arc::clone(&devices);
-                let streams_clone = Arc::clone(&streams);
-                let default_input_clone = Arc::clone(&default_input);
-                let default_output_clone = Arc::clone(&default_output);
-                let events_tx_clone = events_tx.clone();
-                let device_list_tx_clone = device_list_tx.clone();
-                let stream_list_tx_clone = stream_list_tx.clone();
+                    let devices_clone = Arc::clone(&devices);
+                    let streams_clone = Arc::clone(&streams);
+                    let default_input_clone = Arc::clone(&default_input);
+                    let default_output_clone = Arc::clone(&default_output);
+                    let events_tx_clone = events_tx.clone();
+                    let device_list_tx_clone = device_list_tx.clone();
+                    let stream_list_tx_clone = stream_list_tx.clone();
+                    let command_tx_clone = internal_command_tx.clone();
 
-                tokio::spawn(async move {
-                    while let Some(notification) = change_rx.recv().await {
-                        Self::process_change_notification(
-                            notification,
-                            &devices_clone,
-                            &streams_clone,
-                            &default_input_clone,
-                            &default_output_clone,
-                            &events_tx_clone,
-                            &device_list_tx_clone,
-                            &stream_list_tx_clone,
-                        ).await;
-                    }
-                });
-
-                Self::trigger_device_discovery(&context, &devices, &device_list_tx);
-                Self::trigger_stream_discovery(&context, &streams, &stream_list_tx);
-
-                tokio::select! {
-                    _ = mainloop.run() => {}
-                    _ = async {
-                        while let Some(command) = command_rx.recv().await {
-                            match command {
-                                PulseCommand::Shutdown => break,
-                                _ => Self::handle_command(&mut context, command, &devices, &streams, &device_list_tx, &stream_list_tx),
-                            }
+                    tokio::spawn(async move {
+                        while let Some(notification) = change_rx.recv().await {
+                            Self::process_change_notification(
+                                notification,
+                                &devices_clone,
+                                &streams_clone,
+                                &default_input_clone,
+                                &default_output_clone,
+                                &events_tx_clone,
+                                &device_list_tx_clone,
+                                &stream_list_tx_clone,
+                                &command_tx_clone,
+                            )
+                            .await;
                         }
-                    } => {
-                    }
-                }
+                    });
 
-                Ok(())
-            })
+                    Self::trigger_device_discovery(&context, &devices, &device_list_tx, &events_tx);
+                    Self::trigger_stream_discovery(&context, &streams, &stream_list_tx);
+
+                    tokio::select! {
+                        _ = mainloop.run() => {}
+                        _ = async {
+                            loop {
+                                tokio::select! {
+                                    command = command_rx.recv() => {
+                                        if let Some(command) = command {
+                                            match command {
+                                                PulseCommand::Shutdown => break,
+                                                _ => Self::handle_command(
+                                                    &mut context,
+                                                    command,
+                                                    &devices,
+                                                    &streams,
+                                                    &events_tx,
+                                                    &device_list_tx,
+                                                    &stream_list_tx,
+                                                ),
+                                            }
+                                        } else {
+                                            break;
+                                        }
+                                    }
+                                    command = internal_command_rx.recv() => {
+                                        if let Some(command) = command {
+                                            Self::handle_command(
+                                                &mut context,
+                                                command,
+                                                &devices,
+                                                &streams,
+                                                &events_tx,
+                                                &device_list_tx,
+                                                &stream_list_tx,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        } => {
+                        }
+                    }
+
+                    Ok(())
+                })
             })();
 
             if let Err(_e) = result {
@@ -189,10 +233,10 @@ impl PulseBackend {
     }
 
     /// Convert our volume to PulseAudio volume
-    /// 
+    ///
     /// Maps our 0.0-4.0 range to PulseAudio's 0-MAX range:
     /// - 0.0 → PA_VOLUME_MUTED (0)
-    /// - 1.0 → PA_VOLUME_NORM (65536) 
+    /// - 1.0 → PA_VOLUME_NORM (65536)
     /// - 4.0 → PA_VOLUME_MAX (262144)
     pub fn convert_volume_to_pulse(volume: &Volume) -> ChannelVolumes {
         if volume.channels() == 0 {
@@ -214,7 +258,7 @@ impl PulseBackend {
     }
 
     /// Convert PulseAudio volume to our volume
-    /// 
+    ///
     /// Maps PulseAudio's 0-MAX range to our 0.0-4.0 range:
     /// - PA_VOLUME_MUTED (0) → 0.0
     /// - PA_VOLUME_NORM (65536) → 1.0
@@ -249,6 +293,7 @@ impl PulseBackend {
     fn setup_event_subscription(
         context: &mut Context,
         change_tx: mpsc::UnboundedSender<ChangeNotification>,
+        _command_tx: mpsc::UnboundedSender<PulseCommand>,
     ) -> Result<(), super::PulseError> {
         let interest_mask = InterestMaskSet::SINK
             | InterestMaskSet::SOURCE
@@ -298,6 +343,7 @@ impl PulseBackend {
         events_tx: &broadcast::Sender<AudioEvent>,
         device_list_tx: &broadcast::Sender<Vec<DeviceInfo>>,
         stream_list_tx: &broadcast::Sender<Vec<StreamInfo>>,
+        command_tx: &mpsc::UnboundedSender<PulseCommand>,
     ) {
         match notification {
             ChangeNotification::Device {
@@ -312,6 +358,7 @@ impl PulseBackend {
                     devices,
                     events_tx,
                     device_list_tx,
+                    command_tx,
                 )
                 .await;
             }
@@ -343,13 +390,14 @@ impl PulseBackend {
         devices: &Arc<RwLock<HashMap<DeviceKey, DeviceInfo>>>,
         events_tx: &broadcast::Sender<AudioEvent>,
         device_list_tx: &broadcast::Sender<Vec<DeviceInfo>>,
+        command_tx: &mpsc::UnboundedSender<PulseCommand>,
     ) {
         let device_type = match facility {
             Facility::Sink => DeviceType::Output,
             Facility::Source => DeviceType::Input,
             _ => return,
         };
-        let device_key = DeviceKey::new(index, device_type);
+        let device_key = DeviceKey::new(index, device_type.clone());
 
         match operation {
             Operation::Removed => {
@@ -373,40 +421,7 @@ impl PulseBackend {
                 Self::broadcast_device_list(device_list_tx, devices);
             }
             Operation::Changed => {
-                let mut volume_changed = false;
-                let mut mute_changed = false;
-                let mut device_volume = None;
-                let mut device_muted = false;
-
-                if let Ok(devices_guard) = devices.read() {
-                    if let Some(current_device) = devices_guard.get(&device_key) {
-                        device_volume = Some(current_device.volume.clone());
-                        device_muted = current_device.muted;
-
-                        let device_changed = current_device.clone();
-                        let _ = events_tx.send(AudioEvent::DeviceChanged(device_changed));
-
-                        volume_changed = true;
-                        mute_changed = true;
-                    }
-                }
-
-                if volume_changed {
-                    if let Some(volume) = device_volume {
-                        let _ = events_tx.send(AudioEvent::DeviceVolumeChanged {
-                            device_index: DeviceIndex(index),
-                            volume,
-                        });
-                    }
-                }
-
-                if mute_changed {
-                    let _ = events_tx.send(AudioEvent::DeviceMuteChanged {
-                        device_index: DeviceIndex(index),
-                        muted: device_muted,
-                    });
-                }
-
+                let _ = command_tx.send(PulseCommand::TriggerDeviceDiscovery);
                 Self::broadcast_device_list(device_list_tx, devices);
             }
         }
@@ -444,40 +459,6 @@ impl PulseBackend {
                 Self::broadcast_stream_list(stream_list_tx, streams);
             }
             Operation::Changed => {
-                let mut volume_changed = false;
-                let mut mute_changed = false;
-                let mut stream_volume = None;
-                let mut stream_muted = false;
-
-                if let Ok(streams_guard) = streams.read() {
-                    if let Some(current_stream) = streams_guard.get(&stream_index) {
-                        stream_volume = Some(current_stream.volume.clone());
-                        stream_muted = current_stream.muted;
-
-                        let stream_changed = current_stream.clone();
-                        let _ = events_tx.send(AudioEvent::StreamChanged(stream_changed));
-
-                        volume_changed = true;
-                        mute_changed = true;
-                    }
-                }
-
-                if volume_changed {
-                    if let Some(volume) = stream_volume {
-                        let _ = events_tx.send(AudioEvent::StreamVolumeChanged {
-                            stream_index,
-                            volume,
-                        });
-                    }
-                }
-
-                if mute_changed {
-                    let _ = events_tx.send(AudioEvent::StreamMuteChanged {
-                        stream_index,
-                        muted: stream_muted,
-                    });
-                }
-
                 Self::broadcast_stream_list(stream_list_tx, streams);
             }
         }
@@ -488,11 +469,14 @@ impl PulseBackend {
         context: &Context,
         devices: &Arc<RwLock<HashMap<DeviceKey, DeviceInfo>>>,
         device_list_tx: &broadcast::Sender<Vec<DeviceInfo>>,
+        events_tx: &broadcast::Sender<AudioEvent>,
     ) {
         let devices_clone_for_sink = Arc::clone(devices);
         let devices_clone_for_source = Arc::clone(devices);
         let device_list_tx_clone_for_sink = device_list_tx.clone();
         let device_list_tx_clone_for_source = device_list_tx.clone();
+        let events_tx_clone_for_sink = events_tx.clone();
+        let events_tx_clone_for_source = events_tx.clone();
         let introspect = context.introspect();
 
         introspect.get_sink_info_list(move |result| match result {
@@ -541,7 +525,26 @@ impl PulseBackend {
                 );
 
                 if let Ok(mut devices_guard) = devices_clone_for_sink.write() {
-                    devices_guard.insert(device_info.key.clone(), device_info);
+                    let device_key = device_info.key.clone();
+
+                    if let Some(existing_device) = devices_guard.get(&device_key) {
+                        if existing_device.volume.as_slice() != device_info.volume.as_slice() {
+                            let _ =
+                                events_tx_clone_for_sink.send(AudioEvent::DeviceVolumeChanged {
+                                    device_index: DeviceIndex(sink_info.index),
+                                    volume: device_info.volume.clone(),
+                                });
+                        }
+
+                        if existing_device.muted != device_info.muted {
+                            let _ = events_tx_clone_for_sink.send(AudioEvent::DeviceMuteChanged {
+                                device_index: DeviceIndex(sink_info.index),
+                                muted: device_info.muted,
+                            });
+                        }
+                    }
+
+                    devices_guard.insert(device_key, device_info);
                 }
             }
             ListResult::End => {
@@ -599,7 +602,27 @@ impl PulseBackend {
                 );
 
                 if let Ok(mut devices_guard) = devices_clone_for_source.write() {
-                    devices_guard.insert(device_info.key.clone(), device_info);
+                    let device_key = device_info.key.clone();
+
+                    if let Some(existing_device) = devices_guard.get(&device_key) {
+                        if existing_device.volume.as_slice() != device_info.volume.as_slice() {
+                            let _ =
+                                events_tx_clone_for_source.send(AudioEvent::DeviceVolumeChanged {
+                                    device_index: DeviceIndex(source_info.index),
+                                    volume: device_info.volume.clone(),
+                                });
+                        }
+
+                        if existing_device.muted != device_info.muted {
+                            let _ =
+                                events_tx_clone_for_source.send(AudioEvent::DeviceMuteChanged {
+                                    device_index: DeviceIndex(source_info.index),
+                                    muted: device_info.muted,
+                                });
+                        }
+                    }
+
+                    devices_guard.insert(device_key, device_info);
                 }
             }
             ListResult::End => {
@@ -727,12 +750,13 @@ impl PulseBackend {
         command: PulseCommand,
         devices: &Arc<RwLock<HashMap<DeviceKey, DeviceInfo>>>,
         streams: &Arc<RwLock<HashMap<StreamIndex, StreamInfo>>>,
+        events_tx: &broadcast::Sender<AudioEvent>,
         device_list_tx: &broadcast::Sender<Vec<DeviceInfo>>,
         stream_list_tx: &broadcast::Sender<Vec<StreamInfo>>,
     ) {
         match command {
             PulseCommand::TriggerDeviceDiscovery => {
-                Self::trigger_device_discovery(context, devices, device_list_tx);
+                Self::trigger_device_discovery(context, devices, device_list_tx, events_tx);
             }
             PulseCommand::TriggerStreamDiscovery => {
                 Self::trigger_stream_discovery(context, streams, stream_list_tx);

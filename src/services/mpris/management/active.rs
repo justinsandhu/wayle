@@ -2,7 +2,7 @@ use std::{error::Error, future::Future, pin::Pin};
 
 use async_trait::async_trait;
 
-use crate::services::mpris::{MediaError, PlayerId, MprisMediaService};
+use crate::services::mpris::{MediaError, MprisMediaService, PlayerId};
 
 /// Active player management operations
 #[async_trait]

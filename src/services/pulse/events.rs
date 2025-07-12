@@ -1,4 +1,4 @@
-use super::{device::DeviceInfo, stream::StreamInfo, DeviceIndex, StreamIndex, Volume};
+use super::{DeviceIndex, StreamIndex, Volume, device::DeviceInfo, stream::StreamInfo};
 
 /// Audio system events
 #[derive(Debug, Clone)]

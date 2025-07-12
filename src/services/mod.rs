@@ -5,7 +5,7 @@ pub mod pulse;
 
 pub use mpris::{MediaService, MprisMediaService};
 pub use pulse::{
-    AudioEvent, DeviceIndex, DeviceInfo, DeviceType, DeviceManager, DeviceStreams, 
-    DeviceVolumeController, PulseError, PulseService, StreamIndex, StreamInfo, 
-    StreamManager, StreamStreams, StreamType, StreamVolumeController, Volume,
+    AudioEvent, DeviceIndex, DeviceInfo, DeviceManager, DeviceStreams, DeviceType,
+    DeviceVolumeController, PulseError, PulseService, StreamIndex, StreamInfo, StreamManager,
+    StreamStreams, StreamType, StreamVolumeController, Volume,
 };

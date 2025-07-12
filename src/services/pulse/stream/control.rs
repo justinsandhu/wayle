@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use futures::Stream;
 
 use super::{StreamIndex, StreamInfo};
-use crate::services::pulse::{device::DeviceIndex, volume::Volume, AudioEvent, PulseService};
+use crate::services::pulse::{AudioEvent, PulseService, device::DeviceIndex, volume::Volume};
 
 /// Stream management operations
 #[async_trait]
@@ -182,4 +182,3 @@ impl StreamStreams for PulseService {
         }
     }
 }
-

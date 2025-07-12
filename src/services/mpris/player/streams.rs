@@ -4,8 +4,8 @@ use async_stream::stream;
 use futures::Stream;
 
 use crate::services::mpris::{
-    MediaError, PlaybackState, PlayerEvent, PlayerId, PlayerInfo, PlayerState, TrackMetadata,
-    LoopMode, ShuffleMode, MprisMediaService,
+    LoopMode, MediaError, MprisMediaService, PlaybackState, PlayerEvent, PlayerId, PlayerInfo,
+    PlayerState, ShuffleMode, TrackMetadata,
 };
 
 /// Reactive data streams for media players
