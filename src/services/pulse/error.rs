@@ -15,6 +15,10 @@ pub enum PulseError {
     #[error("Volume conversion failed")]
     VolumeConversion(#[from] VolumeError),
 
+    /// Volume exceeds safe limits
+    #[error("Volume {0} exceeds safe limit of 2.0 (use Volume::with_amplification for higher values)")]
+    VolumeExceedsSafeLimit(f64),
+
     /// Device not found
     #[error("Device {0:?} not found")]
     DeviceNotFound(DeviceIndex),
@@ -23,9 +27,13 @@ pub enum PulseError {
     #[error("Stream {0:?} not found")]
     StreamNotFound(StreamIndex),
 
-    /// Thread communication failed
-    #[error("PulseAudio thread communication failed")]
-    ThreadCommunication,
+    /// Command channel disconnected
+    #[error("Command channel disconnected")]
+    CommandChannelDisconnected,
+
+    /// Lock poisoned due to panic in another thread
+    #[error("Shared data lock poisoned: {0}")]
+    LockPoisoned(String),
 
     /// Service initialization failed
     #[error("Service initialization failed: {0}")]

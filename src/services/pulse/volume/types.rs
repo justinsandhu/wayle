@@ -1,10 +1,17 @@
-/// Multi-channel volume with automatic clamping
+use super::VolumeError;
+
+/// Multi-channel volume with safety warnings
 ///
-/// Volume range: 0.0 (muted) to 4.0 (400% amplification)
+/// # Volume Safety Guidelines
+/// - **Safe range**: 0.0 to 2.0 (0% to 200%)
+/// - **Warning range**: 2.0 to 4.0 (may cause audio damage)
+/// - **Invalid**: Above 4.0 (clamped) or below 0.0 (clamped)
+///
+/// # Volume Levels
 /// - 0.0 = Muted
 /// - 1.0 = Normal volume (100%)
-/// - 2.0 = 200% amplification
-/// - 4.0 = Maximum amplification (400%)
+/// - 2.0 = Safe maximum (200%)
+/// - 4.0 = Absolute maximum (400% - **Audio damage possible**)
 #[derive(Debug, Clone, PartialEq)]
 pub struct Volume {
     volumes: Vec<f64>,
@@ -18,8 +25,35 @@ impl Volume {
     /// - 1.0 = Normal volume (100%)
     /// - 4.0 = Maximum amplification (400%)
     pub fn new(volumes: Vec<f64>) -> Self {
-        let volumes = volumes.into_iter().map(|v| v.clamp(0.0, 4.0)).collect();
+        let volumes = volumes.into_iter().map(|v| {
+            let clamped = v.clamp(0.0, 4.0);
+            if v > 2.0 && v <= 4.0 {
+                tracing::warn!("Volume {v} exceeds safe limit (2.0). Audio damage possible at high amplification.");
+            } else if v > 4.0 {
+                tracing::warn!("Volume {v} clamped to maximum (4.0). Use values ≤2.0 for safe operation.");
+            } else if v < 0.0 {
+                tracing::warn!("Negative volume {v} clamped to 0.0.");
+            }
+            clamped
+        }).collect();
         Self { volumes }
+    }
+
+    /// Create volume with amplification (allows up to 4.0)
+    ///
+    /// # Safety
+    /// Volumes above 2.0 may cause audio damage or distortion.
+    /// Only use when amplification is explicitly required.
+    ///
+    /// # Errors
+    /// Returns error if any volume is negative or exceeds 4.0.
+    pub fn with_amplification(volumes: Vec<f64>) -> Result<Self, VolumeError> {
+        for &volume in &volumes {
+            if !(0.0..=4.0).contains(&volume) {
+                return Err(VolumeError::InvalidVolume { channel: 0, volume });
+            }
+        }
+        Ok(Self { volumes })
     }
 
     /// Create a mono volume
@@ -46,13 +80,27 @@ impl Volume {
     /// Set volume for a specific channel
     ///
     /// Volume is automatically clamped to valid range (0.0 to 4.0).
-    /// Returns true if channel exists, false otherwise.
-    pub fn set_channel(&mut self, channel: usize, volume: f64) -> bool {
+    ///
+    /// # Errors
+    /// Returns error if channel index is out of bounds.
+    pub fn set_channel(&mut self, channel: usize, volume: f64) -> Result<(), VolumeError> {
         if let Some(vol) = self.volumes.get_mut(channel) {
-            *vol = volume.clamp(0.0, 4.0);
-            true
+            let clamped = volume.clamp(0.0, 4.0);
+            if volume > 2.0 && volume <= 4.0 {
+                tracing::warn!(
+                    "Volume {volume} exceeds safe limit (2.0). Audio damage possible at high amplification."
+                );
+            } else if volume > 4.0 {
+                tracing::warn!(
+                    "Volume {volume} clamped to maximum (4.0). Use values ≤2.0 for safe operation."
+                );
+            } else if volume < 0.0 {
+                tracing::warn!("Negative volume {volume} clamped to 0.0.");
+            }
+            *vol = clamped;
+            Ok(())
         } else {
-            false
+            Err(VolumeError::InvalidChannel { channel })
         }
     }
 

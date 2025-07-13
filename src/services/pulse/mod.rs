@@ -157,7 +157,7 @@ impl DeviceManager for PulseService {
         let devices = self
             .devices
             .read()
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         devices
             .values()
             .find(|d| d.index == device)
@@ -172,7 +172,7 @@ impl DeviceManager for PulseService {
         let devices = self
             .devices
             .read()
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         let filtered_devices: Vec<DeviceInfo> = devices
             .values()
             .filter(|d| d.device_type == device_type)
@@ -185,7 +185,7 @@ impl DeviceManager for PulseService {
         let default_input = self
             .default_input
             .read()
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(default_input.clone())
     }
 
@@ -193,21 +193,21 @@ impl DeviceManager for PulseService {
         let default_output = self
             .default_output
             .read()
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(default_output.clone())
     }
 
     async fn set_default_input(&self, device: DeviceIndex) -> Result<(), Self::Error> {
         self.command_tx
             .send(ExternalCommand::SetDefaultInput { device })
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 
     async fn set_default_output(&self, device: DeviceIndex) -> Result<(), Self::Error> {
         self.command_tx
             .send(ExternalCommand::SetDefaultOutput { device })
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 }
@@ -227,14 +227,14 @@ impl DeviceVolumeController for PulseService {
                 device,
                 volume: pulse_volume,
             })
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 
     async fn set_device_mute(&self, device: DeviceIndex, muted: bool) -> Result<(), Self::Error> {
         self.command_tx
             .send(ExternalCommand::SetDeviceMute { device, muted })
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 }
@@ -247,7 +247,7 @@ impl StreamManager for PulseService {
         let streams = self
             .streams
             .read()
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         streams
             .get(&stream)
             .cloned()
@@ -261,7 +261,7 @@ impl StreamManager for PulseService {
     ) -> Result<(), Self::Error> {
         self.command_tx
             .send(ExternalCommand::MoveStream { stream, device })
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 }
@@ -281,14 +281,14 @@ impl StreamVolumeController for PulseService {
                 stream,
                 volume: pulse_volume,
             })
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 
     async fn set_stream_mute(&self, stream: StreamIndex, muted: bool) -> Result<(), Self::Error> {
         self.command_tx
             .send(ExternalCommand::SetStreamMute { stream, muted })
-            .map_err(|_| PulseError::ThreadCommunication)?;
+            .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 }
