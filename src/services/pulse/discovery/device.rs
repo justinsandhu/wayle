@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use libpulse_binding::{callbacks::ListResult, context::Context};
-use tracing::{info, instrument, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::services::{
     AudioEvent, DeviceIndex,
@@ -19,10 +19,10 @@ pub fn trigger_device_discovery(
     device_list_tx: &DeviceListSender,
     events_tx: &EventSender,
 ) {
-    info!("Starting PulseAudio device discovery");
+    debug!("Starting PulseAudio device discovery");
     discover_sinks(context, devices, device_list_tx, events_tx);
     discover_sources(context, devices, device_list_tx, events_tx);
-    info!("PulseAudio device discovery initiated");
+    debug!("PulseAudio device discovery initiated");
 }
 
 /// Discover output devices (sinks)
@@ -48,7 +48,7 @@ fn discover_sinks(
             );
         }
         ListResult::End => {
-            info!("Completed sink discovery");
+            debug!("Completed sink discovery");
             broadcast_device_list(&device_list_tx_clone, &devices_clone);
         }
         ListResult::Error => {}
@@ -78,7 +78,7 @@ fn discover_sources(
             );
         }
         ListResult::End => {
-            info!("Completed source discovery");
+            debug!("Completed source discovery");
             broadcast_device_list(&device_list_tx_clone, &devices_clone);
         }
         ListResult::Error => {}

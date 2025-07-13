@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use libpulse_binding::{callbacks::ListResult, context::Context};
-use tracing::{info, instrument, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::services::{
     AudioEvent,
@@ -19,10 +19,10 @@ pub fn trigger_stream_discovery(
     stream_list_tx: &StreamListSender,
     events_tx: &EventSender,
 ) {
-    info!("Starting PulseAudio stream discovery");
+    debug!("Starting PulseAudio stream discovery");
     discover_sink_inputs(context, streams, stream_list_tx, events_tx);
     discover_source_outputs(context, streams, stream_list_tx, events_tx);
-    info!("PulseAudio stream discovery initiated");
+    debug!("PulseAudio stream discovery initiated");
 }
 
 /// Discover playback streams (sink inputs)
@@ -43,7 +43,7 @@ fn discover_sink_inputs(
             process_stream_info(stream_info, &streams_clone, &events_tx_clone);
         }
         ListResult::End => {
-            info!("Completed sink input discovery");
+            debug!("Completed sink input discovery");
             broadcast_stream_list(&stream_list_tx_clone, &streams_clone);
         }
         ListResult::Error => {}
@@ -68,7 +68,7 @@ fn discover_source_outputs(
             process_stream_info(stream_info, &streams_clone, &events_tx_clone);
         }
         ListResult::End => {
-            info!("Completed source output discovery");
+            debug!("Completed source output discovery");
             broadcast_stream_list(&stream_list_tx_clone, &streams_clone);
         }
         ListResult::Error => {}

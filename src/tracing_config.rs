@@ -1,6 +1,6 @@
 use std::env;
 
-use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Initialize tracing for the application
 ///
@@ -42,14 +42,20 @@ pub fn init() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Initialize tracing with file output
 ///
-/// Similar to init() but also writes logs to a file in addition to stdout.
+/// Sets up dual logging: console output respects RUST_LOG (defaults to "warn"),
+/// while file output uses WAYLE_FILE_LOG level (defaults to "info").
 /// File is created in the wayle logs directory.
 ///
 /// # Errors
 /// Returns error if file creation or tracing subscriber initialization fails
 pub fn init_with_file() -> Result<(), Box<dyn std::error::Error>> {
     const DAYS_TO_KEEP: usize = 7;
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let console_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+    let file_filter = env::var("WAYLE_FILE_LOG")
+        .map(EnvFilter::new)
+        .unwrap_or_else(|_| EnvFilter::new("info"));
 
     let log_dir = crate::config::ConfigPaths::log_dir()?;
 
@@ -63,7 +69,7 @@ pub fn init_with_file() -> Result<(), Box<dyn std::error::Error>> {
 
     let format = env::var("WAYLE_LOG_FORMAT").unwrap_or_else(|_| "pretty".to_string());
 
-    let registry = tracing_subscriber::registry().with(env_filter);
+    let registry = tracing_subscriber::registry();
 
     match format.as_str() {
         "json" => {
@@ -73,7 +79,8 @@ pub fn init_with_file() -> Result<(), Box<dyn std::error::Error>> {
                         .json()
                         .with_target(true)
                         .with_level(true)
-                        .with_writer(std::io::stdout),
+                        .with_writer(std::io::stdout)
+                        .with_filter(console_filter),
                 )
                 .with(
                     fmt::layer()
@@ -81,7 +88,8 @@ pub fn init_with_file() -> Result<(), Box<dyn std::error::Error>> {
                         .with_target(true)
                         .with_level(true)
                         .with_writer(non_blocking)
-                        .with_ansi(false),
+                        .with_ansi(false)
+                        .with_filter(file_filter),
                 )
                 .try_init()?;
         }
@@ -94,7 +102,8 @@ pub fn init_with_file() -> Result<(), Box<dyn std::error::Error>> {
                         .with_level(true)
                         .with_thread_ids(true)
                         .with_thread_names(true)
-                        .with_writer(std::io::stdout),
+                        .with_writer(std::io::stdout)
+                        .with_filter(console_filter),
                 )
                 .with(
                     fmt::layer()
@@ -102,7 +111,8 @@ pub fn init_with_file() -> Result<(), Box<dyn std::error::Error>> {
                         .with_target(true)
                         .with_level(true)
                         .with_writer(non_blocking)
-                        .with_ansi(false),
+                        .with_ansi(false)
+                        .with_filter(file_filter),
                 )
                 .try_init()?;
         }
