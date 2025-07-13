@@ -8,9 +8,11 @@ use crate::services::{AudioEvent, DeviceType, PulseError, StreamIndex, pulse::de
 
 use super::super::discovery::{broadcast_device_list, broadcast_stream_list};
 use super::types::{
-    ChangeNotification, CommandSender, DefaultDevice, DeviceListSender, DeviceStore, EventSender,
-    PulseCommand, StreamListSender, StreamStore,
+    ChangeNotification, DefaultDevice, DeviceListSender, DeviceStore, EventSender, InternalCommand,
+    InternalCommandSender, StreamListSender, StreamStore,
 };
+
+type SubscriptionCallback = Option<Box<dyn FnMut(Option<Facility>, Option<Operation>, u32)>>;
 
 /// Setup PulseAudio event subscription
 ///
@@ -19,7 +21,7 @@ use super::types::{
 pub fn setup_event_subscription(
     context: &mut Context,
     change_tx: mpsc::UnboundedSender<ChangeNotification>,
-    _command_tx: CommandSender,
+    _command_tx: InternalCommandSender,
 ) -> Result<(), PulseError> {
     let interest_mask = InterestMaskSet::SINK
         | InterestMaskSet::SOURCE
@@ -27,38 +29,37 @@ pub fn setup_event_subscription(
         | InterestMaskSet::SOURCE_OUTPUT
         | InterestMaskSet::SERVER;
 
-    context.set_subscribe_callback(Some(Box::new(
-        move |facility, operation, index| match facility {
-            Some(Facility::Sink) | Some(Facility::Source) => {
-                if let (Some(f), Some(op)) = (facility, operation) {
-                    let _ = change_tx.send(ChangeNotification::Device {
-                        facility: f,
-                        operation: op,
+    let subscription_callback: SubscriptionCallback =
+        Some(Box::new(move |facility, operation, index| {
+            let notification = match (facility, operation) {
+                (Some(facil @ (Facility::Sink | Facility::Source)), Some(oper)) => {
+                    Some(ChangeNotification::Device {
+                        facility: facil,
+                        operation: oper,
                         index,
-                    });
+                    })
                 }
-            }
-            Some(Facility::SinkInput) | Some(Facility::SourceOutput) => {
-                if let (Some(f), Some(op)) = (facility, operation) {
-                    let _ = change_tx.send(ChangeNotification::Stream {
-                        facility: f,
-                        operation: op,
+                (Some(facil @ (Facility::SinkInput | Facility::SourceOutput)), Some(oper)) => {
+                    Some(ChangeNotification::Stream {
+                        facility: facil,
+                        operation: oper,
                         index,
-                    });
+                    })
                 }
+                (Some(facil @ Facility::Server), Some(oper)) => Some(ChangeNotification::Server {
+                    facility: facil,
+                    operation: oper,
+                    index,
+                }),
+                _ => None,
+            };
+
+            if let Some(notification) = notification {
+                let _ = change_tx.send(notification);
             }
-            Some(Facility::Server) => {
-                if let (Some(f), Some(op)) = (facility, operation) {
-                    let _ = change_tx.send(ChangeNotification::Server {
-                        facility: f,
-                        operation: op,
-                        index,
-                    });
-                }
-            }
-            _ => {}
-        },
-    )));
+        }));
+
+    context.set_subscribe_callback(subscription_callback);
 
     context.subscribe(interest_mask, |_success: bool| {});
 
@@ -76,7 +77,7 @@ pub async fn process_change_notification(
     events_tx: &EventSender,
     device_list_tx: &DeviceListSender,
     stream_list_tx: &StreamListSender,
-    command_tx: &CommandSender,
+    command_tx: &InternalCommandSender,
 ) {
     match notification {
         ChangeNotification::Device {
@@ -138,7 +139,7 @@ async fn handle_device_change(
     devices: &DeviceStore,
     events_tx: &EventSender,
     device_list_tx: &DeviceListSender,
-    command_tx: &CommandSender,
+    command_tx: &InternalCommandSender,
 ) {
     let device_type = match facility {
         Facility::Sink => DeviceType::Output,
@@ -161,11 +162,11 @@ async fn handle_device_change(
             broadcast_device_list(device_list_tx, devices);
         }
         Operation::New => {
-            let _ = command_tx.send(PulseCommand::TriggerDeviceDiscovery);
+            let _ = command_tx.send(InternalCommand::RefreshDevices);
             broadcast_device_list(device_list_tx, devices);
         }
         Operation::Changed => {
-            let _ = command_tx.send(PulseCommand::TriggerDeviceDiscovery);
+            let _ = command_tx.send(InternalCommand::RefreshDevices);
             broadcast_device_list(device_list_tx, devices);
         }
     }
@@ -179,7 +180,7 @@ async fn handle_stream_change(
     streams: &StreamStore,
     events_tx: &EventSender,
     stream_list_tx: &StreamListSender,
-    command_tx: &CommandSender,
+    command_tx: &InternalCommandSender,
 ) {
     let stream_index = StreamIndex(index);
 
@@ -197,11 +198,11 @@ async fn handle_stream_change(
             broadcast_stream_list(stream_list_tx, streams);
         }
         Operation::New => {
-            let _ = command_tx.send(PulseCommand::TriggerStreamDiscovery);
+            let _ = command_tx.send(InternalCommand::RefreshStreams);
             broadcast_stream_list(stream_list_tx, streams);
         }
         Operation::Changed => {
-            let _ = command_tx.send(PulseCommand::TriggerStreamDiscovery);
+            let _ = command_tx.send(InternalCommand::RefreshStreams);
             broadcast_stream_list(stream_list_tx, streams);
         }
     }
@@ -215,11 +216,11 @@ async fn handle_server_change(
     _devices: &DeviceStore,
     _events_tx: &EventSender,
     device_list_tx: &DeviceListSender,
-    command_tx: &CommandSender,
+    command_tx: &InternalCommandSender,
 ) {
     match operation {
         Operation::Changed => {
-            let _ = command_tx.send(PulseCommand::TriggerServerInfoQuery);
+            let _ = command_tx.send(InternalCommand::RefreshServerInfo);
             broadcast_device_list(device_list_tx, _devices);
         }
         _ => {

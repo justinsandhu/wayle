@@ -28,13 +28,17 @@ pub type DeviceListSender = broadcast::Sender<Vec<DeviceInfo>>;
 /// Channel sender for stream list updates
 pub type StreamListSender = broadcast::Sender<Vec<StreamInfo>>;
 
-/// Channel sender for backend commands
-pub type CommandSender = mpsc::UnboundedSender<PulseCommand>;
+/// Channel sender for external backend commands
+pub type CommandSender = mpsc::UnboundedSender<ExternalCommand>;
+
+/// Channel sender for internal backend commands
+pub(super) type InternalCommandSender = mpsc::UnboundedSender<InternalCommand>;
 
 /// Thread-safe storage for server information
 pub type ServerInfo = Arc<RwLock<Option<String>>>;
 
-pub(super) type CommandReceiver = mpsc::UnboundedReceiver<PulseCommand>;
+pub(super) type ExternalCommandReceiver = mpsc::UnboundedReceiver<ExternalCommand>;
+pub(super) type InternalCommandReceiver = mpsc::UnboundedReceiver<InternalCommand>;
 
 /// Change notifications from PulseAudio subscription
 #[derive(Debug, Clone)]
@@ -68,15 +72,20 @@ pub enum ChangeNotification {
     },
 }
 
-/// PulseAudio commands for backend communication
+/// Internal commands triggered by PulseAudio events
 #[derive(Debug)]
-pub enum PulseCommand {
-    /// Trigger device discovery refresh
-    TriggerDeviceDiscovery,
-    /// Trigger stream discovery refresh
-    TriggerStreamDiscovery,
-    /// Trigger server info query for default device detection
-    TriggerServerInfoQuery,
+pub enum InternalCommand {
+    /// Refresh device information after change notification
+    RefreshDevices,
+    /// Refresh stream information after change notification
+    RefreshStreams,
+    /// Refresh server info for default device updates
+    RefreshServerInfo,
+}
+
+/// External commands from user/API requests
+#[derive(Debug)]
+pub enum ExternalCommand {
     /// Set device volume
     SetDeviceVolume {
         /// Target device

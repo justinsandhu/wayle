@@ -5,14 +5,15 @@ use crate::services::{DeviceIndex, DeviceType, StreamIndex, StreamType};
 use super::{
     discovery::{trigger_device_discovery, trigger_server_info_query, trigger_stream_discovery},
     types::{
-        DeviceListSender, DeviceStore, EventSender, PulseCommand, StreamListSender, StreamStore,
+        DeviceListSender, DeviceStore, EventSender, ExternalCommand, InternalCommand,
+        StreamListSender, StreamStore,
     },
 };
 
-/// Handle PulseAudio backend commands
-pub fn handle_command(
+/// Handle internal PulseAudio commands (event-driven)
+pub fn handle_internal_command(
     context: &mut Context,
-    command: PulseCommand,
+    command: InternalCommand,
     devices: &DeviceStore,
     streams: &StreamStore,
     events_tx: &EventSender,
@@ -20,37 +21,48 @@ pub fn handle_command(
     stream_list_tx: &StreamListSender,
 ) {
     match command {
-        PulseCommand::TriggerDeviceDiscovery => {
+        InternalCommand::RefreshDevices => {
             trigger_device_discovery(context, devices, device_list_tx, events_tx);
         }
-        PulseCommand::TriggerStreamDiscovery => {
+        InternalCommand::RefreshStreams => {
             trigger_stream_discovery(context, streams, stream_list_tx, events_tx);
         }
-        PulseCommand::TriggerServerInfoQuery => {
+        InternalCommand::RefreshServerInfo => {
             trigger_server_info_query(context, devices, events_tx);
         }
-        PulseCommand::SetDeviceVolume { device, volume } => {
+    }
+}
+
+/// Handle external PulseAudio commands (user-initiated)
+pub fn handle_external_command(
+    context: &mut Context,
+    command: ExternalCommand,
+    devices: &DeviceStore,
+    streams: &StreamStore,
+) {
+    match command {
+        ExternalCommand::SetDeviceVolume { device, volume } => {
             set_device_volume(context, device, volume, devices);
         }
-        PulseCommand::SetDeviceMute { device, muted } => {
+        ExternalCommand::SetDeviceMute { device, muted } => {
             set_device_mute(context, device, muted, devices);
         }
-        PulseCommand::SetDefaultInput { device } => {
+        ExternalCommand::SetDefaultInput { device } => {
             set_default_input(context, device, devices);
         }
-        PulseCommand::SetDefaultOutput { device } => {
+        ExternalCommand::SetDefaultOutput { device } => {
             set_default_output(context, device, devices);
         }
-        PulseCommand::SetStreamVolume { stream, volume } => {
+        ExternalCommand::SetStreamVolume { stream, volume } => {
             set_stream_volume(context, stream, volume, streams);
         }
-        PulseCommand::SetStreamMute { stream, muted } => {
+        ExternalCommand::SetStreamMute { stream, muted } => {
             set_stream_mute(context, stream, muted, streams);
         }
-        PulseCommand::MoveStream { stream, device } => {
+        ExternalCommand::MoveStream { stream, device } => {
             move_stream(context, stream, device, streams);
         }
-        PulseCommand::Shutdown => {
+        ExternalCommand::Shutdown => {
             // Shutdown handled in main loop
         }
     }

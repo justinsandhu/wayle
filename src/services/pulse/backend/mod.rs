@@ -9,8 +9,8 @@ pub mod types;
 
 // Re-export public types for easy access
 pub use types::{
-    CommandSender, DefaultDevice, DeviceListSender, DeviceStore, EventSender, PulseCommand,
-    ServerInfo, StreamListSender, StreamStore,
+    CommandSender, DefaultDevice, DeviceListSender, DeviceStore, EventSender, ExternalCommand,
+    InternalCommand, ServerInfo, StreamListSender, StreamStore,
 };
 
 // Re-export conversion functions
@@ -20,19 +20,62 @@ use std::sync::Arc;
 
 use libpulse_binding::context::{Context, FlagSet as ContextFlags};
 use tokio::sync::mpsc;
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
 use crate::services::PulseError;
 
 use super::{discovery, tokio_mainloop::TokioMain, volume};
-use commands::handle_command;
+use commands::{handle_external_command, handle_internal_command};
 use events::{process_change_notification, setup_event_subscription};
-use types::{ChangeNotification, CommandReceiver};
+use types::{ChangeNotification, ExternalCommandReceiver, InternalCommandReceiver};
 
 /// PulseAudio backend implementation
 pub struct PulseBackend;
 
 impl PulseBackend {
+    /// Spawn the monitoring task for PulseAudio events
+    ///
+    /// Creates a background task that monitors PulseAudio for device and stream changes,
+    /// processes commands, and manages the connection lifecycle.
+    ///
+    /// # Errors
+    /// Returns error if PulseAudio connection or monitoring setup fails
+    #[allow(clippy::too_many_arguments)]
+    #[instrument(name = "pulse_backend_spawn", skip_all)]
+    pub async fn spawn_monitoring_task(
+        command_rx: ExternalCommandReceiver,
+        device_list_tx: DeviceListSender,
+        stream_list_tx: StreamListSender,
+        events_tx: EventSender,
+        devices: DeviceStore,
+        streams: StreamStore,
+        default_input: DefaultDevice,
+        default_output: DefaultDevice,
+        _server_info: ServerInfo,
+    ) -> Result<tokio::task::JoinHandle<()>, PulseError> {
+        let handle = tokio::task::spawn_blocking(move || {
+            let runtime = tokio::runtime::Handle::current();
+            runtime.block_on(async move {
+                if let Err(e) = Self::monitor_pulse_events(
+                    command_rx,
+                    device_list_tx,
+                    stream_list_tx,
+                    events_tx,
+                    devices,
+                    streams,
+                    default_input,
+                    default_output,
+                )
+                .await
+                {
+                    error!("PulseAudio monitoring task failed: {e}");
+                }
+            });
+        });
+
+        Ok(handle)
+    }
+
     /// Convert our volume to PulseAudio volume
     pub fn convert_volume_to_pulse(
         volume: &volume::Volume,
@@ -46,15 +89,17 @@ impl PulseBackend {
     ) -> volume::Volume {
         conversion::convert_volume_from_pulse(pulse_volume)
     }
-    /// Spawn the monitoring task for PulseAudio events
+
+    /// Main monitoring loop for PulseAudio events
+    ///
+    /// Establishes connection to PulseAudio server and runs the event processing loop.
+    /// Handles both external commands and internal change notifications.
     ///
     /// # Errors
-    /// Returns error if PulseAudio connection or monitoring setup fails
+    /// Returns error if connection fails or event setup fails
     #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_lines)]
-    #[instrument(name = "pulse_backend_spawn", skip_all)]
-    pub async fn spawn_monitoring_task(
-        mut command_rx: CommandReceiver,
+    async fn monitor_pulse_events(
+        command_rx: ExternalCommandReceiver,
         device_list_tx: DeviceListSender,
         stream_list_tx: StreamListSender,
         events_tx: EventSender,
@@ -62,136 +107,135 @@ impl PulseBackend {
         streams: StreamStore,
         default_input: DefaultDevice,
         default_output: DefaultDevice,
-        _server_info: ServerInfo,
-    ) -> Result<tokio::task::JoinHandle<()>, PulseError> {
-        let handle = tokio::task::spawn_blocking(move || {
-            let result: Result<(), PulseError> = (|| {
-                info!("Starting PulseAudio backend monitoring task");
-                let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                    PulseError::ConnectionFailed(format!("Failed to create runtime: {e}"))
-                })?;
-                rt.block_on(async {
-                    let mut mainloop = TokioMain::new();
-                    info!("Creating PulseAudio context");
-                    let mut context = Context::new(&mainloop, "wayle-pulse").ok_or_else(|| {
-                        PulseError::ConnectionFailed("Failed to create context".to_string())
-                    })?;
+    ) -> Result<(), PulseError> {
+        info!("Starting PulseAudio backend monitoring task");
 
-                    info!("Connecting to PulseAudio server");
-                    context
-                        .connect(None, ContextFlags::NOFLAGS, None)
-                        .map_err(|e| {
-                            PulseError::ConnectionFailed(format!("Connection failed: {e}"))
-                        })?;
+        let mut mainloop = TokioMain::new();
+        info!("Creating PulseAudio context");
+        let mut context = Context::new(&mainloop, "wayle-pulse")
+            .ok_or_else(|| PulseError::ConnectionFailed("Failed to create context".to_string()))?;
 
-                    info!("Waiting for PulseAudio context to become ready");
-                    mainloop.wait_for_ready(&context).await.map_err(|e| {
-                        PulseError::ConnectionFailed(format!(
-                            "Context failed to become ready: {e:?}"
-                        ))
-                    })?;
+        info!("Connecting to PulseAudio server");
+        context
+            .connect(None, ContextFlags::NOFLAGS, None)
+            .map_err(|e| PulseError::ConnectionFailed(format!("Connection failed: {e}")))?;
 
-                    let (change_tx, mut change_rx) =
-                        mpsc::unbounded_channel::<ChangeNotification>();
-                    let (internal_command_tx, mut internal_command_rx) =
-                        mpsc::unbounded_channel::<PulseCommand>();
+        info!("Waiting for PulseAudio context to become ready");
+        mainloop.wait_for_ready(&context).await.map_err(|e| {
+            PulseError::ConnectionFailed(format!("Context failed to become ready: {e:?}"))
+        })?;
 
-                    info!("Setting up PulseAudio event subscription");
-                    setup_event_subscription(&mut context, change_tx, internal_command_tx.clone())?;
+        let (change_tx, mut change_rx) = mpsc::unbounded_channel::<ChangeNotification>();
+        let (internal_command_tx, internal_command_rx) =
+            mpsc::unbounded_channel::<InternalCommand>();
 
-                    let devices_clone = Arc::clone(&devices);
-                    let streams_clone = Arc::clone(&streams);
-                    let default_input_clone = Arc::clone(&default_input);
-                    let default_output_clone = Arc::clone(&default_output);
-                    let events_tx_clone = events_tx.clone();
-                    let device_list_tx_clone = device_list_tx.clone();
-                    let stream_list_tx_clone = stream_list_tx.clone();
-                    let command_tx_clone = internal_command_tx.clone();
+        info!("Setting up PulseAudio event subscription");
+        setup_event_subscription(&mut context, change_tx, internal_command_tx.clone())?;
 
-                    tokio::spawn(async move {
-                        while let Some(notification) = change_rx.recv().await {
-                            process_change_notification(
-                                notification,
-                                &devices_clone,
-                                &streams_clone,
-                                &default_input_clone,
-                                &default_output_clone,
-                                &events_tx_clone,
-                                &device_list_tx_clone,
-                                &stream_list_tx_clone,
-                                &command_tx_clone,
-                            )
-                            .await;
-                        }
-                    });
+        let devices_clone = Arc::clone(&devices);
+        let streams_clone = Arc::clone(&streams);
+        let default_input_clone = Arc::clone(&default_input);
+        let default_output_clone = Arc::clone(&default_output);
+        let events_tx_clone = events_tx.clone();
+        let device_list_tx_clone = device_list_tx.clone();
+        let stream_list_tx_clone = stream_list_tx.clone();
+        let command_tx_clone = internal_command_tx.clone();
 
-                    info!("Triggering initial device and stream discovery");
-                    discovery::trigger_device_discovery(
-                        &context,
-                        &devices,
-                        &device_list_tx,
-                        &events_tx,
-                    );
-                    discovery::trigger_stream_discovery(
-                        &context,
-                        &streams,
-                        &stream_list_tx,
-                        &events_tx,
-                    );
-
-                    info!("PulseAudio backend fully initialized and monitoring");
-
-                    tokio::select! {
-                        _ = mainloop.run() => {}
-                        _ = async {
-                            loop {
-                                tokio::select! {
-                                    command = command_rx.recv() => {
-                                        if let Some(command) = command {
-                                            match command {
-                                                PulseCommand::Shutdown => break,
-                                                _ => handle_command(
-                                                    &mut context,
-                                                    command,
-                                                    &devices,
-                                                    &streams,
-                                                    &events_tx,
-                                                    &device_list_tx,
-                                                    &stream_list_tx,
-                                                ),
-                                            }
-                                        } else {
-                                            break;
-                                        }
-                                    }
-                                    command = internal_command_rx.recv() => {
-                                        if let Some(command) = command {
-                                            handle_command(
-                                                &mut context,
-                                                command,
-                                                &devices,
-                                                &streams,
-                                                &events_tx,
-                                                &device_list_tx,
-                                                &stream_list_tx,
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        } => {
-                        }
-                    }
-
-                    Ok(())
-                })
-            })();
-
-            if let Err(_e) = result {
-                // Error handling - task continues
+        tokio::spawn(async move {
+            while let Some(notification) = change_rx.recv().await {
+                process_change_notification(
+                    notification,
+                    &devices_clone,
+                    &streams_clone,
+                    &default_input_clone,
+                    &default_output_clone,
+                    &events_tx_clone,
+                    &device_list_tx_clone,
+                    &stream_list_tx_clone,
+                    &command_tx_clone,
+                )
+                .await;
             }
         });
 
-        Ok(handle)
+        info!("Triggering initial device and stream discovery");
+        discovery::trigger_device_discovery(&context, &devices, &device_list_tx, &events_tx);
+        discovery::trigger_stream_discovery(&context, &streams, &stream_list_tx, &events_tx);
+
+        info!("PulseAudio backend fully initialized and monitoring");
+
+        tokio::select! {
+            _ = mainloop.run() => {
+                info!("PulseAudio mainloop exited");
+            }
+            _ = Self::run_command_loop(
+                &mut context,
+                command_rx,
+                internal_command_rx,
+                &devices,
+                &streams,
+                &events_tx,
+                &device_list_tx,
+                &stream_list_tx,
+            ) => {
+                info!("Command processing loop exited");
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Run the command processing loop
+    ///
+    /// Processes both external and internal commands until shutdown is requested
+    /// or a channel is closed.
+    #[allow(clippy::too_many_arguments)]
+    async fn run_command_loop(
+        context: &mut Context,
+        mut command_rx: ExternalCommandReceiver,
+        mut internal_command_rx: InternalCommandReceiver,
+        devices: &DeviceStore,
+        streams: &StreamStore,
+        events_tx: &EventSender,
+        device_list_tx: &DeviceListSender,
+        stream_list_tx: &StreamListSender,
+    ) {
+        loop {
+            tokio::select! {
+                external_cmd = command_rx.recv() => {
+                    match external_cmd {
+                        Some(ExternalCommand::Shutdown) => {
+                            info!("Received shutdown command");
+                            break;
+                        }
+                        Some(command) => {
+                            handle_external_command(
+                                context,
+                                command,
+                                devices,
+                                streams,
+                            );
+                        }
+                        None => {
+                            info!("External command channel closed");
+                            break;
+                        }
+                    }
+                }
+                internal_cmd = internal_command_rx.recv() => {
+                    if let Some(command) = internal_cmd {
+                        handle_internal_command(
+                            context,
+                            command,
+                            devices,
+                            streams,
+                            events_tx,
+                            device_list_tx,
+                            stream_list_tx,
+                        );
+                    }
+                }
+            }
+        }
     }
 }
