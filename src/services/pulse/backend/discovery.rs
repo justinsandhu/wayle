@@ -183,6 +183,14 @@ pub fn trigger_stream_discovery(
                             });
                     }
 
+                    if existing_stream.device_index != stream_info.device_index {
+                        let _ = events_tx_clone_for_sink_input.send(AudioEvent::StreamMoved {
+                            stream_index: stream_info.index,
+                            from_device: existing_stream.device_index,
+                            to_device: stream_info.device_index,
+                        });
+                    }
+
                     if existing_stream.properties_changed(&stream_info) {
                         let _ = events_tx_clone_for_sink_input
                             .send(AudioEvent::StreamChanged(stream_info.clone()));
