@@ -10,6 +10,8 @@ use tokio::sync::{broadcast, mpsc};
 pub mod backend;
 /// Device management domain
 pub mod device;
+/// Discovery functionality
+pub mod discovery;
 /// Error types
 pub mod error;
 /// Event types and handling

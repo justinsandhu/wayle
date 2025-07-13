@@ -2,8 +2,6 @@
 pub mod commands;
 /// Data conversion utilities
 pub mod conversion;
-/// Device and stream discovery
-pub mod discovery;
 /// Event subscription and handling
 pub mod events;
 /// Type definitions and aliases
@@ -25,7 +23,7 @@ use tokio::sync::mpsc;
 
 use crate::services::PulseError;
 
-use super::{tokio_mainloop::TokioMain, volume};
+use super::{discovery, tokio_mainloop::TokioMain, volume};
 use commands::handle_command;
 use events::{process_change_notification, setup_event_subscription};
 use types::{ChangeNotification, CommandReceiver};
