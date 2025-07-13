@@ -1,5 +1,7 @@
 use std::{error::Error, sync::Arc};
 
+use tracing::{info, instrument};
+
 use crate::config_store::ConfigStore;
 use crate::services::mpris::MprisMediaService;
 use crate::services::pulse::PulseService;
@@ -27,12 +29,19 @@ impl Services {
     ///
     /// # Errors
     /// Returns error if any service initialization fails
+    #[instrument(skip(config_store))]
     pub async fn new(config_store: &ConfigStore) -> Result<Self, Box<dyn Error>> {
         let config = config_store.get_current();
 
+        info!("Initializing MPRIS media service");
         let media_service = MprisMediaService::new(config.media.ignored_players).await?;
-        let audio_service = PulseService::new().await?;
+        info!("MPRIS service started successfully");
 
+        info!("Initializing PulseAudio service");
+        let audio_service = PulseService::new().await?;
+        info!("PulseAudio service started successfully");
+
+        info!("All services initialized successfully");
         Ok(Self {
             media: Arc::new(media_service),
             audio: Arc::new(audio_service),

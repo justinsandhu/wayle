@@ -3,6 +3,7 @@ use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc, time::Durat
 use async_trait::async_trait;
 use futures::Stream;
 use tokio::sync::{RwLock, broadcast};
+use tracing::{info, instrument};
 use zbus::Connection;
 
 /// Thread-safe storage for media player state trackers
@@ -80,10 +81,13 @@ impl MprisMediaService {
     ///
     /// # Errors
     /// Returns error if D-Bus session connection fails or player discovery initialization fails
+    #[instrument(skip(ignored_players))]
     pub async fn new(ignored_players: Vec<String>) -> Result<Self, MediaError> {
+        info!("Initializing MPRIS media service");
         let connection = Connection::session().await.map_err(|e| {
             MediaError::InitializationFailed(format!("D-Bus connection failed: {e}"))
         })?;
+        info!("D-Bus session connection established");
 
         let (player_list_tx, _) = broadcast::channel(32);
         let (events_tx, _) = broadcast::channel(1024);
@@ -95,6 +99,7 @@ impl MprisMediaService {
         let events_tx = Arc::new(events_tx);
         let ignored_players = Arc::new(RwLock::new(ignored_players));
 
+        info!("Setting up player discovery and monitoring");
         let discovery = PlayerDiscovery::new(
             connection.clone(),
             players.clone(),
@@ -116,7 +121,9 @@ impl MprisMediaService {
             ignored_players,
         );
 
+        info!("Starting MPRIS player discovery");
         player_manager.start_discovery().await?;
+        info!("MPRIS service fully initialized");
 
         Ok(Self {
             player_manager,

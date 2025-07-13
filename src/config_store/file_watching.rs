@@ -12,6 +12,7 @@ use tokio::{
     task::JoinHandle,
     time::timeout,
 };
+use tracing::{debug, error, info, instrument, warn};
 
 /// File watcher that monitors configuration changes.
 ///
@@ -39,7 +40,9 @@ impl ConfigStore {
     /// # Errors
     /// Returns `ConfigError::FileWatcherInitError` if file watching cannot be initialized
     /// or configuration directory cannot be accessed.
+    #[instrument(skip(self))]
     pub fn start_file_watching(&self) -> Result<FileWatcher, ConfigError> {
+        info!("Starting configuration file monitoring");
         let (tx, mut rx) = mpsc::channel(100);
 
         let mut watcher = recommended_watcher(move |res| {
@@ -92,6 +95,12 @@ impl ConfigStore {
 
         self.update_config(new_config)?;
 
+        if changes.is_empty() {
+            debug!("No configuration changes detected");
+            return Ok(());
+        }
+
+        info!("Broadcasting {} configuration changes", changes.len());
         for change in &changes {
             self.broadcast_change(change.clone());
         }
@@ -125,12 +134,13 @@ async fn file_watch_loop(event_rx: &mut Receiver<notify::Event>, store: ConfigSt
                 }
             }
             Ok(None) => {
+                debug!("File watching terminated");
                 break;
             }
             Err(_) => {
                 if pending_changes && last_change.elapsed() >= debounce_duration {
                     if let Err(e) = store.reload_from_files() {
-                        eprintln!("Failed to reload config: {e}");
+                        error!("Failed to reload config: {e}");
                     }
                     pending_changes = false;
                 }

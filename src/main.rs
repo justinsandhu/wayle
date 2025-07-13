@@ -5,16 +5,24 @@
 
 use std::{env, error::Error, fs, process};
 
+use tracing::{Level, error, info, instrument, span};
 use wayle::{
     cli::{CliService, formatting::format_error},
     config::ConfigPaths,
     config_store::ConfigStore,
     service_manager::Services,
+    tracing_config,
 };
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
+
+    tracing_config::init_with_file()?;
+
+    let _span = span!(Level::INFO, "wayle_main").entered();
+    info!("Starting Wayle desktop environment framework");
+
     ensure_wayle_directories()?;
 
     match args.get(1).map(|s| s.as_str()) {
@@ -41,6 +49,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 /// # Errors
 /// Returns error if command execution fails or config store initialization fails.
 async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn Error>> {
+    let _span = span!(
+        Level::INFO,
+        "cli_command",
+        category = args.first().map(|s| s.as_str()).unwrap_or("help"),
+        command = args.get(1).map(|s| s.as_str()).unwrap_or("")
+    )
+    .entered();
+
+    info!("Loading configuration and services");
     let config_store = ConfigStore::load()?;
     let services = Services::new(&config_store).await?;
     let cli_service = CliService::new(config_store, &services);
@@ -60,17 +77,23 @@ async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn Error>> {
             if !output.trim().is_empty() {
                 println!("{output}");
             }
+            info!("Command completed successfully");
             Ok(())
         }
         Err(e) => {
+            error!("Command failed: {}", e);
             eprintln!("{}", format_error(&e.to_string()));
             process::exit(1);
         }
     }
 }
 
+#[instrument]
 fn ensure_wayle_directories() -> Result<(), Box<dyn Error>> {
     let config_dir = ConfigPaths::config_dir()?;
-    fs::create_dir_all(&config_dir)?;
+    if !config_dir.exists() {
+        info!("Creating config directory: {}", config_dir.display());
+        fs::create_dir_all(&config_dir)?;
+    }
     Ok(())
 }

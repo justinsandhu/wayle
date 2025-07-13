@@ -45,5 +45,8 @@ pub mod service_manager;
 /// Runtime state shared between CLI and UI.
 pub mod runtime_state;
 
+/// Tracing and logging configuration.
+pub mod tracing_config;
+
 /// Re-exported core types for convenience.
 pub use core::{Result, WayleError};

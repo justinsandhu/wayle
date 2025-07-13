@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::StreamExt;
 use tokio::sync::{RwLock, broadcast};
+use tracing::{info, instrument, warn};
 use zbus::{Connection, fdo};
 
 use super::{
@@ -48,7 +49,9 @@ impl PlayerDiscovery {
     ///
     /// # Errors
     /// Returns error if D-Bus proxy creation or signal subscription fails
+    #[instrument(skip(self))]
     pub async fn start_discovery(&self) -> Result<(), MediaError> {
+        info!("Starting MPRIS player discovery monitoring");
         let dbus_proxy = fdo::DBusProxy::new(&self.connection)
             .await
             .map_err(|e| MediaError::InitializationFailed(format!("DBus proxy failed: {e}")))?;
@@ -77,7 +80,7 @@ impl PlayerDiscovery {
                     }
                     (None, Some(_)) => {
                         if let Err(e) = discovery.handle_player_added(player_id).await {
-                            println!("Failed to add player: {e}");
+                            warn!("Failed to add player: {e}");
                         }
                     }
                     _ => {}
@@ -85,6 +88,7 @@ impl PlayerDiscovery {
             }
         });
 
+        info!("MPRIS player discovery monitoring started successfully");
         Ok(())
     }
 
@@ -92,7 +96,9 @@ impl PlayerDiscovery {
     ///
     /// # Errors
     /// Returns error if D-Bus proxy creation or name listing fails
+    #[instrument(skip(self))]
     pub async fn discover_existing_players(&self) -> Result<(), MediaError> {
+        info!("Discovering existing MPRIS players on D-Bus");
         let dbus_proxy = fdo::DBusProxy::new(&self.connection)
             .await
             .map_err(|e| MediaError::InitializationFailed(format!("DBus proxy failed: {e}")))?;
@@ -109,10 +115,11 @@ impl PlayerDiscovery {
 
             let player_id = PlayerId::from_bus_name(&name);
             if let Err(e) = self.handle_player_added(player_id).await {
-                eprintln!("Failed to add existing player {name}: {e}");
+                warn!("Failed to add existing player {}: {}", name, e);
             }
         }
 
+        info!("Finished discovering existing MPRIS players");
         Ok(())
     }
 
@@ -120,10 +127,14 @@ impl PlayerDiscovery {
     ///
     /// # Errors
     /// Returns error if player proxy creation or monitoring setup fails
+    #[instrument(skip(self), fields(bus_name = %player_id.bus_name()))]
     pub async fn handle_player_added(&self, player_id: PlayerId) -> Result<(), MediaError> {
         if self.should_ignore_player(player_id.bus_name()).await {
+            info!("Ignoring player based on configuration");
             return Ok(());
         }
+
+        info!("Adding new MPRIS player");
         let base_proxy = MediaPlayer2Proxy::builder(&self.connection)
             .destination(player_id.bus_name().to_string())
             .map_err(MediaError::DbusError)?
@@ -203,11 +214,14 @@ impl PlayerDiscovery {
             }
         }
 
+        info!("MPRIS player added and monitoring started successfully");
         Ok(())
     }
 
     /// Handle a player being removed from the bus
+    #[instrument(skip(self), fields(bus_name = %player_id.bus_name()))]
     pub async fn handle_player_removed(&self, player_id: PlayerId) {
+        info!("Removing MPRIS player");
         {
             let mut players = self.players.write().await;
             if let Some(mut tracker) = players.remove(&player_id) {
@@ -227,6 +241,7 @@ impl PlayerDiscovery {
 
         let _ = self.events_tx.send(PlayerEvent::PlayerRemoved(player_id));
         self.broadcast_player_list().await;
+        info!("MPRIS player removed successfully");
     }
 
     /// Check if a player should be ignored based on its bus name

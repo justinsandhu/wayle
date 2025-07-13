@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use libpulse_binding::{callbacks::ListResult, context::Context};
+use tracing::{info, instrument, warn};
 
 use crate::services::{
     AudioEvent,
@@ -11,14 +12,17 @@ use crate::services::{
 };
 
 /// Trigger stream discovery from PulseAudio
+#[instrument(skip_all)]
 pub fn trigger_stream_discovery(
     context: &Context,
     streams: &StreamStore,
     stream_list_tx: &StreamListSender,
     events_tx: &EventSender,
 ) {
+    info!("Starting PulseAudio stream discovery");
     discover_sink_inputs(context, streams, stream_list_tx, events_tx);
     discover_source_outputs(context, streams, stream_list_tx, events_tx);
+    info!("PulseAudio stream discovery initiated");
 }
 
 /// Discover playback streams (sink inputs)
@@ -39,6 +43,7 @@ fn discover_sink_inputs(
             process_stream_info(stream_info, &streams_clone, &events_tx_clone);
         }
         ListResult::End => {
+            info!("Completed sink input discovery");
             broadcast_stream_list(&stream_list_tx_clone, &streams_clone);
         }
         ListResult::Error => {}
@@ -63,6 +68,7 @@ fn discover_source_outputs(
             process_stream_info(stream_info, &streams_clone, &events_tx_clone);
         }
         ListResult::End => {
+            info!("Completed source output discovery");
             broadcast_stream_list(&stream_list_tx_clone, &streams_clone);
         }
         ListResult::Error => {}
@@ -131,4 +137,3 @@ pub fn broadcast_stream_list(stream_list_tx: &StreamListSender, streams: &Stream
         let _ = stream_list_tx.send(stream_list);
     }
 }
-

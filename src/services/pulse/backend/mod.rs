@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use libpulse_binding::context::{Context, FlagSet as ContextFlags};
 use tokio::sync::mpsc;
+use tracing::{info, instrument};
 
 use crate::services::PulseError;
 
@@ -51,6 +52,7 @@ impl PulseBackend {
     /// Returns error if PulseAudio connection or monitoring setup fails
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_lines)]
+    #[instrument(name = "pulse_backend_spawn", skip_all)]
     pub async fn spawn_monitoring_task(
         mut command_rx: CommandReceiver,
         device_list_tx: DeviceListSender,
@@ -64,21 +66,25 @@ impl PulseBackend {
     ) -> Result<tokio::task::JoinHandle<()>, PulseError> {
         let handle = tokio::task::spawn_blocking(move || {
             let result: Result<(), PulseError> = (|| {
+                info!("Starting PulseAudio backend monitoring task");
                 let rt = tokio::runtime::Runtime::new().map_err(|e| {
                     PulseError::ConnectionFailed(format!("Failed to create runtime: {e}"))
                 })?;
                 rt.block_on(async {
                     let mut mainloop = TokioMain::new();
+                    info!("Creating PulseAudio context");
                     let mut context = Context::new(&mainloop, "wayle-pulse").ok_or_else(|| {
                         PulseError::ConnectionFailed("Failed to create context".to_string())
                     })?;
 
+                    info!("Connecting to PulseAudio server");
                     context
                         .connect(None, ContextFlags::NOFLAGS, None)
                         .map_err(|e| {
                             PulseError::ConnectionFailed(format!("Connection failed: {e}"))
                         })?;
 
+                    info!("Waiting for PulseAudio context to become ready");
                     mainloop.wait_for_ready(&context).await.map_err(|e| {
                         PulseError::ConnectionFailed(format!(
                             "Context failed to become ready: {e:?}"
@@ -90,6 +96,7 @@ impl PulseBackend {
                     let (internal_command_tx, mut internal_command_rx) =
                         mpsc::unbounded_channel::<PulseCommand>();
 
+                    info!("Setting up PulseAudio event subscription");
                     setup_event_subscription(&mut context, change_tx, internal_command_tx.clone())?;
 
                     let devices_clone = Arc::clone(&devices);
@@ -118,6 +125,7 @@ impl PulseBackend {
                         }
                     });
 
+                    info!("Triggering initial device and stream discovery");
                     discovery::trigger_device_discovery(
                         &context,
                         &devices,
@@ -130,6 +138,8 @@ impl PulseBackend {
                         &stream_list_tx,
                         &events_tx,
                     );
+
+                    info!("PulseAudio backend fully initialized and monitoring");
 
                     tokio::select! {
                         _ = mainloop.run() => {}

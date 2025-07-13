@@ -8,8 +8,8 @@ use crate::services::{AudioEvent, DeviceType, PulseError, StreamIndex, pulse::de
 
 use super::super::discovery::{broadcast_device_list, broadcast_stream_list};
 use super::types::{
-    ChangeNotification, CommandSender, DefaultDevice, DeviceListSender, DeviceStore,
-    EventSender, PulseCommand, StreamListSender, StreamStore,
+    ChangeNotification, CommandSender, DefaultDevice, DeviceListSender, DeviceStore, EventSender,
+    PulseCommand, StreamListSender, StreamStore,
 };
 
 /// Setup PulseAudio event subscription

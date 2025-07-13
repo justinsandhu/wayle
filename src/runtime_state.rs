@@ -1,6 +1,7 @@
 use std::{fs, path::PathBuf, time::SystemTime};
 
 use serde::{Deserialize, Serialize};
+use tracing::{info, instrument, warn};
 
 use crate::config::ConfigPaths;
 
@@ -34,14 +35,20 @@ impl RuntimeState {
     ///
     /// # Errors
     /// Returns error if file cannot be read or config directory is inaccessible
+    #[instrument]
     pub async fn load() -> Result<Self, Box<dyn std::error::Error>> {
         let path = Self::state_file_path()?;
 
         if path.exists() {
+            info!("Loading runtime state from file");
             let content = fs::read_to_string(&path)?;
-            let state: Self = serde_json::from_str(&content).unwrap_or_else(|_| Self::default());
+            let state: Self = serde_json::from_str(&content).unwrap_or_else(|_| {
+                warn!("Invalid runtime state file, using defaults");
+                Self::default()
+            });
             Ok(state)
         } else {
+            info!("No runtime state file found, creating default");
             Ok(Self::default())
         }
     }
@@ -50,6 +57,7 @@ impl RuntimeState {
     ///
     /// # Errors
     /// Returns error if file cannot be written or directory cannot be created
+    #[instrument(skip(self))]
     pub async fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let path = Self::state_file_path()?;
 

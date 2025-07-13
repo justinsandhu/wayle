@@ -5,6 +5,7 @@ use std::{
 };
 
 use toml::Value;
+use tracing::{debug, info, instrument, warn};
 
 /// Thread-safe storage for configuration
 pub type ConfigData = Arc<RwLock<Config>>;
@@ -49,8 +50,11 @@ impl ConfigStore {
     /// # Errors
     ///
     /// Returns `ConfigError::ProcessingError` if the configuration file cannot be loaded.
+    #[instrument]
     pub fn load() -> Result<Self, ConfigError> {
         let main_config = ConfigPaths::main_config();
+        info!("Loading configuration from {}", main_config.display());
+
         let config =
             Config::load_with_imports(&main_config).map_err(|e| ConfigError::ProcessingError {
                 operation: "load config".to_string(),
@@ -58,8 +62,10 @@ impl ConfigStore {
             })?;
         let broadcast_service = BroadcastService::new();
 
+        debug!("Loading runtime configuration");
         let runtime_config = Self::load_runtime_config()?;
 
+        info!("Configuration loaded successfully");
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
             runtime_config: Arc::new(RwLock::new(runtime_config)),
@@ -79,8 +85,10 @@ impl ConfigStore {
     /// * `ConfigError::SerializationError` - If the config cannot be serialized
     /// * `ConfigError::ConversionError` - If the config cannot be converted between formats
     /// * `ConfigError::PersistenceError` - If the config cannot be saved to disk
+    #[instrument(skip(self, value), fields(path = %path))]
     pub fn set_by_path(&self, path: &str, value: Value) -> Result<(), ConfigError> {
         let old_value = self.get_by_path(path).ok();
+        debug!("Setting config value at path: {}", path);
 
         self.runtime_config
             .write()
@@ -99,6 +107,7 @@ impl ConfigStore {
             self.set_config_field(&mut config, path, &value)?;
         }
 
+        debug!("Persisting configuration changes");
         self.save_config()?;
 
         let change = ConfigChange::new(path.to_string(), old_value, value);
