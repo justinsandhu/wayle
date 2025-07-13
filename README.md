@@ -29,33 +29,32 @@ A fast, configurable desktop environment framework for Wayland compositors. Buil
 
 - [ ] **Component Library** - Base Relm4 widgets and containers
 - [ ] **Bar Modules**:
-  - [ ] Battery indicator
-  - [ ] Dashboard toggle
+  - [ ] Battery
+  - [ ] Dashboard
   - [ ] Hyprland workspaces
-  - [ ] Window title display
-  - [ ] Media controls
-  - [ ] Notification indicator
-  - [ ] Volume control
-  - [ ] Network status
-  - [ ] Bluetooth status
-  - [ ] Clock display
+  - [ ] Window title
+  - [ ] Media
+  - [ ] Notification
+  - [ ] Volume
+  - [ ] Network
+  - [ ] Bluetooth
+  - [ ] Clock
   - [ ] System tray
   - [ ] World clock
-  - [ ] Separator elements
-  - [ ] Microphone indicator
-  - [ ] RAM usage
-  - [ ] CPU usage
-  - [ ] CPU temperature
-  - [ ] Storage usage
-  - [ ] Network statistics
-  - [ ] Keyboard input display
-  - [ ] Update notifications
-  - [ ] Weather display
+  - [ ] Separator
+  - [ ] Microphone
+  - [ ] RAM
+  - [ ] CPU
+  - [ ] CPU
+  - [ ] Storage
+  - [ ] Network
+  - [ ] Keyboard input
+  - [ ] Updates
+  - [ ] Weather
   - [ ] Hyprland submap
-  - [ ] Hyprsunset control
-  - [ ] Hypridle status
-  - [ ] Power controls
-  - [ ] Audio visualization
+  - [ ] Hyprsunset
+  - [ ] Hypridle
+  - [ ] Power
 
 ### Dropdown Interfaces
 
