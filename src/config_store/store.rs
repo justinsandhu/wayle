@@ -6,6 +6,12 @@ use std::{
 
 use toml::Value;
 
+/// Thread-safe storage for configuration
+pub type ConfigData = Arc<RwLock<Config>>;
+
+/// Thread-safe storage for runtime configuration values
+pub type RuntimeConfig = Arc<RwLock<HashMap<String, Value>>>;
+
 use crate::config::{Config, ConfigPaths};
 
 use super::{
@@ -20,9 +26,9 @@ use super::{
 /// read, write, and observe configuration changes across the application.
 #[derive(Clone)]
 pub struct ConfigStore {
-    config: Arc<RwLock<Config>>,
+    config: ConfigData,
     broadcast_service: BroadcastService,
-    runtime_config: Arc<RwLock<HashMap<String, Value>>>,
+    runtime_config: RuntimeConfig,
 }
 
 impl ConfigStore {

@@ -5,6 +5,15 @@ use futures::Stream;
 use tokio::sync::{RwLock, broadcast};
 use zbus::Connection;
 
+/// Thread-safe storage for media player state trackers
+pub type PlayerStore = Arc<RwLock<HashMap<PlayerId, player::PlayerStateTracker>>>;
+
+/// Channel sender for player list updates
+pub type PlayerListSender = broadcast::Sender<Vec<PlayerId>>;
+
+/// Channel sender for player events
+pub type PlayerEventSender = broadcast::Sender<PlayerEvent>;
+
 /// Media control operations
 pub mod control;
 /// Player discovery and lifecycle management
@@ -54,10 +63,10 @@ pub struct MprisMediaService {
     control: MediaControl,
 
     /// Broadcast channel for player list updates
-    player_list_tx: Arc<broadcast::Sender<Vec<PlayerId>>>,
+    player_list_tx: Arc<PlayerListSender>,
 
     /// Broadcast channel for player events
-    events_tx: Arc<broadcast::Sender<PlayerEvent>>,
+    events_tx: Arc<PlayerEventSender>,
 }
 
 impl MprisMediaService {

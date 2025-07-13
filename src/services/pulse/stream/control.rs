@@ -4,7 +4,10 @@ use async_trait::async_trait;
 use futures::Stream;
 
 use super::{StreamIndex, StreamInfo};
-use crate::services::pulse::{AudioEvent, PulseService, device::DeviceIndex, volume::Volume};
+use crate::services::{
+    StreamType,
+    pulse::{AudioEvent, PulseService, device::DeviceIndex, volume::Volume},
+};
 
 /// Stream management operations
 #[async_trait]
@@ -106,7 +109,7 @@ impl StreamStreams for PulseService {
             while let Some(stream_list) = streams_stream.next().await {
                 let playback_streams: Vec<StreamInfo> = stream_list
                     .into_iter()
-                    .filter(|s| s.stream_type == super::StreamType::Playback)
+                    .filter(|s| s.stream_type == StreamType::Playback)
                     .collect();
                 yield playback_streams;
             }
@@ -123,7 +126,7 @@ impl StreamStreams for PulseService {
             while let Some(stream_list) = streams_stream.next().await {
                 let recording_streams: Vec<StreamInfo> = stream_list
                     .into_iter()
-                    .filter(|s| matches!(s.stream_type, super::StreamType::Record | super::StreamType::Capture))
+                    .filter(|s| matches!(s.stream_type, StreamType::Record | StreamType::Capture))
                     .collect();
                 yield recording_streams;
             }

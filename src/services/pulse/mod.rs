@@ -32,24 +32,26 @@ pub use stream::{
 };
 pub use volume::{Volume, VolumeError};
 
-use backend::{PulseBackend, PulseCommand};
-use device::DeviceKey;
+use backend::{
+    CommandSender, DefaultDevice, DeviceListSender, DeviceStore, EventSender, PulseBackend,
+    PulseCommand, ServerInfo, StreamListSender, StreamStore,
+};
 
 /// PulseAudio service implementation
 ///
 /// Provides device and stream management through PulseAudio backend.
 pub struct PulseService {
-    command_tx: mpsc::UnboundedSender<PulseCommand>,
+    command_tx: CommandSender,
 
-    device_list_tx: Arc<broadcast::Sender<Vec<DeviceInfo>>>,
-    stream_list_tx: Arc<broadcast::Sender<Vec<stream::StreamInfo>>>,
-    events_tx: Arc<broadcast::Sender<AudioEvent>>,
+    device_list_tx: Arc<DeviceListSender>,
+    stream_list_tx: Arc<StreamListSender>,
+    events_tx: Arc<EventSender>,
 
-    devices: Arc<RwLock<HashMap<DeviceKey, DeviceInfo>>>,
-    streams: Arc<RwLock<HashMap<StreamIndex, stream::StreamInfo>>>,
-    default_input: Arc<RwLock<Option<DeviceInfo>>>,
-    default_output: Arc<RwLock<Option<DeviceInfo>>>,
-    server_info: Arc<RwLock<Option<String>>>,
+    devices: DeviceStore,
+    streams: StreamStore,
+    default_input: DefaultDevice,
+    default_output: DefaultDevice,
+    server_info: ServerInfo,
 
     monitoring_handle: Option<tokio::task::JoinHandle<()>>,
 }

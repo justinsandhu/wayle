@@ -163,7 +163,7 @@ impl StreamFormat {
 }
 
 /// Audio stream information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StreamInfo {
     /// Stream index
     pub index: StreamIndex,
@@ -183,4 +183,24 @@ pub struct StreamInfo {
     pub muted: bool,
     /// Stream format information
     pub format: StreamFormat,
+}
+
+impl StreamInfo {
+    /// Check if device properties have changed, excluding volume and mute state
+    ///
+    /// Compares non-audio properties that would trigger a DeviceChanged event.
+    /// Volume and mute changes are handled separately via specific events.
+    ///
+    /// # Arguments
+    /// * `other_device` - Device info to compare against
+    ///
+    /// # Returns
+    /// `true` if any tracked properties differ, `false` if all are identical
+    pub fn properties_changed(&self, other: &StreamInfo) -> bool {
+        self.name != other.name
+            || self.application_name != other.application_name
+            || self.stream_type != other.stream_type
+            || self.state != other.state
+            || self.format != other.format
+    }
 }

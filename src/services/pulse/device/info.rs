@@ -133,4 +133,22 @@ impl DeviceInfo {
             key,
         }
     }
+
+    /// Check if device properties have changed, excluding volume and mute state
+    ///
+    /// Compares non-audio properties that would trigger a DeviceChanged event.
+    /// Volume and mute changes are handled separately via specific events.
+    ///
+    /// # Arguments
+    /// * `other_device` - Device info to compare against
+    ///
+    /// # Returns
+    /// `true` if any tracked properties differ, `false` if all are identical
+    pub fn properties_changed(&self, other: &DeviceInfo) -> bool {
+        self.name != other.name
+            || self.description != other.description
+            || self.state != other.state
+            || self.active_port != other.active_port
+            || self.ports != other.ports
+    }
 }
