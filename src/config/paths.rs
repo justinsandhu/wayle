@@ -1,4 +1,8 @@
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    io::{Error, ErrorKind},
+    path::PathBuf,
+};
 
 /// Utility struct for managing configuration file paths
 ///
@@ -16,17 +20,54 @@ impl ConfigPaths {
     ///
     /// # Errors
     /// Returns an error if neither `XDG_CONFIG_HOME` nor `HOME` environment variables are set
-    pub fn config_dir() -> Result<PathBuf, std::io::Error> {
+    pub fn config_dir() -> Result<PathBuf, Error> {
         let config_home = env::var("XDG_CONFIG_HOME")
             .or_else(|_| env::var("HOME").map(|home| format!("{home}/.config")))
             .map_err(|_| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
+                Error::new(
+                    ErrorKind::NotFound,
                     "Neither XDG_CONFIG_HOME nor HOME environment variable found",
                 )
             })?;
 
         Ok(PathBuf::from(config_home).join("wayle"))
+    }
+
+    /// Returns the application data directory path
+    ///
+    /// Creates the directory if it doesn't exist.
+    ///
+    /// # Errors
+    /// Returns an error if HOME environment variable is not set or directory cannot be created
+    pub fn app_data_dir() -> Result<PathBuf, Error> {
+        let data_dir = env::var("HOME")
+            .map(|home| format!("{home}/.wayle"))
+            .map_err(|_| Error::new(ErrorKind::NotFound, "HOME environment variable found"))?;
+
+        let app_dir = PathBuf::from(data_dir);
+
+        if !app_dir.exists() {
+            std::fs::create_dir_all(&app_dir)?;
+        }
+
+        Ok(app_dir)
+    }
+
+    /// Get the application log directory
+    ///
+    /// Creates the directory if it doesn't exist.
+    ///
+    /// # Errors
+    /// Returns error if directory cannot be created
+    pub fn log_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let app_dir = Self::app_data_dir()?;
+        let log_dir = app_dir.join("logs");
+
+        if !log_dir.exists() {
+            std::fs::create_dir_all(&log_dir)?;
+        }
+
+        Ok(log_dir)
     }
 
     /// Returns the path to the main configuration file
