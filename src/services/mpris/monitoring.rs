@@ -56,6 +56,7 @@ impl PlayerMonitoring {
         Ok(tracker.player_proxy.clone())
     }
 
+    #[allow(clippy::cognitive_complexity)]
     async fn run_property_monitoring_loop(
         &self,
         player_id: PlayerId,
@@ -69,22 +70,37 @@ impl PlayerMonitoring {
 
         loop {
             tokio::select! {
-                Some(signal) = position_changes.next() => {
-                    self.handle_position_signal(player_id.clone(), signal).await;
+                signal = position_changes.next() => {
+                    match signal {
+                        Some(signal) => self.handle_position_signal(player_id.clone(), signal).await,
+                        None => tracing::debug!("Position updates stopped for player {player_id:?}"),
+                    }
                 }
-                Some(signal) = playback_status_changes.next() => {
-                    self.handle_playback_status_signal(player_id.clone(), signal).await;
+                signal = playback_status_changes.next() => {
+                    match signal {
+                        Some(signal) => self.handle_playback_status_signal(player_id.clone(), signal).await,
+                        None => tracing::debug!("Playback status updates stopped for player {player_id:?}"),
+
+                    }
                 }
-                Some(signal) = metadata_changes.next() => {
-                    self.handle_metadata_signal(player_id.clone(), signal).await;
+                signal = metadata_changes.next() => {
+                    match signal {
+                        Some(signal) => self.handle_metadata_signal(player_id.clone(), signal).await,
+                        None => tracing::debug!("Metadata updates stopped for player {player_id:?}"),
+                    }
                 }
-                Some(signal) = loop_status_changes.next() => {
-                    self.handle_loop_status_signal(player_id.clone(), signal).await;
+                signal = loop_status_changes.next() => {
+                    match signal {
+                        Some(signal) => self.handle_loop_status_signal(player_id.clone(), signal).await,
+                        None => tracing::debug!("Loop status updates stopped for player {player_id:?}"),
+                    }
                 }
-                Some(signal) = shuffle_changes.next() => {
-                    self.handle_shuffle_signal(player_id.clone(), signal).await;
+                signal = shuffle_changes.next() => {
+                    match signal {
+                        Some(signal) => self.handle_shuffle_signal(player_id.clone(), signal).await,
+                        None => tracing::debug!("Shuffle updates stopped for player {player_id:?}"),
+                    }
                 }
-                else => break,
             }
         }
     }
