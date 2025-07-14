@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, time::SystemTime};
+use std::{error::Error, fs, path::PathBuf, time::SystemTime};
 
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument, warn};
@@ -26,7 +26,7 @@ impl Default for RuntimeState {
 
 impl RuntimeState {
     /// Get the runtime state file path
-    fn state_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    fn state_file_path() -> Result<PathBuf, Box<dyn Error>> {
         let config_dir = ConfigPaths::config_dir()?;
         Ok(config_dir.join("runtime-state.json"))
     }
@@ -36,7 +36,7 @@ impl RuntimeState {
     /// # Errors
     /// Returns error if file cannot be read or config directory is inaccessible
     #[instrument]
-    pub async fn load() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn load() -> Result<Self, Box<dyn Error>> {
         let path = Self::state_file_path()?;
 
         if path.exists() {
@@ -58,7 +58,7 @@ impl RuntimeState {
     /// # Errors
     /// Returns error if file cannot be written or directory cannot be created
     #[instrument(skip(self))]
-    pub async fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn save(&self) -> Result<(), Box<dyn Error>> {
         let path = Self::state_file_path()?;
 
         if let Some(parent) = path.parent() {
@@ -75,7 +75,7 @@ impl RuntimeState {
     ///
     /// # Errors
     /// Returns error if state file cannot be loaded
-    pub async fn get_active_player() -> Result<Option<String>, Box<dyn std::error::Error>> {
+    pub async fn get_active_player() -> Result<Option<String>, Box<dyn Error>> {
         let state = Self::load().await?;
         Ok(state.active_media_player)
     }
@@ -84,9 +84,7 @@ impl RuntimeState {
     ///
     /// # Errors
     /// Returns error if state cannot be loaded or saved
-    pub async fn set_active_player(
-        player_id: Option<String>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn set_active_player(player_id: Option<String>) -> Result<(), Box<dyn Error>> {
         let mut state = Self::load().await?;
         state.active_media_player = player_id;
         state.last_updated = SystemTime::now();

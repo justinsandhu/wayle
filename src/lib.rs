@@ -39,9 +39,6 @@ pub mod cli;
 /// Reactive services for system integration.
 pub mod services;
 
-/// Simple service instance manager.
-pub mod service_manager;
-
 /// Runtime state shared between CLI and UI.
 pub mod runtime_state;
 

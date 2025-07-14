@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 
 use crate::{
@@ -15,18 +13,12 @@ use super::utils::{get_player_display_name, get_player_id_or_active};
 /// Command to toggle or set loop mode
 ///
 /// Controls the active player by default, or a specific player if provided.
-pub struct LoopCommand {
-    media_service: Arc<MprisMediaService>,
-}
+pub struct LoopCommand {}
 
 impl LoopCommand {
     /// Creates a new LoopCommand
-    ///
-    /// # Arguments
-    ///
-    /// * `media_service` - Shared reference to the media service
-    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
-        Self { media_service }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -42,10 +34,17 @@ impl Command for LoopCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let player_id = get_player_id_or_active(&self.media_service, args.first()).await?;
-        let player_name = get_player_display_name(&self.media_service, &player_id).await;
+        let media_service =
+            MprisMediaService::new(Vec::new())
+                .await
+                .map_err(|e| CliError::ServiceError {
+                    service: "Media".to_string(),
+                    details: e.to_string(),
+                })?;
+        let player_id = get_player_id_or_active(&media_service, args.first()).await?;
+        let player_name = get_player_display_name(&media_service, &player_id).await;
 
-        self.media_service
+        media_service
             .toggle_loop(player_id.clone())
             .await
             .map_err(|e| CliError::ServiceError {

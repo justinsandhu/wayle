@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, error::Error};
 
 use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -10,7 +10,7 @@ use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::Subs
 ///
 /// # Errors
 /// Returns error if tracing subscriber initialization fails
-pub fn init() -> Result<(), Box<dyn std::error::Error>> {
+pub fn init() -> Result<(), Box<dyn Error>> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     let format = env::var("WAYLE_LOG_FORMAT").unwrap_or_else(|_| "pretty".to_string());
@@ -48,7 +48,23 @@ pub fn init() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// # Errors
 /// Returns error if file creation or tracing subscriber initialization fails
-pub fn init_with_file() -> Result<(), Box<dyn std::error::Error>> {
+pub fn init_with_file() -> Result<(), Box<dyn Error>> {
+    init_with_file_and_console_option(true)
+}
+
+/// Initialize tracing for CLI mode (file-only, no console output)
+///
+/// Sets up file-only logging for CLI commands to avoid mixing structured logs
+/// with command output. Console logs are completely disabled.
+///
+/// # Errors
+/// Returns error if file creation or tracing subscriber initialization fails
+pub fn init_cli_mode() -> Result<(), Box<dyn Error>> {
+    init_with_file_and_console_option(false)
+}
+
+/// Initialize tracing with file output and optional console output
+fn init_with_file_and_console_option(enable_console: bool) -> Result<(), Box<dyn Error>> {
     const DAYS_TO_KEEP: usize = 7;
 
     let console_filter =
@@ -71,51 +87,65 @@ pub fn init_with_file() -> Result<(), Box<dyn std::error::Error>> {
 
     let registry = tracing_subscriber::registry();
 
-    match format.as_str() {
-        "json" => {
-            registry
-                .with(
-                    fmt::layer()
-                        .json()
-                        .with_target(true)
-                        .with_level(true)
-                        .with_writer(std::io::stdout)
-                        .with_filter(console_filter),
-                )
-                .with(
-                    fmt::layer()
-                        .json()
-                        .with_target(true)
-                        .with_level(true)
-                        .with_writer(non_blocking)
-                        .with_ansi(false)
-                        .with_filter(file_filter),
-                )
-                .try_init()?;
+    if enable_console {
+        match format.as_str() {
+            "json" => {
+                registry
+                    .with(
+                        fmt::layer()
+                            .json()
+                            .with_target(true)
+                            .with_level(true)
+                            .with_writer(std::io::stdout)
+                            .with_filter(console_filter),
+                    )
+                    .with(
+                        fmt::layer()
+                            .json()
+                            .with_target(true)
+                            .with_level(true)
+                            .with_writer(non_blocking)
+                            .with_ansi(false)
+                            .with_filter(file_filter),
+                    )
+                    .try_init()?;
+            }
+            _ => {
+                registry
+                    .with(
+                        fmt::layer()
+                            .pretty()
+                            .with_target(true)
+                            .with_level(true)
+                            .with_thread_ids(true)
+                            .with_thread_names(true)
+                            .with_writer(std::io::stdout)
+                            .with_filter(console_filter),
+                    )
+                    .with(
+                        fmt::layer()
+                            .compact()
+                            .with_target(true)
+                            .with_level(true)
+                            .with_writer(non_blocking)
+                            .with_ansi(false)
+                            .with_filter(file_filter),
+                    )
+                    .try_init()?;
+            }
         }
-        _ => {
-            registry
-                .with(
-                    fmt::layer()
-                        .pretty()
-                        .with_target(true)
-                        .with_level(true)
-                        .with_thread_ids(true)
-                        .with_thread_names(true)
-                        .with_writer(std::io::stdout)
-                        .with_filter(console_filter),
-                )
-                .with(
-                    fmt::layer()
-                        .compact()
-                        .with_target(true)
-                        .with_level(true)
-                        .with_writer(non_blocking)
-                        .with_ansi(false)
-                        .with_filter(file_filter),
-                )
-                .try_init()?;
-        }
+    } else {
+        registry
+            .with(
+                fmt::layer()
+                    .compact()
+                    .with_target(true)
+                    .with_level(true)
+                    .with_writer(non_blocking)
+                    .with_ansi(false)
+                    .with_filter(file_filter),
+            )
+            .try_init()?;
     }
 
     std::mem::forget(_guard);

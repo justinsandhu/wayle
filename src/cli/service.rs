@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{config_store::ConfigStore, service_manager::Services};
+use crate::config_store::ConfigStore;
 
 use super::{CliError, CommandRegistry, CommandResult, formatting::*};
 
@@ -16,16 +16,14 @@ impl CliService {
     /// Creates a new CLI service with all available commands registered.
     ///
     /// Initializes the command registry and automatically registers all built-in
-    /// commands across all categories. Services are injected into commands that
-    /// need them for dependency injection.
+    /// commands across all categories.
     ///
     /// # Arguments
     /// * `config_store` - Configuration store for commands that need config access
-    /// * `services` - Application services container for dependency injection
-    pub fn new(config_store: ConfigStore, services: &Services) -> Self {
+    pub fn new(config_store: ConfigStore) -> Self {
         let config_store = Arc::new(config_store);
         let mut registry = CommandRegistry::new(config_store);
-        registry.register_all_commands(services);
+        registry.register_all_commands();
 
         CliService { registry }
     }

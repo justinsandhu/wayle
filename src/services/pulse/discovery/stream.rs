@@ -4,7 +4,7 @@ use libpulse_binding::{callbacks::ListResult, context::Context};
 use tracing::{debug, instrument, warn};
 
 use crate::services::{
-    AudioEvent,
+    AudioEvent, StreamInfo,
     pulse::backend::{
         EventSender, StreamListSender, StreamStore,
         conversion::{create_stream_info_from_sink_input, create_stream_info_from_source_output},
@@ -76,11 +76,7 @@ fn discover_source_outputs(
 }
 
 /// Process stream information and emit appropriate events
-fn process_stream_info(
-    stream_info: crate::services::StreamInfo,
-    streams: &StreamStore,
-    events_tx: &EventSender,
-) {
+fn process_stream_info(stream_info: StreamInfo, streams: &StreamStore, events_tx: &EventSender) {
     if let Ok(mut streams_guard) = streams.write() {
         let stream_index = stream_info.index;
         let is_new_stream = !streams_guard.contains_key(&stream_index);
@@ -99,8 +95,8 @@ fn process_stream_info(
 
 /// Emit events for stream property changes
 fn emit_stream_change_events(
-    existing_stream: &crate::services::StreamInfo,
-    new_stream: &crate::services::StreamInfo,
+    existing_stream: &StreamInfo,
+    new_stream: &StreamInfo,
     events_tx: &EventSender,
 ) {
     if existing_stream.volume.as_slice() != new_stream.volume.as_slice() {

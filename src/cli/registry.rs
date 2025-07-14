@@ -1,10 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{config_store::ConfigStore, service_manager::Services};
+/// Nested command storage: category name -> (command name -> command implementation)
+pub type CommandCategories = HashMap<String, HashMap<String, Box<dyn Command>>>;
+
+use crate::config_store::ConfigStore;
 
 use super::{
     CliError, Command,
-    commands::{config, media},
+    commands::{audio, config, media},
     types::CommandMetadata,
 };
 
@@ -31,7 +34,7 @@ use super::{
 /// ```
 pub struct CommandRegistry {
     /// Nested HashMap structure: category name -> (command name -> command implementation)
-    categories: HashMap<String, HashMap<String, Box<dyn Command>>>,
+    categories: CommandCategories,
     config_store: Arc<ConfigStore>,
 }
 
@@ -41,7 +44,7 @@ impl CommandRegistry {
     /// The registry starts with no commands registered. Commands must be added
     /// using the `register_command` method, typically during application initialization.
     pub fn new(config_store: Arc<ConfigStore>) -> Self {
-        let categories = HashMap::new();
+        let categories = CommandCategories::new();
         Self {
             categories,
             config_store,
@@ -232,11 +235,9 @@ impl CommandRegistry {
     ///
     /// This function serves as the central registration point for all CLI commands,
     /// delegating to individual modules to register their commands.
-    ///
-    /// # Arguments
-    /// * `services` - Application services container for dependency injection
-    pub fn register_all_commands(&mut self, services: &Services) {
+    pub fn register_all_commands(&mut self) {
         config::register_commands(self, self.config_store.clone());
-        media::register_commands(self, services);
+        media::register_commands(self);
+        audio::register_commands(self);
     }
 }

@@ -7,18 +7,19 @@ pub mod events;
 /// Type definitions and aliases
 pub mod types;
 
-// Re-export public types for easy access
 pub use types::{
     CommandSender, DefaultDevice, DeviceListSender, DeviceStore, EventSender, ExternalCommand,
     InternalCommand, ServerInfo, StreamListSender, StreamStore,
 };
 
-// Re-export conversion functions
 pub use conversion::{convert_volume_from_pulse, convert_volume_to_pulse};
 
 use std::sync::Arc;
 
-use libpulse_binding::context::{Context, FlagSet as ContextFlags};
+use libpulse_binding::{
+    context::{Context, FlagSet as ContextFlags},
+    volume::ChannelVolumes,
+};
 use tokio::sync::mpsc;
 use tracing::{error, info, instrument};
 
@@ -77,16 +78,12 @@ impl PulseBackend {
     }
 
     /// Convert our volume to PulseAudio volume
-    pub fn convert_volume_to_pulse(
-        volume: &volume::Volume,
-    ) -> libpulse_binding::volume::ChannelVolumes {
+    pub fn convert_volume_to_pulse(volume: &volume::Volume) -> ChannelVolumes {
         conversion::convert_volume_to_pulse(volume)
     }
 
     /// Convert PulseAudio volume to our volume
-    pub fn convert_volume_from_pulse(
-        pulse_volume: &libpulse_binding::volume::ChannelVolumes,
-    ) -> volume::Volume {
+    pub fn convert_volume_from_pulse(pulse_volume: &ChannelVolumes) -> volume::Volume {
         conversion::convert_volume_from_pulse(pulse_volume)
     }
 

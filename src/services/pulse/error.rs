@@ -16,7 +16,9 @@ pub enum PulseError {
     VolumeConversion(#[from] VolumeError),
 
     /// Volume exceeds safe limits
-    #[error("Volume {0} exceeds safe limit of 2.0 (use Volume::with_amplification for higher values)")]
+    #[error(
+        "Volume {0} exceeds safe limit of 2.0 (use Volume::with_amplification for higher values)"
+    )]
     VolumeExceedsSafeLimit(f64),
 
     /// Device not found

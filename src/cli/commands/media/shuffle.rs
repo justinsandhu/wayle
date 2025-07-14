@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 
 use crate::{
@@ -15,18 +13,12 @@ use super::utils::{get_player_display_name, get_player_id_or_active};
 /// Command to toggle shuffle mode
 ///
 /// Controls the active player by default, or a specific player if provided.
-pub struct ShuffleCommand {
-    media_service: Arc<MprisMediaService>,
-}
+pub struct ShuffleCommand {}
 
 impl ShuffleCommand {
     /// Creates a new ShuffleCommand
-    ///
-    /// # Arguments
-    ///
-    /// * `media_service` - Shared reference to the media service
-    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
-        Self { media_service }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -42,10 +34,17 @@ impl Command for ShuffleCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let player_id = get_player_id_or_active(&self.media_service, args.first()).await?;
-        let player_name = get_player_display_name(&self.media_service, &player_id).await;
+        let media_service =
+            MprisMediaService::new(Vec::new())
+                .await
+                .map_err(|e| CliError::ServiceError {
+                    service: "Media".to_string(),
+                    details: e.to_string(),
+                })?;
+        let player_id = get_player_id_or_active(&media_service, args.first()).await?;
+        let player_name = get_player_display_name(&media_service, &player_id).await;
 
-        self.media_service
+        media_service
             .toggle_shuffle(player_id)
             .await
             .map_err(|e| CliError::ServiceError {

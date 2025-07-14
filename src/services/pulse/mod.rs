@@ -23,7 +23,6 @@ pub mod tokio_mainloop;
 /// Volume control domain
 pub mod volume;
 
-// Clean public API - only export what users need
 pub use device::{
     DeviceIndex, DeviceInfo, DeviceManager, DeviceStreams, DeviceType, DeviceVolumeController,
 };
@@ -219,8 +218,11 @@ impl DeviceVolumeController for PulseService {
     async fn set_device_volume(
         &self,
         device: DeviceIndex,
-        volume: Volume,
+        level: f64,
     ) -> Result<(), Self::Error> {
+        let device_info = self.device(device).await?;
+        let channel_count = device_info.volume.channels();
+        let volume = Volume::new(vec![level; channel_count]);
         let pulse_volume = PulseBackend::convert_volume_to_pulse(&volume);
         self.command_tx
             .send(ExternalCommand::SetDeviceVolume {

@@ -1,10 +1,16 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLockReadGuard},
+};
 
-use libpulse_binding::context::Context;
+use libpulse_binding::context::{Context, introspect};
 
 use crate::services::{
-    AudioEvent,
-    pulse::backend::{DeviceStore, EventSender},
+    AudioEvent, DeviceInfo,
+    pulse::{
+        self,
+        backend::{DeviceStore, EventSender},
+    },
 };
 
 /// Query server information for default device detection
@@ -27,13 +33,8 @@ pub fn trigger_server_info_query(
 
 /// Check if default output device has changed
 fn check_default_output_change(
-    server_info: &libpulse_binding::context::introspect::ServerInfo,
-    devices_guard: &std::sync::RwLockReadGuard<
-        std::collections::HashMap<
-            crate::services::pulse::device::DeviceKey,
-            crate::services::DeviceInfo,
-        >,
-    >,
+    server_info: &introspect::ServerInfo,
+    devices_guard: &RwLockReadGuard<HashMap<pulse::device::DeviceKey, DeviceInfo>>,
     events_tx: &EventSender,
 ) {
     if let Some(default_sink_name) = &server_info.default_sink_name {
@@ -48,13 +49,8 @@ fn check_default_output_change(
 
 /// Check if default input device has changed
 fn check_default_input_change(
-    server_info: &libpulse_binding::context::introspect::ServerInfo,
-    devices_guard: &std::sync::RwLockReadGuard<
-        std::collections::HashMap<
-            crate::services::pulse::device::DeviceKey,
-            crate::services::DeviceInfo,
-        >,
-    >,
+    server_info: &introspect::ServerInfo,
+    devices_guard: &RwLockReadGuard<HashMap<pulse::device::DeviceKey, DeviceInfo>>,
     events_tx: &EventSender,
 ) {
     if let Some(default_source_name) = &server_info.default_source_name {

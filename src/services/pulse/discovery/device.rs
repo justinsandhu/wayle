@@ -4,7 +4,7 @@ use libpulse_binding::{callbacks::ListResult, context::Context};
 use tracing::{debug, instrument, warn};
 
 use crate::services::{
-    AudioEvent, DeviceIndex,
+    AudioEvent, DeviceIndex, DeviceInfo,
     pulse::backend::{
         DeviceListSender, DeviceStore, EventSender,
         conversion::{create_device_info_from_sink, create_device_info_from_source},
@@ -87,7 +87,7 @@ fn discover_sources(
 
 /// Process device information and emit appropriate events
 fn process_device_info(
-    device_info: crate::services::DeviceInfo,
+    device_info: DeviceInfo,
     device_index: DeviceIndex,
     devices: &DeviceStore,
     events_tx: &EventSender,
@@ -110,8 +110,8 @@ fn process_device_info(
 
 /// Emit events for device property changes
 fn emit_device_change_events(
-    existing_device: &crate::services::DeviceInfo,
-    new_device: &crate::services::DeviceInfo,
+    existing_device: &DeviceInfo,
+    new_device: &DeviceInfo,
     device_index: DeviceIndex,
     events_tx: &EventSender,
 ) {

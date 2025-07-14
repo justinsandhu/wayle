@@ -1,7 +1,5 @@
 use crate::config::Config;
-use std::collections::HashSet;
-use std::sync::OnceLock;
-use std::time::Instant;
+use std::{collections::HashSet, error::Error, sync::OnceLock, time::Instant};
 
 use super::{ConfigChange, ConfigError, path_ops::navigate_path};
 
@@ -19,10 +17,7 @@ static DEFAULT_CONFIG: OnceLock<toml::Value> = OnceLock::new();
 ///
 /// # Errors
 /// Returns error if either configuration cannot be serialized to TOML format.
-pub fn diff_configs(
-    old: &Config,
-    new: &Config,
-) -> Result<Vec<ConfigChange>, Box<dyn std::error::Error>> {
+pub fn diff_configs(old: &Config, new: &Config) -> Result<Vec<ConfigChange>, Box<dyn Error>> {
     let old_toml = toml::to_string(old)?;
     let new_toml = toml::to_string(new)?;
 

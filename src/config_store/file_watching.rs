@@ -6,7 +6,10 @@ use notify::{
     event::{AccessKind, AccessMode},
     recommended_watcher,
 };
-use std::time::{Duration, Instant};
+use std::{
+    error::Error,
+    time::{Duration, Instant},
+};
 use tokio::{
     sync::mpsc::{self, Receiver},
     task::JoinHandle,
@@ -112,7 +115,7 @@ impl ConfigStore {
         &self,
         old: &Config,
         new: &Config,
-    ) -> Result<Vec<ConfigChange>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<ConfigChange>, Box<dyn Error>> {
         diff::diff_configs(old, new)
     }
 }

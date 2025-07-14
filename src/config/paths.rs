@@ -1,5 +1,5 @@
 use std::{
-    env,
+    env, fs,
     io::{Error, ErrorKind},
     path::PathBuf,
 };
@@ -47,7 +47,7 @@ impl ConfigPaths {
         let app_dir = PathBuf::from(data_dir);
 
         if !app_dir.exists() {
-            std::fs::create_dir_all(&app_dir)?;
+            fs::create_dir_all(&app_dir)?;
         }
 
         Ok(app_dir)
@@ -64,7 +64,7 @@ impl ConfigPaths {
         let log_dir = app_dir.join("logs");
 
         if !log_dir.exists() {
-            std::fs::create_dir_all(&log_dir)?;
+            fs::create_dir_all(&log_dir)?;
         }
 
         Ok(log_dir)

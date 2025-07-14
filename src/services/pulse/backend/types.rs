@@ -3,6 +3,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use libpulse_binding::{
+    context::subscribe::{Facility, Operation},
+    volume::ChannelVolumes,
+};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::services::{
@@ -46,27 +50,27 @@ pub enum ChangeNotification {
     /// Device-related change notification
     Device {
         /// PulseAudio facility type
-        facility: libpulse_binding::context::subscribe::Facility,
+        facility: Facility,
         /// Operation performed on the device
-        operation: libpulse_binding::context::subscribe::Operation,
+        operation: Operation,
         /// Device index
         index: u32,
     },
     /// Stream-related change notification
     Stream {
         /// PulseAudio facility type
-        facility: libpulse_binding::context::subscribe::Facility,
+        facility: Facility,
         /// Operation performed on the stream
-        operation: libpulse_binding::context::subscribe::Operation,
+        operation: Operation,
         /// Stream index
         index: u32,
     },
     /// Server-related change notification
     Server {
         /// PulseAudio facility type
-        facility: libpulse_binding::context::subscribe::Facility,
+        facility: Facility,
         /// Operation performed on the server
-        operation: libpulse_binding::context::subscribe::Operation,
+        operation: Operation,
         /// Server index
         index: u32,
     },
@@ -91,7 +95,7 @@ pub enum ExternalCommand {
         /// Target device
         device: device::DeviceIndex,
         /// New volume levels
-        volume: libpulse_binding::volume::ChannelVolumes,
+        volume: ChannelVolumes,
     },
     /// Set device mute state
     SetDeviceMute {
@@ -105,7 +109,7 @@ pub enum ExternalCommand {
         /// Target stream
         stream: StreamIndex,
         /// New volume levels
-        volume: libpulse_binding::volume::ChannelVolumes,
+        volume: ChannelVolumes,
     },
     /// Set stream mute state
     SetStreamMute {

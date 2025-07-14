@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 
 use crate::{
@@ -16,18 +14,12 @@ use super::utils::{find_player_by_identifier, get_player_display_name};
 ///
 /// Without arguments, shows the current active player.
 /// With an argument, sets the specified player as active.
-pub struct ActiveCommand {
-    media_service: Arc<MprisMediaService>,
-}
+pub struct ActiveCommand {}
 
 impl ActiveCommand {
     /// Creates a new ActiveCommand
-    ///
-    /// # Arguments
-    ///
-    /// * `media_service` - Shared reference to the media service
-    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
-        Self { media_service }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -43,11 +35,19 @@ impl Command for ActiveCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        if let Some(identifier) = args.first() {
-            let player_id = find_player_by_identifier(&self.media_service, identifier).await?;
-            let player_name = get_player_display_name(&self.media_service, &player_id).await;
+        let media_service =
+            MprisMediaService::new(Vec::new())
+                .await
+                .map_err(|e| CliError::ServiceError {
+                    service: "Media".to_string(),
+                    details: e.to_string(),
+                })?;
 
-            self.media_service
+        if let Some(identifier) = args.first() {
+            let player_id = find_player_by_identifier(&media_service, identifier).await?;
+            let player_name = get_player_display_name(&media_service, &player_id).await;
+
+            media_service
                 .set_active_player(Some(player_id))
                 .await
                 .map_err(|e| CliError::ServiceError {
@@ -57,10 +57,9 @@ impl Command for ActiveCommand {
 
             Ok(format!("Set active player to: {player_name}"))
         } else {
-            match self.media_service.active_player().await {
+            match media_service.active_player().await {
                 Some(player_id) => {
-                    let player_name =
-                        get_player_display_name(&self.media_service, &player_id).await;
+                    let player_name = get_player_display_name(&media_service, &player_id).await;
                     Ok(format!("Active player: {player_name}"))
                 }
                 None => Ok("No active player set".to_string()),

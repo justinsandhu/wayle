@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fs,
+    path::PathBuf,
     sync::{Arc, RwLock},
 };
 
@@ -193,12 +194,12 @@ impl ConfigStore {
 
         Self::ensure_config_dir()?;
 
-        std::fs::write(&temp_path, toml_str).map_err(|e| ConfigError::PersistenceError {
+        fs::write(&temp_path, toml_str).map_err(|e| ConfigError::PersistenceError {
             path: temp_path.clone(),
             details: e.to_string(),
         })?;
 
-        std::fs::rename(temp_path, &config_path).map_err(|e| ConfigError::PersistenceError {
+        fs::rename(temp_path, &config_path).map_err(|e| ConfigError::PersistenceError {
             path: config_path.clone(),
             details: e.to_string(),
         })?;
@@ -343,11 +344,11 @@ impl ConfigStore {
 
     fn ensure_config_dir() -> Result<(), ConfigError> {
         let config_dir = ConfigPaths::config_dir().map_err(|e| ConfigError::PersistenceError {
-            path: std::path::PathBuf::from("."),
+            path: PathBuf::from("."),
             details: format!("Failed to determine config directory: {e}"),
         })?;
 
-        std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::PersistenceError {
+        fs::create_dir_all(&config_dir).map_err(|e| ConfigError::PersistenceError {
             path: config_dir,
             details: format!("Failed to create config directory: {e}"),
         })?;

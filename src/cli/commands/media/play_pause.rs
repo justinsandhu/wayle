@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 
 use crate::{
@@ -15,18 +13,12 @@ use super::utils::{get_player_display_name, get_player_id_or_active};
 /// Command to toggle play/pause state of a media player
 ///
 /// Controls the active player by default, or a specific player if provided.
-pub struct PlayPauseCommand {
-    media_service: Arc<MprisMediaService>,
-}
+pub struct PlayPauseCommand;
 
 impl PlayPauseCommand {
     /// Creates a new PlayPauseCommand
-    ///
-    /// # Arguments
-    ///
-    /// * `media_service` - Shared reference to the media service
-    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
-        Self { media_service }
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -42,10 +34,18 @@ impl Command for PlayPauseCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let player_id = get_player_id_or_active(&self.media_service, args.first()).await?;
-        let player_name = get_player_display_name(&self.media_service, &player_id).await;
+        let media_service =
+            MprisMediaService::new(Vec::new())
+                .await
+                .map_err(|e| CliError::ServiceError {
+                    service: "Media".to_string(),
+                    details: format!("Failed to initialize media service: {e}"),
+                })?;
 
-        self.media_service
+        let player_id = get_player_id_or_active(&media_service, args.first()).await?;
+        let player_name = get_player_display_name(&media_service, &player_id).await;
+
+        media_service
             .play_pause(player_id)
             .await
             .map_err(|e| CliError::ServiceError {

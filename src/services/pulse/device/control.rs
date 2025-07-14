@@ -58,14 +58,21 @@ pub trait DeviceVolumeController {
     /// Error type for volume operations
     type Error: Error + Send + Sync + 'static;
 
-    /// Set device volume
+    /// Set device volume using percentage level (0.0 to 4.0)
+    ///
+    /// Automatically handles channel count matching the device configuration.
+    /// Volume level applies uniformly across all device channels.
+    ///
+    /// # Arguments
+    /// * `device` - Target device index
+    /// * `level` - Volume level where 0.0=mute, 1.0=normal, 4.0=maximum
     ///
     /// # Errors
-    /// Returns error if device is not found, volume is invalid, or operation fails
+    /// Returns error if device is not found, level is invalid, or operation fails
     async fn set_device_volume(
         &self,
         device: DeviceIndex,
-        volume: Volume,
+        level: f64,
     ) -> Result<(), Self::Error>;
 
     /// Set device mute state
@@ -102,7 +109,6 @@ pub trait DeviceStreams {
     fn device_state(&self, device: DeviceIndex) -> impl Stream<Item = DeviceInfo> + Send;
 }
 
-// Implementation for PulseService
 impl DeviceStreams for PulseService {
     fn devices(&self) -> impl Stream<Item = Vec<DeviceInfo>> + Send {
         use async_stream::stream;

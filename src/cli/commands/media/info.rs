@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -6,7 +6,7 @@ use tokio::pin;
 
 use crate::{
     cli::{
-        Command, CommandResult,
+        CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
     services::mpris::{
@@ -20,18 +20,12 @@ use super::utils::get_player_id_or_active;
 /// Command to show detailed information about a media player
 ///
 /// Displays current track, playback state, position, and player capabilities
-pub struct InfoCommand {
-    media_service: Arc<MprisMediaService>,
-}
+pub struct InfoCommand {}
 
 impl InfoCommand {
     /// Creates a new InfoCommand
-    ///
-    /// # Arguments
-    ///
-    /// * `media_service` - Shared reference to the media service
-    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
-        Self { media_service }
+    pub fn new() -> Self {
+        Self {}
     }
 
     /// Format duration as MM:SS
@@ -55,16 +49,23 @@ impl Command for InfoCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let player_id = get_player_id_or_active(&self.media_service, args.first()).await?;
+        let media_service =
+            MprisMediaService::new(Vec::new())
+                .await
+                .map_err(|e| CliError::ServiceError {
+                    service: "Media".to_string(),
+                    details: e.to_string(),
+                })?;
+        let player_id = get_player_id_or_active(&media_service, args.first()).await?;
         let mut output = String::new();
 
-        self.add_player_info(self.media_service.as_ref(), &player_id, &mut output)
+        self.add_player_info(&media_service, &player_id, &mut output)
             .await;
-        self.add_playback_state(self.media_service.as_ref(), &player_id, &mut output)
+        self.add_playback_state(&media_service, &player_id, &mut output)
             .await;
-        self.add_modes(self.media_service.as_ref(), &player_id, &mut output)
+        self.add_modes(&media_service, &player_id, &mut output)
             .await;
-        self.add_track_info(self.media_service.as_ref(), &player_id, &mut output)
+        self.add_track_info(&media_service, &player_id, &mut output)
             .await;
 
         Ok(output)

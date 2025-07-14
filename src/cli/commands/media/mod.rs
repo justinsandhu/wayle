@@ -20,7 +20,7 @@ pub use previous::PreviousCommand;
 pub use seek::SeekCommand;
 pub use shuffle::ShuffleCommand;
 
-use crate::{cli::CommandRegistry, service_manager::Services};
+use crate::cli::CommandRegistry;
 
 /// Registers all media-related commands with the command registry
 ///
@@ -30,44 +30,16 @@ use crate::{cli::CommandRegistry, service_manager::Services};
 /// # Arguments
 ///
 /// * `registry` - Mutable reference to the command registry
-/// * `services` - Application services container
-pub fn register_commands(registry: &mut CommandRegistry, services: &Services) {
+pub fn register_commands(registry: &mut CommandRegistry) {
     const CATEGORY_NAME: &str = "media";
 
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(ListCommand::new(services.media.clone())),
-    );
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(PlayPauseCommand::new(services.media.clone())),
-    );
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(NextCommand::new(services.media.clone())),
-    );
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(PreviousCommand::new(services.media.clone())),
-    );
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(SeekCommand::new(services.media.clone())),
-    );
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(ShuffleCommand::new(services.media.clone())),
-    );
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(LoopCommand::new(services.media.clone())),
-    );
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(ActiveCommand::new(services.media.clone())),
-    );
-    registry.register_command(
-        CATEGORY_NAME,
-        Box::new(InfoCommand::new(services.media.clone())),
-    );
+    registry.register_command(CATEGORY_NAME, Box::new(ListCommand::new()));
+    registry.register_command(CATEGORY_NAME, Box::new(PlayPauseCommand::new()));
+    registry.register_command(CATEGORY_NAME, Box::new(NextCommand::new()));
+    registry.register_command(CATEGORY_NAME, Box::new(PreviousCommand::new()));
+    registry.register_command(CATEGORY_NAME, Box::new(SeekCommand::new()));
+    registry.register_command(CATEGORY_NAME, Box::new(ShuffleCommand::new()));
+    registry.register_command(CATEGORY_NAME, Box::new(LoopCommand::new()));
+    registry.register_command(CATEGORY_NAME, Box::new(ActiveCommand::new()));
+    registry.register_command(CATEGORY_NAME, Box::new(InfoCommand::new()));
 }

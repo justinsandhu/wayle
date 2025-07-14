@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -17,18 +17,12 @@ use super::utils::{get_player_display_name, get_player_id_or_active};
 /// Command to seek to a specific position in the current track
 ///
 /// Supports various time formats like seconds, mm:ss, or percentage
-pub struct SeekCommand {
-    media_service: Arc<MprisMediaService>,
-}
+pub struct SeekCommand {}
 
 impl SeekCommand {
     /// Creates a new SeekCommand
-    ///
-    /// # Arguments
-    ///
-    /// * `media_service` - Shared reference to the media service
-    pub fn new(media_service: Arc<MprisMediaService>) -> Self {
-        Self { media_service }
+    pub fn new() -> Self {
+        Self {}
     }
 
     /// Parse position from various formats
@@ -157,14 +151,21 @@ impl Command for SeekCommand {
         let position_str = &args[0];
         let player_arg = args.get(1);
 
-        let player_id = get_player_id_or_active(&self.media_service, player_arg).await?;
-        let player_name = get_player_display_name(&self.media_service, &player_id).await;
+        let media_service =
+            MprisMediaService::new(Vec::new())
+                .await
+                .map_err(|e| CliError::ServiceError {
+                    service: "Media".to_string(),
+                    details: e.to_string(),
+                })?;
+        let player_id = get_player_id_or_active(&media_service, player_arg).await?;
+        let player_name = get_player_display_name(&media_service, &player_id).await;
 
-        let position_stream = self.media_service.position(player_id.clone());
+        let position_stream = media_service.position(player_id.clone());
         pin!(position_stream);
         let current_position = position_stream.next().await;
 
-        let metadata_stream = self.media_service.metadata(player_id.clone());
+        let metadata_stream = media_service.metadata(player_id.clone());
         pin!(metadata_stream);
         let track_length = if let Some(metadata) = metadata_stream.next().await {
             metadata.length
@@ -183,7 +184,7 @@ impl Command for SeekCommand {
             }
         }
 
-        self.media_service
+        media_service
             .seek(player_id, target_position)
             .await
             .map_err(|e| CliError::ServiceError {

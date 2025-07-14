@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use libpulse_binding::{context::Context, volume::ChannelVolumes};
 
 use crate::services::{DeviceIndex, DeviceType, StreamIndex, StreamType};
@@ -75,7 +77,7 @@ fn set_device_volume(
     volume: ChannelVolumes,
     devices: &DeviceStore,
 ) {
-    let devices_clone = std::sync::Arc::clone(devices);
+    let devices_clone = Arc::clone(devices);
     let mut introspect = context.introspect();
 
     let device_info = {
@@ -87,12 +89,16 @@ fn set_device_volume(
     };
 
     if let Some(info) = device_info {
+        let avg_vol = volume.avg();
+        let mut channel_volumes = ChannelVolumes::default();
+        channel_volumes.set(info.volume.channels() as u8, avg_vol);
+
         match info.device_type {
             DeviceType::Output => {
-                introspect.set_sink_volume_by_index(device.0, &volume, None);
+                introspect.set_sink_volume_by_index(device.0, &channel_volumes, None);
             }
             DeviceType::Input => {
-                introspect.set_source_volume_by_index(device.0, &volume, None);
+                introspect.set_source_volume_by_index(device.0, &channel_volumes, None);
             }
         }
     }
@@ -100,7 +106,7 @@ fn set_device_volume(
 
 /// Set device mute state through PulseAudio
 fn set_device_mute(context: &Context, device: DeviceIndex, muted: bool, devices: &DeviceStore) {
-    let devices_clone = std::sync::Arc::clone(devices);
+    let devices_clone = Arc::clone(devices);
     let mut introspect = context.introspect();
 
     let device_info = {
@@ -148,7 +154,7 @@ fn set_stream_volume(
     volume: ChannelVolumes,
     streams: &StreamStore,
 ) {
-    let streams_clone = std::sync::Arc::clone(streams);
+    let streams_clone = Arc::clone(streams);
     let mut introspect = context.introspect();
 
     let stream_info = {
@@ -173,7 +179,7 @@ fn set_stream_volume(
 
 /// Set stream mute state through PulseAudio
 fn set_stream_mute(context: &Context, stream: StreamIndex, muted: bool, streams: &StreamStore) {
-    let streams_clone = std::sync::Arc::clone(streams);
+    let streams_clone = Arc::clone(streams);
     let mut introspect = context.introspect();
 
     let stream_info = {
@@ -198,7 +204,7 @@ fn set_stream_mute(context: &Context, stream: StreamIndex, muted: bool, streams:
 
 /// Move stream to different device
 fn move_stream(context: &Context, stream: StreamIndex, device: DeviceIndex, streams: &StreamStore) {
-    let streams_clone = std::sync::Arc::clone(streams);
+    let streams_clone = Arc::clone(streams);
     let mut introspect = context.introspect();
 
     let stream_info = {

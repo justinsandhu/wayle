@@ -8,6 +8,7 @@ use circular_detection::CircularDetector;
 use file_creation::create_default_config_file;
 use merging::merge_toml_configs;
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -75,7 +76,7 @@ impl Config {
     /// Returns error if any file cannot be read or contains invalid TOML
     pub fn get_all_config_files(path: &Path) -> Result<Vec<PathBuf>> {
         let mut files = Vec::new();
-        let mut visited = std::collections::HashSet::new();
+        let mut visited = HashSet::new();
 
         Self::collect_config_files(path, &mut files, &mut visited)?;
         Ok(files)
@@ -187,7 +188,7 @@ impl Config {
     fn collect_config_files(
         path: &Path,
         files: &mut Vec<PathBuf>,
-        visited: &mut std::collections::HashSet<PathBuf>,
+        visited: &mut HashSet<PathBuf>,
     ) -> Result<()> {
         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use libpulse_binding::{
     context::introspect::{SinkInfo, SinkInputInfo, SourceInfo, SourceOutputInfo},
     def::PortAvailable,
@@ -20,20 +22,16 @@ use crate::services::{
 /// - 1.0 → PA_VOLUME_NORM (65536)
 /// - 4.0 → PA_VOLUME_MAX (262144)
 pub fn convert_volume_to_pulse(volume: &Volume) -> ChannelVolumes {
-    if volume.channels() == 0 {
-        let mut pulse_volume = ChannelVolumes::default();
-        pulse_volume.set_len(1);
-        pulse_volume.set(0, PulseVolume::NORMAL);
-        return pulse_volume;
+    let channels = volume.channels();
+    if channels == 0 {
+        return ChannelVolumes::default();
     }
+
+    let avg_level = volume.average();
+    let pulse_vol = PulseVolume((avg_level * PulseVolume::NORMAL.0 as f64) as u32);
 
     let mut pulse_volume = ChannelVolumes::default();
-    pulse_volume.set_len(volume.channels() as u8);
-
-    for (i, &vol) in volume.as_slice().iter().enumerate() {
-        let pulse_vol = (vol * PulseVolume::NORMAL.0 as f64) as u32;
-        pulse_volume.set(i as u8, PulseVolume(pulse_vol));
-    }
+    pulse_volume.set(channels as u8, pulse_vol);
 
     pulse_volume
 }
@@ -71,7 +69,7 @@ pub fn convert_sample_format(format: PulseFormat) -> SampleFormat {
     }
 }
 
-fn cow_str_to_string(cow_str: Option<&std::borrow::Cow<str>>) -> String {
+fn cow_str_to_string(cow_str: Option<&Cow<str>>) -> String {
     cow_str.map(|s| s.to_string()).unwrap_or_default()
 }
 

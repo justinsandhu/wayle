@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{path::PathBuf, time::Instant};
 
 use toml::Value;
 
@@ -53,7 +53,7 @@ pub enum ConfigError {
     #[error("failed to persist config to '{path}': {details}")]
     PersistenceError {
         /// Path where persistence failed
-        path: std::path::PathBuf,
+        path: PathBuf,
         /// Error details from the persistence operation
         details: String,
     },
@@ -98,7 +98,7 @@ pub enum ConfigError {
     #[error("file watcher error for '{path}': {details}")]
     FileWatchError {
         /// Path being watched when error occurred
-        path: std::path::PathBuf,
+        path: PathBuf,
         /// File watcher error details
         details: String,
     },
@@ -116,7 +116,7 @@ pub enum ConfigError {
     #[error("I/O error on '{path}': {details}")]
     IoError {
         /// Path where I/O error occurred
-        path: std::path::PathBuf,
+        path: PathBuf,
         /// I/O error details
         details: String,
     },
