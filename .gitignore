@@ -1,3 +1,7 @@
 target/
+
+# Temporary sandboxes
 Wayle
 tests/
+src/cli/commands/audio/
+examples/
