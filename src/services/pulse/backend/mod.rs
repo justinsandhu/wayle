@@ -158,6 +158,13 @@ impl PulseBackend {
         info!("Triggering initial device and stream discovery");
         discovery::trigger_device_discovery(&context, &devices, &device_list_tx, &events_tx);
         discovery::trigger_stream_discovery(&context, &streams, &stream_list_tx, &events_tx);
+        discovery::trigger_server_info_query(
+            &context,
+            &devices,
+            &events_tx,
+            &default_input,
+            &default_output,
+        );
 
         info!("PulseAudio backend fully initialized and monitoring");
 
@@ -174,6 +181,8 @@ impl PulseBackend {
                 &events_tx,
                 &device_list_tx,
                 &stream_list_tx,
+                &default_input,
+                &default_output,
             ) => {
                 info!("Command processing loop exited");
             }
@@ -196,6 +205,8 @@ impl PulseBackend {
         events_tx: &EventSender,
         device_list_tx: &DeviceListSender,
         stream_list_tx: &StreamListSender,
+        default_input: &DefaultDevice,
+        default_output: &DefaultDevice,
     ) {
         loop {
             tokio::select! {
@@ -229,6 +240,8 @@ impl PulseBackend {
                             events_tx,
                             device_list_tx,
                             stream_list_tx,
+                            default_input,
+                            default_output,
                         );
                     }
                 }

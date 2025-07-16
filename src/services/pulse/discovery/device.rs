@@ -4,7 +4,7 @@ use libpulse_binding::{callbacks::ListResult, context::Context};
 use tracing::{debug, instrument, warn};
 
 use crate::services::{
-    AudioEvent, DeviceIndex, DeviceInfo,
+    AudioEvent, DeviceInfo,
     pulse::backend::{
         DeviceListSender, DeviceStore, EventSender,
         conversion::{create_device_info_from_sink, create_device_info_from_source},
@@ -40,12 +40,7 @@ fn discover_sinks(
     introspect.get_sink_info_list(move |result| match result {
         ListResult::Item(sink_info) => {
             let device_info = create_device_info_from_sink(sink_info);
-            process_device_info(
-                device_info,
-                DeviceIndex(sink_info.index),
-                &devices_clone,
-                &events_tx_clone,
-            );
+            process_device_info(device_info, &devices_clone, &events_tx_clone);
         }
         ListResult::End => {
             debug!("Completed sink discovery");
@@ -70,12 +65,7 @@ fn discover_sources(
     introspect.get_source_info_list(move |result| match result {
         ListResult::Item(source_info) => {
             let device_info = create_device_info_from_source(source_info);
-            process_device_info(
-                device_info,
-                DeviceIndex(source_info.index),
-                &devices_clone,
-                &events_tx_clone,
-            );
+            process_device_info(device_info, &devices_clone, &events_tx_clone);
         }
         ListResult::End => {
             debug!("Completed source discovery");
@@ -86,18 +76,13 @@ fn discover_sources(
 }
 
 /// Process device information and emit appropriate events
-fn process_device_info(
-    device_info: DeviceInfo,
-    device_index: DeviceIndex,
-    devices: &DeviceStore,
-    events_tx: &EventSender,
-) {
+fn process_device_info(device_info: DeviceInfo, devices: &DeviceStore, events_tx: &EventSender) {
     if let Ok(mut devices_guard) = devices.write() {
-        let device_key = device_info.key.clone();
+        let device_key = device_info.key;
         let is_new_device = !devices_guard.contains_key(&device_key);
 
         if let Some(existing_device) = devices_guard.get(&device_key) {
-            emit_device_change_events(existing_device, &device_info, device_index, events_tx);
+            emit_device_change_events(existing_device, &device_info, events_tx);
         }
 
         devices_guard.insert(device_key, device_info.clone());
@@ -112,19 +97,18 @@ fn process_device_info(
 fn emit_device_change_events(
     existing_device: &DeviceInfo,
     new_device: &DeviceInfo,
-    device_index: DeviceIndex,
     events_tx: &EventSender,
 ) {
     if existing_device.volume.as_slice() != new_device.volume.as_slice() {
         let _ = events_tx.send(AudioEvent::DeviceVolumeChanged {
-            device_index,
+            device_key: new_device.key,
             volume: new_device.volume.clone(),
         });
     }
 
     if existing_device.muted != new_device.muted {
         let _ = events_tx.send(AudioEvent::DeviceMuteChanged {
-            device_index,
+            device_key: new_device.key,
             muted: new_device.muted,
         });
     }

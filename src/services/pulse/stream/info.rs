@@ -5,7 +5,7 @@ use crate::services::pulse::{device::DeviceIndex, volume::Volume};
 pub struct StreamIndex(pub u32);
 
 /// Audio stream type
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StreamType {
     /// Playback stream (audio output)
     Playback,
@@ -162,6 +162,15 @@ impl StreamFormat {
     }
 }
 
+/// Stream key for unique identification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StreamKey {
+    /// Stream index
+    pub index: u32,
+    /// Stream type
+    pub stream_type: StreamType,
+}
+
 /// Audio stream information
 #[derive(Debug, Clone, PartialEq)]
 pub struct StreamInfo {
@@ -183,6 +192,8 @@ pub struct StreamInfo {
     pub muted: bool,
     /// Stream format information
     pub format: StreamFormat,
+    /// Unique stream key
+    pub key: StreamKey,
 }
 
 impl StreamInfo {

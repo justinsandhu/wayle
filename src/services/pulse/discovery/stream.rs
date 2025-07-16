@@ -78,14 +78,13 @@ fn discover_source_outputs(
 /// Process stream information and emit appropriate events
 fn process_stream_info(stream_info: StreamInfo, streams: &StreamStore, events_tx: &EventSender) {
     if let Ok(mut streams_guard) = streams.write() {
-        let stream_index = stream_info.index;
-        let is_new_stream = !streams_guard.contains_key(&stream_index);
+        let is_new_stream = !streams_guard.contains_key(&stream_info.key);
 
-        if let Some(existing_stream) = streams_guard.get(&stream_index) {
+        if let Some(existing_stream) = streams_guard.get(&stream_info.key) {
             emit_stream_change_events(existing_stream, &stream_info, events_tx);
         }
 
-        streams_guard.insert(stream_info.index, stream_info.clone());
+        streams_guard.insert(stream_info.key, stream_info.clone());
 
         if is_new_stream {
             let _ = events_tx.send(AudioEvent::StreamAdded(stream_info));
@@ -101,21 +100,21 @@ fn emit_stream_change_events(
 ) {
     if existing_stream.volume.as_slice() != new_stream.volume.as_slice() {
         let _ = events_tx.send(AudioEvent::StreamVolumeChanged {
-            stream_index: new_stream.index,
+            stream_key: new_stream.key,
             volume: new_stream.volume.clone(),
         });
     }
 
     if existing_stream.muted != new_stream.muted {
         let _ = events_tx.send(AudioEvent::StreamMuteChanged {
-            stream_index: new_stream.index,
+            stream_key: new_stream.key,
             muted: new_stream.muted,
         });
     }
 
     if existing_stream.device_index != new_stream.device_index {
         let _ = events_tx.send(AudioEvent::StreamMoved {
-            stream_index: new_stream.index,
+            stream_key: new_stream.key,
             from_device: existing_stream.device_index,
             to_device: new_stream.device_index,
         });

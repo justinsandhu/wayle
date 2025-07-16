@@ -1,4 +1,8 @@
-use super::{DeviceIndex, StreamIndex, Volume, device::DeviceInfo, stream::StreamInfo};
+use super::{
+    DeviceIndex, Volume,
+    device::{DeviceInfo, DeviceKey},
+    stream::{StreamInfo, StreamKey},
+};
 
 /// Audio system events
 #[derive(Debug, Clone)]
@@ -10,14 +14,14 @@ pub enum AudioEvent {
     /// Device volume changed
     DeviceVolumeChanged {
         /// Device that changed
-        device_index: DeviceIndex,
+        device_key: DeviceKey,
         /// New volume
         volume: Volume,
     },
     /// Device mute state changed
     DeviceMuteChanged {
         /// Device that changed
-        device_index: DeviceIndex,
+        device_key: DeviceKey,
         /// New mute state
         muted: bool,
     },
@@ -34,14 +38,14 @@ pub enum AudioEvent {
     /// Stream volume changed
     StreamVolumeChanged {
         /// Stream that changed
-        stream_index: StreamIndex,
+        stream_key: StreamKey,
         /// New volume
         volume: Volume,
     },
     /// Stream mute state changed
     StreamMuteChanged {
         /// Stream that changed
-        stream_index: StreamIndex,
+        stream_key: StreamKey,
         /// New mute state
         muted: bool,
     },
@@ -50,7 +54,7 @@ pub enum AudioEvent {
     /// Stream moved to different device
     StreamMoved {
         /// Stream that moved
-        stream_index: StreamIndex,
+        stream_key: StreamKey,
         /// Source device
         from_device: DeviceIndex,
         /// Destination device

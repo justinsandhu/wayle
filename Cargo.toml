@@ -23,11 +23,28 @@ libpulse-binding = "2.28"
 libc = "0.2"
 chrono = { version = "0.4", features = ["clock"] }
 tracing = "0.1"
+tracing-attributes = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
+
+[[example]]
+name = "relm_volume"
+required-features = []
+
+[[example]]
+name = "pulse_test_gui"
+required-features = []
+
+[[example]]
+name = "pulse_full_test"
+required-features = []
+
+[[example]]
+name = "pulse_simple_test"
+required-features = []
 
 [lints.rust]
 unsafe_code = "deny"

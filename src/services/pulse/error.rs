@@ -1,4 +1,4 @@
-use super::{DeviceIndex, StreamIndex, VolumeError};
+use super::{DeviceType, StreamType, VolumeError};
 
 /// PulseAudio service errors
 #[derive(thiserror::Error, Debug)]
@@ -22,12 +22,12 @@ pub enum PulseError {
     VolumeExceedsSafeLimit(f64),
 
     /// Device not found
-    #[error("Device {0:?} not found")]
-    DeviceNotFound(DeviceIndex),
+    #[error("Device {0:?} ({1:?}) not found")]
+    DeviceNotFound(u32, DeviceType),
 
     /// Stream not found
     #[error("Stream {0:?} not found")]
-    StreamNotFound(StreamIndex),
+    StreamNotFound(u32, StreamType),
 
     /// Command channel disconnected
     #[error("Command channel disconnected")]

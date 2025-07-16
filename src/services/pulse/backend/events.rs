@@ -4,7 +4,10 @@ use libpulse_binding::context::{
 };
 use tokio::sync::mpsc;
 
-use crate::services::{AudioEvent, DeviceType, PulseError, StreamIndex, pulse::device::DeviceKey};
+use crate::services::{
+    AudioEvent, DeviceType, PulseError, StreamType,
+    pulse::{device::DeviceKey, stream::StreamKey},
+};
 
 use super::super::discovery::{broadcast_device_list, broadcast_stream_list};
 use super::types::{
@@ -146,7 +149,7 @@ async fn handle_device_change(
         Facility::Source => DeviceType::Input,
         _ => return,
     };
-    let device_key = DeviceKey::new(index, device_type.clone());
+    let device_key = DeviceKey::new(index, device_type);
 
     match operation {
         Operation::Removed => {
@@ -174,20 +177,29 @@ async fn handle_device_change(
 
 /// Handle stream-related change notifications
 async fn handle_stream_change(
-    _facility: Facility,
+    facility: Facility,
     operation: Operation,
-    index: u32,
+    stream_index: u32,
     streams: &StreamStore,
     events_tx: &EventSender,
     stream_list_tx: &StreamListSender,
     command_tx: &InternalCommandSender,
 ) {
-    let stream_index = StreamIndex(index);
+    let stream_type = match facility {
+        Facility::SinkInput => StreamType::Playback,
+        Facility::SourceOutput => StreamType::Record,
+        _ => return,
+    };
+
+    let stream_key = StreamKey {
+        stream_type,
+        index: stream_index,
+    };
 
     match operation {
         Operation::Removed => {
             let removed_stream = if let Ok(mut streams_guard) = streams.write() {
-                streams_guard.remove(&stream_index)
+                streams_guard.remove(&stream_key)
             } else {
                 None
             };

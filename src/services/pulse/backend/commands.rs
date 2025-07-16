@@ -2,17 +2,21 @@ use std::sync::Arc;
 
 use libpulse_binding::{context::Context, volume::ChannelVolumes};
 
-use crate::services::{DeviceIndex, DeviceType, StreamIndex, StreamType};
+use crate::services::{
+    DeviceType, StreamType,
+    pulse::{device::DeviceKey, stream::StreamKey},
+};
 
 use super::{
     discovery::{trigger_device_discovery, trigger_server_info_query, trigger_stream_discovery},
     types::{
-        DeviceListSender, DeviceStore, EventSender, ExternalCommand, InternalCommand,
-        StreamListSender, StreamStore,
+        DefaultDevice, DeviceListSender, DeviceStore, EventSender, ExternalCommand,
+        InternalCommand, StreamListSender, StreamStore,
     },
 };
 
 /// Handle internal PulseAudio commands (event-driven)
+#[allow(clippy::too_many_arguments)]
 pub fn handle_internal_command(
     context: &mut Context,
     command: InternalCommand,
@@ -21,6 +25,8 @@ pub fn handle_internal_command(
     events_tx: &EventSender,
     device_list_tx: &DeviceListSender,
     stream_list_tx: &StreamListSender,
+    default_input: &DefaultDevice,
+    default_output: &DefaultDevice,
 ) {
     match command {
         InternalCommand::RefreshDevices => {
@@ -30,7 +36,7 @@ pub fn handle_internal_command(
             trigger_stream_discovery(context, streams, stream_list_tx, events_tx);
         }
         InternalCommand::RefreshServerInfo => {
-            trigger_server_info_query(context, devices, events_tx);
+            trigger_server_info_query(context, devices, events_tx, default_input, default_output);
         }
     }
 }
@@ -43,26 +49,29 @@ pub fn handle_external_command(
     streams: &StreamStore,
 ) {
     match command {
-        ExternalCommand::SetDeviceVolume { device, volume } => {
-            set_device_volume(context, device, volume, devices);
+        ExternalCommand::SetDeviceVolume { device_key, volume } => {
+            set_device_volume(context, device_key, volume, devices);
         }
-        ExternalCommand::SetDeviceMute { device, muted } => {
-            set_device_mute(context, device, muted, devices);
+        ExternalCommand::SetDeviceMute { device_key, muted } => {
+            set_device_mute(context, device_key, muted, devices);
         }
-        ExternalCommand::SetDefaultInput { device } => {
-            set_default_input(context, device, devices);
+        ExternalCommand::SetDefaultInput { device_key } => {
+            set_default_input(context, device_key, devices);
         }
-        ExternalCommand::SetDefaultOutput { device } => {
-            set_default_output(context, device, devices);
+        ExternalCommand::SetDefaultOutput { device_key } => {
+            set_default_output(context, device_key, devices);
         }
-        ExternalCommand::SetStreamVolume { stream, volume } => {
-            set_stream_volume(context, stream, volume, streams);
+        ExternalCommand::SetStreamVolume { stream_key, volume } => {
+            set_stream_volume(context, stream_key, volume, streams);
         }
-        ExternalCommand::SetStreamMute { stream, muted } => {
-            set_stream_mute(context, stream, muted, streams);
+        ExternalCommand::SetStreamMute { stream_key, muted } => {
+            set_stream_mute(context, stream_key, muted, streams);
         }
-        ExternalCommand::MoveStream { stream, device } => {
-            move_stream(context, stream, device, streams);
+        ExternalCommand::MoveStream {
+            stream_key,
+            device_key,
+        } => {
+            move_stream(context, stream_key, device_key, streams);
         }
         ExternalCommand::Shutdown => {
             // Shutdown handled in main loop
@@ -73,7 +82,7 @@ pub fn handle_external_command(
 /// Set device volume through PulseAudio
 fn set_device_volume(
     context: &Context,
-    device: DeviceIndex,
+    device_key: DeviceKey,
     volume: ChannelVolumes,
     devices: &DeviceStore,
 ) {
@@ -82,36 +91,42 @@ fn set_device_volume(
 
     let device_info = {
         if let Ok(devices_guard) = devices_clone.read() {
-            devices_guard.values().find(|d| d.index == device).cloned()
+            devices_guard
+                .values()
+                .find(|d| d.key == device_key)
+                .cloned()
         } else {
             return;
         }
     };
 
+    println!("Device info:");
+    println!("{device_info:#?}");
     if let Some(info) = device_info {
-        let avg_vol = volume.avg();
-        let mut channel_volumes = ChannelVolumes::default();
-        channel_volumes.set(info.volume.channels() as u8, avg_vol);
-
         match info.device_type {
             DeviceType::Output => {
-                introspect.set_sink_volume_by_index(device.0, &channel_volumes, None);
+                println!("Setting output volume");
+                introspect.set_sink_volume_by_index(device_key.index, &volume, None);
             }
             DeviceType::Input => {
-                introspect.set_source_volume_by_index(device.0, &channel_volumes, None);
+                println!("Setting input volume");
+                introspect.set_source_volume_by_index(device_key.index, &volume, None);
             }
         }
     }
 }
 
 /// Set device mute state through PulseAudio
-fn set_device_mute(context: &Context, device: DeviceIndex, muted: bool, devices: &DeviceStore) {
+fn set_device_mute(context: &Context, device_key: DeviceKey, muted: bool, devices: &DeviceStore) {
     let devices_clone = Arc::clone(devices);
     let mut introspect = context.introspect();
 
     let device_info = {
         if let Ok(devices_guard) = devices_clone.read() {
-            devices_guard.values().find(|d| d.index == device).cloned()
+            devices_guard
+                .values()
+                .find(|d| d.key == device_key)
+                .cloned()
         } else {
             return;
         }
@@ -120,28 +135,28 @@ fn set_device_mute(context: &Context, device: DeviceIndex, muted: bool, devices:
     if let Some(info) = device_info {
         match info.device_type {
             DeviceType::Output => {
-                introspect.set_sink_mute_by_index(device.0, muted, None);
+                introspect.set_sink_mute_by_index(device_key.index, muted, None);
             }
             DeviceType::Input => {
-                introspect.set_source_mute_by_index(device.0, muted, None);
+                introspect.set_source_mute_by_index(device_key.index, muted, None);
             }
         }
     }
 }
 
 /// Set default input device
-fn set_default_input(context: &mut Context, device: DeviceIndex, devices: &DeviceStore) {
+fn set_default_input(context: &mut Context, device_key: DeviceKey, devices: &DeviceStore) {
     if let Ok(devices_guard) = devices.read() {
-        if let Some(device_info) = devices_guard.values().find(|d| d.index == device) {
+        if let Some(device_info) = devices_guard.values().find(|d| d.key == device_key) {
             context.set_default_source(device_info.name.as_str(), |_success| {});
         }
     }
 }
 
 /// Set default output device
-fn set_default_output(context: &mut Context, device: DeviceIndex, devices: &DeviceStore) {
+fn set_default_output(context: &mut Context, device_key: DeviceKey, devices: &DeviceStore) {
     if let Ok(devices_guard) = devices.read() {
-        if let Some(device_info) = devices_guard.values().find(|d| d.index == device) {
+        if let Some(device_info) = devices_guard.values().find(|d| d.key == device_key) {
             context.set_default_sink(device_info.name.as_str(), |_success| {});
         }
     }
@@ -150,7 +165,7 @@ fn set_default_output(context: &mut Context, device: DeviceIndex, devices: &Devi
 /// Set stream volume through PulseAudio
 fn set_stream_volume(
     context: &Context,
-    stream: StreamIndex,
+    stream_key: StreamKey,
     volume: ChannelVolumes,
     streams: &StreamStore,
 ) {
@@ -159,7 +174,7 @@ fn set_stream_volume(
 
     let stream_info = {
         if let Ok(streams_guard) = streams_clone.read() {
-            streams_guard.get(&stream).cloned()
+            streams_guard.get(&stream_key).cloned()
         } else {
             return;
         }
@@ -168,23 +183,23 @@ fn set_stream_volume(
     if let Some(info) = stream_info {
         match info.stream_type {
             StreamType::Playback => {
-                introspect.set_sink_input_volume(stream.0, &volume, None);
+                introspect.set_sink_input_volume(stream_key.index, &volume, None);
             }
             StreamType::Record | StreamType::Capture => {
-                introspect.set_source_output_volume(stream.0, &volume, None);
+                introspect.set_source_output_volume(stream_key.index, &volume, None);
             }
         }
     }
 }
 
 /// Set stream mute state through PulseAudio
-fn set_stream_mute(context: &Context, stream: StreamIndex, muted: bool, streams: &StreamStore) {
+fn set_stream_mute(context: &Context, stream_key: StreamKey, muted: bool, streams: &StreamStore) {
     let streams_clone = Arc::clone(streams);
     let mut introspect = context.introspect();
 
     let stream_info = {
         if let Ok(streams_guard) = streams_clone.read() {
-            streams_guard.get(&stream).cloned()
+            streams_guard.get(&stream_key).cloned()
         } else {
             return;
         }
@@ -193,23 +208,28 @@ fn set_stream_mute(context: &Context, stream: StreamIndex, muted: bool, streams:
     if let Some(info) = stream_info {
         match info.stream_type {
             StreamType::Playback => {
-                introspect.set_sink_input_mute(stream.0, muted, None);
+                introspect.set_sink_input_mute(stream_key.index, muted, None);
             }
             StreamType::Record | StreamType::Capture => {
-                introspect.set_source_output_mute(stream.0, muted, None);
+                introspect.set_source_output_mute(stream_key.index, muted, None);
             }
         }
     }
 }
 
 /// Move stream to different device
-fn move_stream(context: &Context, stream: StreamIndex, device: DeviceIndex, streams: &StreamStore) {
+fn move_stream(
+    context: &Context,
+    stream_key: StreamKey,
+    device_key: DeviceKey,
+    streams: &StreamStore,
+) {
     let streams_clone = Arc::clone(streams);
     let mut introspect = context.introspect();
 
     let stream_info = {
         if let Ok(streams_guard) = streams_clone.read() {
-            streams_guard.get(&stream).cloned()
+            streams_guard.get(&stream_key).cloned()
         } else {
             return;
         }
@@ -218,10 +238,10 @@ fn move_stream(context: &Context, stream: StreamIndex, device: DeviceIndex, stre
     if let Some(info) = stream_info {
         match info.stream_type {
             StreamType::Playback => {
-                introspect.move_sink_input_by_index(stream.0, device.0, None);
+                introspect.move_sink_input_by_index(stream_key.index, device_key.index, None);
             }
             StreamType::Record | StreamType::Capture => {
-                introspect.move_source_output_by_index(stream.0, device.0, None);
+                introspect.move_source_output_by_index(stream_key.index, device_key.index, None);
             }
         }
     }

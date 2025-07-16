@@ -3,10 +3,10 @@ use std::error::Error;
 use async_trait::async_trait;
 use futures::Stream;
 
-use super::{StreamIndex, StreamInfo};
+use super::{StreamInfo, StreamKey};
 use crate::services::{
     StreamType,
-    pulse::{AudioEvent, PulseService, device::DeviceIndex, volume::Volume},
+    pulse::{AudioEvent, PulseService, device::DeviceKey, volume::Volume},
 };
 
 /// Stream management operations
@@ -19,7 +19,7 @@ pub trait StreamManager {
     ///
     /// # Errors
     /// Returns error if stream is not found or communication fails
-    async fn stream(&self, stream: StreamIndex) -> Result<StreamInfo, Self::Error>;
+    async fn stream(&self, stream_key: StreamKey) -> Result<StreamInfo, Self::Error>;
 
     /// Move stream to different device
     ///
@@ -27,8 +27,8 @@ pub trait StreamManager {
     /// Returns error if stream or device is not found, or operation fails
     async fn move_stream(
         &self,
-        stream: StreamIndex,
-        device: DeviceIndex,
+        stream_key: StreamKey,
+        device_key: DeviceKey,
     ) -> Result<(), Self::Error>;
 }
 
@@ -44,7 +44,7 @@ pub trait StreamVolumeController {
     /// Returns error if stream is not found, volume is invalid, or operation fails
     async fn set_stream_volume(
         &self,
-        stream: StreamIndex,
+        stream_key: StreamKey,
         volume: Volume,
     ) -> Result<(), Self::Error>;
 
@@ -52,7 +52,7 @@ pub trait StreamVolumeController {
     ///
     /// # Errors
     /// Returns error if stream is not found or operation fails
-    async fn set_stream_mute(&self, stream: StreamIndex, muted: bool) -> Result<(), Self::Error>;
+    async fn set_stream_mute(&self, stream_key: StreamKey, muted: bool) -> Result<(), Self::Error>;
 }
 
 /// Stream monitoring streams
@@ -67,13 +67,13 @@ pub trait StreamStreams {
     fn recording_streams(&self) -> impl Stream<Item = Vec<StreamInfo>> + Send;
 
     /// Stream of volume changes for specific stream
-    fn stream_volume(&self, stream: StreamIndex) -> impl Stream<Item = Volume> + Send;
+    fn stream_volume(&self, stream: StreamKey) -> impl Stream<Item = Volume> + Send;
 
     /// Stream of mute changes for specific stream
-    fn stream_mute(&self, stream: StreamIndex) -> impl Stream<Item = bool> + Send;
+    fn stream_mute(&self, stream: StreamKey) -> impl Stream<Item = bool> + Send;
 
     /// Stream of state changes for specific stream
-    fn stream_state(&self, stream: StreamIndex) -> impl Stream<Item = StreamInfo> + Send;
+    fn stream_state(&self, stream: StreamKey) -> impl Stream<Item = StreamInfo> + Send;
 }
 
 impl StreamStreams for PulseService {
@@ -133,7 +133,7 @@ impl StreamStreams for PulseService {
         }
     }
 
-    fn stream_volume(&self, stream: StreamIndex) -> impl Stream<Item = Volume> + Send {
+    fn stream_volume(&self, stream: StreamKey) -> impl Stream<Item = Volume> + Send {
         use async_stream::stream;
         use futures::{StreamExt, pin_mut};
 
@@ -141,8 +141,8 @@ impl StreamStreams for PulseService {
         stream! {
             pin_mut!(events_stream);
             while let Some(event) = events_stream.next().await {
-                if let AudioEvent::StreamVolumeChanged { stream_index, volume, .. } = event {
-                    if stream_index == stream {
+                if let AudioEvent::StreamVolumeChanged { stream_key, volume, .. } = event {
+                    if stream_key == stream {
                         yield volume;
                     }
                 }
@@ -150,7 +150,7 @@ impl StreamStreams for PulseService {
         }
     }
 
-    fn stream_mute(&self, stream: StreamIndex) -> impl Stream<Item = bool> + Send {
+    fn stream_mute(&self, stream: StreamKey) -> impl Stream<Item = bool> + Send {
         use async_stream::stream;
         use futures::{StreamExt, pin_mut};
 
@@ -158,8 +158,8 @@ impl StreamStreams for PulseService {
         stream! {
             pin_mut!(events_stream);
             while let Some(event) = events_stream.next().await {
-                if let AudioEvent::StreamMuteChanged { stream_index, muted, .. } = event {
-                    if stream_index == stream {
+                if let AudioEvent::StreamMuteChanged { stream_key, muted, .. } = event {
+                    if stream_key == stream {
                         yield muted;
                     }
                 }
@@ -167,7 +167,7 @@ impl StreamStreams for PulseService {
         }
     }
 
-    fn stream_state(&self, stream: StreamIndex) -> impl Stream<Item = StreamInfo> + Send {
+    fn stream_state(&self, stream_key: StreamKey) -> impl Stream<Item = StreamInfo> + Send {
         use async_stream::stream;
         use futures::{StreamExt, pin_mut};
 
@@ -176,7 +176,7 @@ impl StreamStreams for PulseService {
             pin_mut!(events_stream);
             while let Some(event) = events_stream.next().await {
                 match event {
-                    AudioEvent::StreamChanged(stream_info) if stream_info.index == stream => {
+                    AudioEvent::StreamChanged(stream_info) if stream_info.key == stream_key => {
                         yield stream_info;
                     }
                     _ => {}

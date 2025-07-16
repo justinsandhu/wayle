@@ -8,10 +8,10 @@ use libpulse_binding::{
 };
 
 use crate::services::{
-    DeviceInfo, DeviceType, StreamIndex, StreamInfo, StreamType, Volume,
+    DeviceIndex, DeviceInfo, DeviceType, StreamIndex, StreamInfo, StreamType, Volume,
     pulse::{
-        device::{self, DeviceName, DevicePort, DeviceState},
-        stream::{SampleFormat, StreamFormat, StreamState},
+        device::{DeviceName, DevicePort, DeviceState},
+        stream::{SampleFormat, StreamFormat, StreamKey, StreamState},
     },
 };
 
@@ -159,10 +159,14 @@ pub fn create_stream_info_from_sink_input(sink_input_info: &SinkInputInfo) -> St
         application_name,
         stream_type: StreamType::Playback,
         state: StreamState::Running,
-        device_index: device::DeviceIndex(sink_input_info.sink),
+        device_index: DeviceIndex(sink_input_info.sink),
         volume,
         muted: sink_input_info.mute,
         format,
+        key: StreamKey {
+            index: sink_input_info.index,
+            stream_type: StreamType::Playback,
+        },
     }
 }
 
@@ -190,9 +194,13 @@ pub fn create_stream_info_from_source_output(source_output_info: &SourceOutputIn
         application_name,
         stream_type: StreamType::Record,
         state: StreamState::Running,
-        device_index: device::DeviceIndex(source_output_info.source),
+        device_index: DeviceIndex(source_output_info.source),
         volume,
         muted: source_output_info.mute,
         format,
+        key: StreamKey {
+            index: source_output_info.index,
+            stream_type: StreamType::Record,
+        },
     }
 }

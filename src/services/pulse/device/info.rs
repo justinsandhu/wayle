@@ -6,7 +6,7 @@ use std::fmt;
 pub struct DeviceIndex(pub u32);
 
 /// Device type enumeration
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeviceType {
     /// Audio input device (microphone, line-in)
     Input,
@@ -63,7 +63,7 @@ pub struct DevicePort {
 }
 
 /// Device key for unique identification
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeviceKey {
     /// Device index
     pub index: u32,
@@ -118,7 +118,7 @@ impl DeviceInfo {
         active_port: Option<String>,
     ) -> Self {
         let index = DeviceIndex(index);
-        let key = DeviceKey::new(index.0, device_type.clone());
+        let key = DeviceKey::new(index.0, device_type);
 
         Self {
             index,

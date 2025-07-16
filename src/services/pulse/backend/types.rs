@@ -10,15 +10,15 @@ use libpulse_binding::{
 use tokio::sync::{broadcast, mpsc};
 
 use crate::services::{
-    AudioEvent, DeviceInfo, StreamIndex, StreamInfo,
-    pulse::device::{self, DeviceKey},
+    AudioEvent, DeviceInfo, StreamInfo,
+    pulse::{device::DeviceKey, stream::StreamKey},
 };
 
 /// Thread-safe storage for audio devices
 pub type DeviceStore = Arc<RwLock<HashMap<DeviceKey, DeviceInfo>>>;
 
 /// Thread-safe storage for audio streams  
-pub type StreamStore = Arc<RwLock<HashMap<StreamIndex, StreamInfo>>>;
+pub type StreamStore = Arc<RwLock<HashMap<StreamKey, StreamInfo>>>;
 
 /// Thread-safe storage for default device information
 pub type DefaultDevice = Arc<RwLock<Option<DeviceInfo>>>;
@@ -93,47 +93,47 @@ pub enum ExternalCommand {
     /// Set device volume
     SetDeviceVolume {
         /// Target device
-        device: device::DeviceIndex,
+        device_key: DeviceKey,
         /// New volume levels
         volume: ChannelVolumes,
     },
     /// Set device mute state
     SetDeviceMute {
         /// Target device
-        device: device::DeviceIndex,
+        device_key: DeviceKey,
         /// Mute state
         muted: bool,
     },
     /// Set stream volume
     SetStreamVolume {
         /// Target stream
-        stream: StreamIndex,
+        stream_key: StreamKey,
         /// New volume levels
         volume: ChannelVolumes,
     },
     /// Set stream mute state
     SetStreamMute {
         /// Target stream
-        stream: StreamIndex,
+        stream_key: StreamKey,
         /// Mute state
         muted: bool,
     },
     /// Set default input device
     SetDefaultInput {
         /// Target device
-        device: device::DeviceIndex,
+        device_key: DeviceKey,
     },
     /// Set default output device
     SetDefaultOutput {
         /// Target device
-        device: device::DeviceIndex,
+        device_key: DeviceKey,
     },
     /// Move stream to different device
     MoveStream {
         /// Target stream
-        stream: StreamIndex,
+        stream_key: StreamKey,
         /// Destination device
-        device: device::DeviceIndex,
+        device_key: DeviceKey,
     },
     /// Shutdown backend
     Shutdown,

@@ -3,7 +3,7 @@ use std::error::Error;
 use async_trait::async_trait;
 use futures::Stream;
 
-use super::{DeviceIndex, DeviceInfo, DeviceType};
+use super::{DeviceInfo, DeviceKey, DeviceType};
 use crate::services::pulse::{AudioEvent, PulseService, volume::Volume};
 
 /// Device management operations
@@ -16,7 +16,7 @@ pub trait DeviceManager {
     ///
     /// # Errors
     /// Returns error if device is not found or communication fails
-    async fn device(&self, device: DeviceIndex) -> Result<DeviceInfo, Self::Error>;
+    async fn device(&self, device_key: DeviceKey) -> Result<DeviceInfo, Self::Error>;
 
     /// Get devices filtered by type
     ///
@@ -43,13 +43,13 @@ pub trait DeviceManager {
     ///
     /// # Errors
     /// Returns error if device is not found or operation fails
-    async fn set_default_input(&self, device: DeviceIndex) -> Result<(), Self::Error>;
+    async fn set_default_input(&self, device_key: DeviceKey) -> Result<(), Self::Error>;
 
     /// Set default output device
     ///
     /// # Errors
     /// Returns error if device is not found or operation fails
-    async fn set_default_output(&self, device: DeviceIndex) -> Result<(), Self::Error>;
+    async fn set_default_output(&self, device_key: DeviceKey) -> Result<(), Self::Error>;
 }
 
 /// Device volume control operations
@@ -69,17 +69,14 @@ pub trait DeviceVolumeController {
     ///
     /// # Errors
     /// Returns error if device is not found, level is invalid, or operation fails
-    async fn set_device_volume(
-        &self,
-        device: DeviceIndex,
-        level: f64,
-    ) -> Result<(), Self::Error>;
+    async fn set_device_volume(&self, device_key: DeviceKey, level: f64)
+    -> Result<(), Self::Error>;
 
     /// Set device mute state
     ///
     /// # Errors
     /// Returns error if device is not found or operation fails
-    async fn set_device_mute(&self, device: DeviceIndex, muted: bool) -> Result<(), Self::Error>;
+    async fn set_device_mute(&self, device_key: DeviceKey, muted: bool) -> Result<(), Self::Error>;
 }
 
 /// Device monitoring streams
@@ -100,13 +97,13 @@ pub trait DeviceStreams {
     fn default_output(&self) -> impl Stream<Item = DeviceInfo> + Send;
 
     /// Stream of volume changes for specific device
-    fn device_volume(&self, device: DeviceIndex) -> impl Stream<Item = Volume> + Send;
+    fn device_volume(&self, device_key: DeviceKey) -> impl Stream<Item = Volume> + Send;
 
     /// Stream of mute changes for specific device
-    fn device_mute(&self, device: DeviceIndex) -> impl Stream<Item = bool> + Send;
+    fn device_mute(&self, device_key: DeviceKey) -> impl Stream<Item = bool> + Send;
 
     /// Stream of state changes for specific device
-    fn device_state(&self, device: DeviceIndex) -> impl Stream<Item = DeviceInfo> + Send;
+    fn device_state(&self, device_key: DeviceKey) -> impl Stream<Item = DeviceInfo> + Send;
 }
 
 impl DeviceStreams for PulseService {
@@ -219,7 +216,7 @@ impl DeviceStreams for PulseService {
         }
     }
 
-    fn device_volume(&self, device: DeviceIndex) -> impl Stream<Item = Volume> + Send {
+    fn device_volume(&self, device: DeviceKey) -> impl Stream<Item = Volume> + Send {
         use async_stream::stream;
         use futures::{StreamExt, pin_mut};
 
@@ -227,8 +224,8 @@ impl DeviceStreams for PulseService {
         stream! {
             pin_mut!(events_stream);
             while let Some(event) = events_stream.next().await {
-                if let AudioEvent::DeviceVolumeChanged { device_index, volume, .. } = event {
-                    if device_index == device {
+                if let AudioEvent::DeviceVolumeChanged { device_key, volume, .. } = event {
+                    if device_key == device {
                         yield volume;
                     }
                 }
@@ -236,7 +233,7 @@ impl DeviceStreams for PulseService {
         }
     }
 
-    fn device_mute(&self, device: DeviceIndex) -> impl Stream<Item = bool> + Send {
+    fn device_mute(&self, device: DeviceKey) -> impl Stream<Item = bool> + Send {
         use async_stream::stream;
         use futures::{StreamExt, pin_mut};
 
@@ -244,8 +241,8 @@ impl DeviceStreams for PulseService {
         stream! {
             pin_mut!(events_stream);
             while let Some(event) = events_stream.next().await {
-                if let AudioEvent::DeviceMuteChanged { device_index, muted, .. } = event {
-                    if device_index == device {
+                if let AudioEvent::DeviceMuteChanged { device_key, muted, .. } = event {
+                    if device == device_key {
                         yield muted;
                     }
                 }
@@ -253,7 +250,7 @@ impl DeviceStreams for PulseService {
         }
     }
 
-    fn device_state(&self, device: DeviceIndex) -> impl Stream<Item = DeviceInfo> + Send {
+    fn device_state(&self, device_key: DeviceKey) -> impl Stream<Item = DeviceInfo> + Send {
         use async_stream::stream;
         use futures::{StreamExt, pin_mut};
 
@@ -262,7 +259,7 @@ impl DeviceStreams for PulseService {
             pin_mut!(events_stream);
             while let Some(event) = events_stream.next().await {
                 match event {
-                    AudioEvent::DeviceChanged(device_info) if device_info.index == device => {
+                    AudioEvent::DeviceChanged(device_info) if device_info.key == device_key => {
                         yield device_info;
                     }
                     _ => {}

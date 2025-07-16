@@ -4,6 +4,8 @@ use std::{
 };
 
 use async_trait::async_trait;
+use device::DeviceKey;
+use stream::StreamKey;
 use tokio::sync::{broadcast, mpsc};
 
 /// PulseAudio backend implementation
@@ -152,16 +154,16 @@ impl Drop for PulseService {
 impl DeviceManager for PulseService {
     type Error = PulseError;
 
-    async fn device(&self, device: DeviceIndex) -> Result<DeviceInfo, Self::Error> {
+    async fn device(&self, device: DeviceKey) -> Result<DeviceInfo, Self::Error> {
         let devices = self
             .devices
             .read()
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         devices
             .values()
-            .find(|d| d.index == device)
+            .find(|d| d.index.0 == device.index && d.device_type == device.device_type)
             .cloned()
-            .ok_or(PulseError::DeviceNotFound(device))
+            .ok_or(PulseError::DeviceNotFound(device.index, device.device_type))
     }
 
     async fn devices_by_type(
@@ -196,16 +198,16 @@ impl DeviceManager for PulseService {
         Ok(default_output.clone())
     }
 
-    async fn set_default_input(&self, device: DeviceIndex) -> Result<(), Self::Error> {
+    async fn set_default_input(&self, device_key: DeviceKey) -> Result<(), Self::Error> {
         self.command_tx
-            .send(ExternalCommand::SetDefaultInput { device })
+            .send(ExternalCommand::SetDefaultInput { device_key })
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 
-    async fn set_default_output(&self, device: DeviceIndex) -> Result<(), Self::Error> {
+    async fn set_default_output(&self, device_key: DeviceKey) -> Result<(), Self::Error> {
         self.command_tx
-            .send(ExternalCommand::SetDefaultOutput { device })
+            .send(ExternalCommand::SetDefaultOutput { device_key })
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
@@ -217,25 +219,29 @@ impl DeviceVolumeController for PulseService {
 
     async fn set_device_volume(
         &self,
-        device: DeviceIndex,
+        device_key: DeviceKey,
         level: f64,
     ) -> Result<(), Self::Error> {
-        let device_info = self.device(device).await?;
+        println!(
+            "Setting volume for device '{}-{:?}': {}",
+            device_key.index, device_key.device_type, level
+        );
+        let device_info = self.device(device_key).await?;
         let channel_count = device_info.volume.channels();
         let volume = Volume::new(vec![level; channel_count]);
         let pulse_volume = PulseBackend::convert_volume_to_pulse(&volume);
         self.command_tx
             .send(ExternalCommand::SetDeviceVolume {
-                device,
+                device_key,
                 volume: pulse_volume,
             })
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 
-    async fn set_device_mute(&self, device: DeviceIndex, muted: bool) -> Result<(), Self::Error> {
+    async fn set_device_mute(&self, device_key: DeviceKey, muted: bool) -> Result<(), Self::Error> {
         self.command_tx
-            .send(ExternalCommand::SetDeviceMute { device, muted })
+            .send(ExternalCommand::SetDeviceMute { device_key, muted })
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
@@ -245,24 +251,30 @@ impl DeviceVolumeController for PulseService {
 impl StreamManager for PulseService {
     type Error = PulseError;
 
-    async fn stream(&self, stream: StreamIndex) -> Result<stream::StreamInfo, Self::Error> {
+    async fn stream(&self, stream_key: StreamKey) -> Result<stream::StreamInfo, Self::Error> {
         let streams = self
             .streams
             .read()
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         streams
-            .get(&stream)
+            .get(&stream_key)
             .cloned()
-            .ok_or(PulseError::StreamNotFound(stream))
+            .ok_or(PulseError::StreamNotFound(
+                stream_key.index,
+                stream_key.stream_type,
+            ))
     }
 
     async fn move_stream(
         &self,
-        stream: StreamIndex,
-        device: DeviceIndex,
+        stream_key: StreamKey,
+        device_key: DeviceKey,
     ) -> Result<(), Self::Error> {
         self.command_tx
-            .send(ExternalCommand::MoveStream { stream, device })
+            .send(ExternalCommand::MoveStream {
+                stream_key,
+                device_key,
+            })
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
@@ -274,22 +286,22 @@ impl StreamVolumeController for PulseService {
 
     async fn set_stream_volume(
         &self,
-        stream: StreamIndex,
+        stream_key: StreamKey,
         volume: Volume,
     ) -> Result<(), Self::Error> {
         let pulse_volume = PulseBackend::convert_volume_to_pulse(&volume);
         self.command_tx
             .send(ExternalCommand::SetStreamVolume {
-                stream,
+                stream_key,
                 volume: pulse_volume,
             })
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
 
-    async fn set_stream_mute(&self, stream: StreamIndex, muted: bool) -> Result<(), Self::Error> {
+    async fn set_stream_mute(&self, stream_key: StreamKey, muted: bool) -> Result<(), Self::Error> {
         self.command_tx
-            .send(ExternalCommand::SetStreamMute { stream, muted })
+            .send(ExternalCommand::SetStreamMute { stream_key, muted })
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
         Ok(())
     }
