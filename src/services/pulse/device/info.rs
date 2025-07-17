@@ -15,7 +15,7 @@ pub enum DeviceType {
 }
 
 /// Device state enumeration
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeviceState {
     /// Device is running and available
     Running,

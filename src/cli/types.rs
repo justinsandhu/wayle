@@ -153,7 +153,7 @@ pub struct CommandArg {
 /// This enum helps with argument validation and provides hints
 /// in help text about what kind of value is expected. The type
 /// information improves user experience and enables better error messages.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ArgType {
     /// A general string value.
     String,

@@ -113,7 +113,7 @@ impl PlayerStreams for MprisMediaService {
         stream! {
             let current_state = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.last_playback_state.clone())
+                players_guard.get(&player_id).map(|tracker| tracker.last_playback_state)
             };
 
             if let Some(state) = current_state {
@@ -197,7 +197,7 @@ impl PlayerStreams for MprisMediaService {
         stream! {
             let current_mode = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.last_loop_mode.clone())
+                players_guard.get(&player_id).map(|tracker| tracker.last_loop_mode)
             };
 
             if let Some(mode) = current_mode {
@@ -225,7 +225,7 @@ impl PlayerStreams for MprisMediaService {
         stream! {
             let current_mode = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.last_shuffle_mode.clone())
+                players_guard.get(&player_id).map(|tracker| tracker.last_shuffle_mode)
             };
 
             if let Some(mode) = current_mode {
@@ -255,11 +255,11 @@ impl PlayerStreams for MprisMediaService {
                 let players_guard = players.read().await;
                 players_guard.get(&player_id).map(|tracker| PlayerState {
                     player_info: tracker.info.clone(),
-                    playback_state: tracker.last_playback_state.clone(),
+                    playback_state: tracker.last_playback_state,
                     metadata: tracker.last_metadata.clone(),
                     position: tracker.last_position,
-                    loop_mode: tracker.last_loop_mode.clone(),
-                    shuffle_mode: tracker.last_shuffle_mode.clone(),
+                    loop_mode: tracker.last_loop_mode,
+                    shuffle_mode: tracker.last_shuffle_mode,
                 })
             };
 
@@ -290,11 +290,11 @@ impl PlayerStreams for MprisMediaService {
                             let players_guard = players.read().await;
                             players_guard.get(&player_id).map(|tracker| PlayerState {
                                 player_info: tracker.info.clone(),
-                                playback_state: tracker.last_playback_state.clone(),
+                                playback_state: tracker.last_playback_state,
                                 metadata: tracker.last_metadata.clone(),
                                 position: tracker.last_position,
-                                loop_mode: tracker.last_loop_mode.clone(),
-                                shuffle_mode: tracker.last_shuffle_mode.clone(),
+                                loop_mode: tracker.last_loop_mode,
+                                shuffle_mode: tracker.last_shuffle_mode,
                             })
                         };
 

@@ -4,7 +4,7 @@ use super::PlayerInfo;
 use crate::services::mpris::{MediaPlayer2PlayerProxy, TrackMetadata};
 
 /// Current playback state of a media player
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PlaybackState {
     /// Player is currently playing
     Playing,
@@ -38,7 +38,7 @@ impl From<PlaybackState> for &'static str {
 }
 
 /// Loop mode for track or playlist repetition
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoopMode {
     /// No looping
     None,
@@ -76,7 +76,7 @@ impl From<LoopMode> for &'static str {
 }
 
 /// Shuffle mode for randomizing playback order
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ShuffleMode {
     /// Shuffle enabled
     On,

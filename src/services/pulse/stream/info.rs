@@ -16,7 +16,7 @@ pub enum StreamType {
 }
 
 /// Audio stream state
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamState {
     /// Stream is running
     Running,
@@ -29,7 +29,7 @@ pub enum StreamState {
 }
 
 /// Audio sample format
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleFormat {
     /// 8-bit unsigned
     U8,
