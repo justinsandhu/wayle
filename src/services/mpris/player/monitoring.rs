@@ -6,9 +6,10 @@ use futures::StreamExt;
 use tokio::sync::{RwLock, broadcast};
 use zbus::{proxy::PropertyChanged, zvariant::OwnedValue};
 
-use super::{
+use super::state::PlayerStateTracker;
+use crate::services::mpris::{
     LoopMode, MediaError, MediaPlayer2PlayerProxy, PlaybackState, PlayerEvent, PlayerEventSender,
-    PlayerId, ShuffleMode, TrackMetadata, player::state::PlayerStateTracker, utils,
+    PlayerId, ShuffleMode, TrackMetadata, utils,
 };
 
 /// Thread-safe collection of active media players and their state trackers.

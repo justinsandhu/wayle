@@ -1,11 +1,10 @@
-use std::{collections::HashMap, error::Error, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use async_trait::async_trait;
 use tokio::sync::RwLock;
 use zbus::zvariant::ObjectPath;
 
 use crate::services::mpris::{
-    LoopMode, MediaError, MediaPlayer2PlayerProxy, MprisMediaService, PlayerId, PlayerStateTracker,
+    LoopMode, MediaError, MediaPlayer2PlayerProxy, PlayerId, PlayerStateTracker,
     utils,
 };
 
@@ -154,77 +153,5 @@ impl MediaControl {
             .set_shuffle(!current_shuffle)
             .await
             .map_err(MediaError::DbusError)
-    }
-}
-
-/// Media control trait operations
-#[async_trait]
-pub trait MediaController {
-    /// Error type for control operations
-    type Error: Error + Send + Sync + 'static;
-
-    /// Toggle play/pause state for a specific player
-    ///
-    /// # Errors
-    /// Returns error if player is not found or doesn't support play/pause
-    async fn play_pause(&self, player_id: PlayerId) -> Result<(), Self::Error>;
-
-    /// Skip to next track for a specific player
-    ///
-    /// # Errors
-    /// Returns error if player is not found or doesn't support next track
-    async fn next(&self, player_id: PlayerId) -> Result<(), Self::Error>;
-
-    /// Skip to previous track for a specific player
-    ///
-    /// # Errors
-    /// Returns error if player is not found or doesn't support previous track
-    async fn previous(&self, player_id: PlayerId) -> Result<(), Self::Error>;
-
-    /// Seek to a specific position in the current track
-    ///
-    /// # Errors
-    /// Returns error if player is not found, doesn't support seeking, or position is invalid
-    async fn seek(&self, player_id: PlayerId, position: Duration) -> Result<(), Self::Error>;
-
-    /// Toggle loop mode for a specific player
-    ///
-    /// # Errors
-    /// Returns error if player is not found or doesn't support loop mode changes
-    async fn toggle_loop(&self, player_id: PlayerId) -> Result<(), Self::Error>;
-
-    /// Toggle shuffle mode for a specific player
-    ///
-    /// # Errors
-    /// Returns error if player is not found or doesn't support shuffle mode changes
-    async fn toggle_shuffle(&self, player_id: PlayerId) -> Result<(), Self::Error>;
-}
-
-#[async_trait]
-impl MediaController for MprisMediaService {
-    type Error = MediaError;
-
-    async fn play_pause(&self, player_id: PlayerId) -> Result<(), Self::Error> {
-        self.control.play_pause(player_id).await
-    }
-
-    async fn next(&self, player_id: PlayerId) -> Result<(), Self::Error> {
-        self.control.next(player_id).await
-    }
-
-    async fn previous(&self, player_id: PlayerId) -> Result<(), Self::Error> {
-        self.control.previous(player_id).await
-    }
-
-    async fn seek(&self, player_id: PlayerId, position: Duration) -> Result<(), Self::Error> {
-        self.control.seek(player_id, position).await
-    }
-
-    async fn toggle_loop(&self, player_id: PlayerId) -> Result<(), Self::Error> {
-        self.control.toggle_loop(player_id).await
-    }
-
-    async fn toggle_shuffle(&self, player_id: PlayerId) -> Result<(), Self::Error> {
-        self.control.toggle_shuffle(player_id).await
     }
 }

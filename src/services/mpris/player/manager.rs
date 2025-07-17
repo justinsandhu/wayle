@@ -4,14 +4,15 @@ use tokio::sync::RwLock;
 use zbus::Connection;
 
 use crate::runtime_state::RuntimeState;
+use crate::services::mpris::{MediaError, PlayerId};
 
 use super::{
-    MediaError, PlayerId, PlayerStateTracker, discovery::PlayerDiscovery,
+    PlayerStateTracker, discovery::PlayerDiscovery,
     monitoring::PlayerMonitoring,
 };
 
-/// Player management functionality
-pub struct PlayerManager {
+/// Player management implementation
+pub struct PlayerManagement {
     /// D-Bus session connection
     pub connection: Connection,
 
@@ -34,7 +35,7 @@ pub struct PlayerManager {
     pub ignored_players: Arc<RwLock<Vec<String>>>,
 }
 
-impl PlayerManager {
+impl PlayerManagement {
     /// Create a new player manager
     pub fn new(
         connection: Connection,
@@ -201,7 +202,7 @@ impl PlayerManager {
     }
 }
 
-impl Drop for PlayerManager {
+impl Drop for PlayerManagement {
     fn drop(&mut self) {
         if let Some(handle) = self.discovery_handle.take() {
             handle.abort();
@@ -222,3 +223,4 @@ impl Drop for PlayerManager {
         }
     }
 }
+

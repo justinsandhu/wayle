@@ -3,13 +3,16 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use futures::StreamExt;
 use tokio::sync::RwLock;
 use tracing::{info, instrument, warn};
-use zbus::{Connection, fdo};
+use zbus::{Connection, fdo::DBusProxy};
+
+use crate::services::mpris::{
+    MediaError, MediaPlayer2PlayerProxy, MediaPlayer2Proxy, PlayerEventSender, PlayerListSender,
+    TrackMetadata, utils,
+};
 
 use super::{
-    LoopMode, MediaError, MediaPlayer2PlayerProxy, MediaPlayer2Proxy, PlaybackState,
-    PlayerCapabilities, PlayerEvent, PlayerEventSender, PlayerId, PlayerInfo, PlayerListSender,
-    ShuffleMode, TrackMetadata, monitoring::PlayerMonitoring, player::state::PlayerStateTracker,
-    utils,
+    LoopMode, PlaybackState, PlayerCapabilities, PlayerEvent, PlayerId, PlayerInfo,
+    PlayerStateTracker, ShuffleMode, monitoring::PlayerMonitoring,
 };
 
 /// Handles player discovery and lifecycle management
@@ -53,7 +56,7 @@ impl PlayerDiscovery {
     #[instrument(skip(self))]
     pub async fn start_discovery(&self) -> Result<(), MediaError> {
         info!("Starting MPRIS player discovery monitoring");
-        let dbus_proxy = fdo::DBusProxy::new(&self.connection)
+        let dbus_proxy = DBusProxy::new(&self.connection)
             .await
             .map_err(|e| MediaError::InitializationFailed(format!("DBus proxy failed: {e}")))?;
 
@@ -100,7 +103,7 @@ impl PlayerDiscovery {
     #[instrument(skip(self))]
     pub async fn discover_existing_players(&self) -> Result<(), MediaError> {
         info!("Discovering existing MPRIS players on D-Bus");
-        let dbus_proxy = fdo::DBusProxy::new(&self.connection)
+        let dbus_proxy = DBusProxy::new(&self.connection)
             .await
             .map_err(|e| MediaError::InitializationFailed(format!("DBus proxy failed: {e}")))?;
 
