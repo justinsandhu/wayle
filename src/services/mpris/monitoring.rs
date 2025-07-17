@@ -7,22 +7,26 @@ use tokio::sync::{RwLock, broadcast};
 use zbus::{proxy::PropertyChanged, zvariant::OwnedValue};
 
 use super::{
-    LoopMode, MediaError, MediaPlayer2PlayerProxy, PlaybackState, PlayerEvent, PlayerId,
-    ShuffleMode, TrackMetadata, player::state::PlayerStateTracker, utils,
+    LoopMode, MediaError, MediaPlayer2PlayerProxy, PlaybackState, PlayerEvent, PlayerEventSender,
+    PlayerId, ShuffleMode, TrackMetadata, player::state::PlayerStateTracker, utils,
 };
+
+/// Thread-safe collection of active media players and their state trackers.
+///
+/// Maps player IDs to their corresponding state trackers, allowing concurrent
+/// access from multiple components. Used throughout the MPRIS service for
+/// player state management and property monitoring.
+pub type PlayerList = Arc<RwLock<HashMap<PlayerId, PlayerStateTracker>>>;
 
 /// Handles player property monitoring and state updates
 pub struct PlayerMonitoring {
-    players: Arc<RwLock<HashMap<PlayerId, PlayerStateTracker>>>,
-    events_tx: Arc<broadcast::Sender<PlayerEvent>>,
+    players: PlayerList,
+    events_tx: broadcast::Sender<PlayerEvent>,
 }
 
 impl PlayerMonitoring {
     /// Create a new player monitoring handler
-    pub fn new(
-        players: Arc<RwLock<HashMap<PlayerId, PlayerStateTracker>>>,
-        events_tx: Arc<broadcast::Sender<PlayerEvent>>,
-    ) -> Self {
+    pub fn new(players: PlayerList, events_tx: PlayerEventSender) -> Self {
         Self { players, events_tx }
     }
 
@@ -223,7 +227,7 @@ impl PlayerMonitoring {
 impl Clone for PlayerMonitoring {
     fn clone(&self) -> Self {
         Self {
-            players: self.players.clone(),
+            players: Arc::clone(&self.players),
             events_tx: self.events_tx.clone(),
         }
     }

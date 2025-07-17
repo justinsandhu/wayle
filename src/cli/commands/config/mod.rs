@@ -25,16 +25,16 @@ pub fn register_commands(registry: &mut CommandRegistry, config_store: Arc<Confi
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(GetCommand::new(config_store.clone())),
+        Box::new(GetCommand::new(Arc::clone(&config_store))),
     );
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(SetCommand::new(config_store.clone())),
+        Box::new(SetCommand::new(Arc::clone(&config_store))),
     );
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(WatchCommand::new(config_store.clone())),
+        Box::new(WatchCommand::new(Arc::clone(&config_store))),
     );
 }

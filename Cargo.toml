@@ -31,19 +31,7 @@ tracing-appender = "0.2"
 tempfile = "3"
 
 [[example]]
-name = "relm_volume"
-required-features = []
-
-[[example]]
-name = "pulse_test_gui"
-required-features = []
-
-[[example]]
 name = "pulse_full_test"
-required-features = []
-
-[[example]]
-name = "pulse_simple_test"
 required-features = []
 
 [lints.rust]

@@ -46,9 +46,9 @@ use backend::{
 pub struct PulseService {
     command_tx: CommandSender,
 
-    device_list_tx: Arc<DeviceListSender>,
-    stream_list_tx: Arc<StreamListSender>,
-    events_tx: Arc<EventSender>,
+    device_list_tx: DeviceListSender,
+    stream_list_tx: StreamListSender,
+    events_tx: EventSender,
 
     devices: DeviceStore,
     streams: StreamStore,
@@ -66,11 +66,11 @@ impl Clone for PulseService {
             device_list_tx: self.device_list_tx.clone(),
             stream_list_tx: self.stream_list_tx.clone(),
             events_tx: self.events_tx.clone(),
-            devices: self.devices.clone(),
-            streams: self.streams.clone(),
-            default_input: self.default_input.clone(),
-            default_output: self.default_output.clone(),
-            server_info: self.server_info.clone(),
+            devices: Arc::clone(&self.devices),
+            streams: Arc::clone(&self.streams),
+            default_input: Arc::clone(&self.default_input),
+            default_output: Arc::clone(&self.default_output),
+            server_info: Arc::clone(&self.server_info),
             monitoring_handle: None,
         }
     }
@@ -103,19 +103,19 @@ impl PulseService {
             device_list_tx.clone(),
             stream_list_tx.clone(),
             events_tx.clone(),
-            devices.clone(),
-            streams.clone(),
-            default_input.clone(),
-            default_output.clone(),
-            server_info.clone(),
+            Arc::clone(&devices),
+            Arc::clone(&streams),
+            Arc::clone(&default_input),
+            Arc::clone(&default_output),
+            Arc::clone(&server_info),
         )
         .await?;
 
         Ok(PulseService {
             command_tx,
-            device_list_tx: Arc::new(device_list_tx),
-            stream_list_tx: Arc::new(stream_list_tx),
-            events_tx: Arc::new(events_tx),
+            device_list_tx,
+            stream_list_tx,
+            events_tx,
             devices,
             streams,
             default_input,
@@ -182,20 +182,20 @@ impl DeviceManager for PulseService {
         Ok(filtered_devices)
     }
 
-    async fn current_default_input(&self) -> Result<Option<DeviceInfo>, Self::Error> {
-        let default_input = self
+    async fn default_input(&self) -> Result<Option<DeviceInfo>, Self::Error> {
+        let input = self
             .default_input
             .read()
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
-        Ok(default_input.clone())
+        Ok(input.clone())
     }
 
-    async fn current_default_output(&self) -> Result<Option<DeviceInfo>, Self::Error> {
-        let default_output = self
+    async fn default_output(&self) -> Result<Option<DeviceInfo>, Self::Error> {
+        let output = self
             .default_output
             .read()
             .map_err(|e| PulseError::LockPoisoned(format!("shared data lock: {e}")))?;
-        Ok(default_output.clone())
+        Ok(output.clone())
     }
 
     async fn set_default_input(&self, device_key: DeviceKey) -> Result<(), Self::Error> {

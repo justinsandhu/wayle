@@ -64,10 +64,10 @@ pub struct MprisMediaService {
     control: MediaControl,
 
     /// Broadcast channel for player list updates
-    player_list_tx: Arc<PlayerListSender>,
+    player_list_tx: PlayerListSender,
 
     /// Broadcast channel for player events
-    events_tx: Arc<PlayerEventSender>,
+    events_tx: PlayerEventSender,
 }
 
 impl MprisMediaService {
@@ -95,21 +95,19 @@ impl MprisMediaService {
         let players = Arc::new(RwLock::new(HashMap::new()));
         let persisted_active = PlayerManager::load_active_player_from_file().await;
         let active_player = Arc::new(RwLock::new(persisted_active));
-        let player_list_tx = Arc::new(player_list_tx);
-        let events_tx = Arc::new(events_tx);
         let ignored_players = Arc::new(RwLock::new(ignored_players));
 
         info!("Setting up player discovery and monitoring");
         let discovery = PlayerDiscovery::new(
             connection.clone(),
-            players.clone(),
+            Arc::clone(&players),
             player_list_tx.clone(),
             events_tx.clone(),
-            active_player.clone(),
-            ignored_players.clone(),
+            Arc::clone(&active_player),
+            Arc::clone(&ignored_players),
         );
 
-        let monitoring = PlayerMonitoring::new(players.clone(), events_tx.clone());
+        let monitoring = PlayerMonitoring::new(Arc::clone(&players), events_tx.clone());
         let control = MediaControl::new(players.clone());
 
         let mut player_manager = PlayerManager::new(
@@ -128,8 +126,8 @@ impl MprisMediaService {
         Ok(Self {
             player_manager,
             control,
-            player_list_tx,
-            events_tx,
+            player_list_tx: player_list_tx.clone(),
+            events_tx: events_tx.clone(),
         })
     }
 
@@ -165,13 +163,13 @@ impl Clone for MprisMediaService {
         Self {
             player_manager: PlayerManager::new(
                 self.player_manager.connection.clone(),
-                self.player_manager.players.clone(),
-                self.player_manager.active_player.clone(),
+                Arc::clone(&self.player_manager.players),
+                Arc::clone(&self.player_manager.active_player),
                 self.player_manager.discovery.clone(),
                 self.player_manager.monitoring.clone(),
-                self.player_manager.ignored_players.clone(),
+                Arc::clone(&self.player_manager.ignored_players),
             ),
-            control: MediaControl::new(self.player_manager.players.clone()),
+            control: MediaControl::new(Arc::clone(&self.player_manager.players)),
             player_list_tx: self.player_list_tx.clone(),
             events_tx: self.events_tx.clone(),
         }

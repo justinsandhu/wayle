@@ -1,22 +1,23 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::StreamExt;
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::RwLock;
 use tracing::{info, instrument, warn};
 use zbus::{Connection, fdo};
 
 use super::{
     LoopMode, MediaError, MediaPlayer2PlayerProxy, MediaPlayer2Proxy, PlaybackState,
-    PlayerCapabilities, PlayerEvent, PlayerId, PlayerInfo, ShuffleMode, TrackMetadata,
-    monitoring::PlayerMonitoring, player::state::PlayerStateTracker, utils,
+    PlayerCapabilities, PlayerEvent, PlayerEventSender, PlayerId, PlayerInfo, PlayerListSender,
+    ShuffleMode, TrackMetadata, monitoring::PlayerMonitoring, player::state::PlayerStateTracker,
+    utils,
 };
 
 /// Handles player discovery and lifecycle management
 pub struct PlayerDiscovery {
     connection: Connection,
     players: Arc<RwLock<HashMap<PlayerId, PlayerStateTracker>>>,
-    player_list_tx: Arc<broadcast::Sender<Vec<PlayerId>>>,
-    events_tx: Arc<broadcast::Sender<PlayerEvent>>,
+    player_list_tx: PlayerListSender,
+    events_tx: PlayerEventSender,
     active_player: Arc<RwLock<Option<PlayerId>>>,
     monitoring: PlayerMonitoring,
     ignored_players: Arc<RwLock<Vec<String>>>,
@@ -27,8 +28,8 @@ impl PlayerDiscovery {
     pub fn new(
         connection: Connection,
         players: Arc<RwLock<HashMap<PlayerId, PlayerStateTracker>>>,
-        player_list_tx: Arc<broadcast::Sender<Vec<PlayerId>>>,
-        events_tx: Arc<broadcast::Sender<PlayerEvent>>,
+        player_list_tx: PlayerListSender,
+        events_tx: PlayerEventSender,
         active_player: Arc<RwLock<Option<PlayerId>>>,
         ignored_players: Arc<RwLock<Vec<String>>>,
     ) -> Self {
@@ -342,12 +343,12 @@ impl Clone for PlayerDiscovery {
     fn clone(&self) -> Self {
         Self {
             connection: self.connection.clone(),
-            players: self.players.clone(),
+            players: Arc::clone(&self.players),
             player_list_tx: self.player_list_tx.clone(),
             events_tx: self.events_tx.clone(),
-            active_player: self.active_player.clone(),
+            active_player: Arc::clone(&self.active_player),
             monitoring: self.monitoring.clone(),
-            ignored_players: self.ignored_players.clone(),
+            ignored_players: Arc::clone(&self.ignored_players),
         }
     }
 }

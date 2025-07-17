@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, sync::Arc};
 
 use async_trait::async_trait;
 use futures::Stream;
@@ -31,13 +31,13 @@ pub trait DeviceManager {
     ///
     /// # Errors
     /// Returns error if communication with audio backend fails
-    async fn current_default_input(&self) -> Result<Option<DeviceInfo>, Self::Error>;
+    async fn default_input(&self) -> Result<Option<DeviceInfo>, Self::Error>;
 
     /// Get current default output device
     ///
     /// # Errors
     /// Returns error if communication with audio backend fails
-    async fn current_default_output(&self) -> Result<Option<DeviceInfo>, Self::Error>;
+    async fn default_output(&self) -> Result<Option<DeviceInfo>, Self::Error>;
 
     /// Set default input device
     ///
@@ -110,7 +110,7 @@ impl DeviceStreams for PulseService {
     fn devices(&self) -> impl Stream<Item = Vec<DeviceInfo>> + Send {
         use async_stream::stream;
 
-        let devices = self.devices.clone();
+        let devices = Arc::clone(&self.devices);
         let mut device_list_rx = self.device_list_tx.subscribe();
 
         stream! {
@@ -171,7 +171,7 @@ impl DeviceStreams for PulseService {
     fn default_input(&self) -> impl Stream<Item = DeviceInfo> + Send {
         use async_stream::stream;
 
-        let default_input = self.default_input.clone();
+        let default_input = Arc::clone(&self.default_input);
         let mut events_rx = self.events_tx.subscribe();
 
         stream! {
@@ -195,7 +195,7 @@ impl DeviceStreams for PulseService {
     fn default_output(&self) -> impl Stream<Item = DeviceInfo> + Send {
         use async_stream::stream;
 
-        let default_output = self.default_output.clone();
+        let default_output = Arc::clone(&self.default_output);
         let mut events_rx = self.events_tx.subscribe();
 
         stream! {

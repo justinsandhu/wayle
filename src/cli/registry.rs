@@ -236,7 +236,7 @@ impl CommandRegistry {
     /// This function serves as the central registration point for all CLI commands,
     /// delegating to individual modules to register their commands.
     pub fn register_all_commands(&mut self) {
-        config::register_commands(self, self.config_store.clone());
+        config::register_commands(self, Arc::clone(&self.config_store));
         media::register_commands(self);
     }
 }

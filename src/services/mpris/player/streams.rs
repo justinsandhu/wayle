@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use async_stream::stream;
 use futures::Stream;
@@ -59,7 +59,7 @@ impl PlayerStreams for MprisMediaService {
         &self,
         player_id: PlayerId,
     ) -> impl Stream<Item = Result<PlayerInfo, MediaError>> + Send {
-        let players = self.player_manager.players.clone();
+        let players = Arc::clone(&self.player_manager.players);
         let mut events_rx = self.events_tx.subscribe();
 
         stream! {
@@ -107,7 +107,7 @@ impl PlayerStreams for MprisMediaService {
     }
 
     fn playback_state(&self, player_id: PlayerId) -> impl Stream<Item = PlaybackState> + Send {
-        let players = self.player_manager.players.clone();
+        let players = Arc::clone(&self.player_manager.players);
         let mut events_rx = self.events_tx.subscribe();
 
         stream! {

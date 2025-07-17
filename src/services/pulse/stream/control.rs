@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, sync::Arc};
 
 use async_trait::async_trait;
 use futures::Stream;
@@ -80,7 +80,7 @@ impl StreamStreams for PulseService {
     fn streams(&self) -> impl Stream<Item = Vec<StreamInfo>> + Send {
         use async_stream::stream;
 
-        let streams = self.streams.clone();
+        let streams = Arc::clone(&self.streams);
         let mut stream_list_rx = self.stream_list_tx.subscribe();
 
         stream! {
