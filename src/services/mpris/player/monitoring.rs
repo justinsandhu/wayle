@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use futures::StreamExt;
 use tokio::sync::{RwLock, broadcast};
@@ -111,10 +110,23 @@ impl PlayerMonitoring {
     }
 
     async fn handle_position_signal(&self, player_id: PlayerId, signal: PropertyChanged<'_, i64>) {
-        if let Ok(position) = signal.get().await {
-            let duration = utils::from_mpris_micros(position);
-            self.handle_position_changed(player_id, duration).await;
+        let Ok(position) = signal.get().await else {
+            return;
+        };
+
+        let duration = utils::from_mpris_micros(position);
+
+        {
+            let mut players = self.players.write().await;
+            if let Some(tracker) = players.get_mut(&player_id) {
+                tracker.last_position = duration;
+            }
         }
+
+        let _ = self.events_tx.send(PlayerEvent::PositionChanged {
+            player_id,
+            position: duration,
+        });
     }
 
     async fn handle_playback_status_signal(
@@ -122,56 +134,12 @@ impl PlayerMonitoring {
         player_id: PlayerId,
         signal: PropertyChanged<'_, String>,
     ) {
-        if let Ok(status) = signal.get().await {
-            let state = PlaybackState::from(status.as_str());
-            self.handle_playback_state_changed(player_id, state).await;
-        }
-    }
+        let Ok(status) = signal.get().await else {
+            return;
+        };
 
-    async fn handle_metadata_signal(
-        &self,
-        player_id: PlayerId,
-        signal: PropertyChanged<'_, HashMap<String, OwnedValue>>,
-    ) {
-        if let Ok(metadata_map) = signal.get().await {
-            let metadata = TrackMetadata::from(metadata_map);
-            self.handle_metadata_changed(player_id, metadata).await;
-        }
-    }
+        let state = PlaybackState::from(status.as_str());
 
-    async fn handle_loop_status_signal(
-        &self,
-        player_id: PlayerId,
-        signal: PropertyChanged<'_, String>,
-    ) {
-        if let Ok(status) = signal.get().await {
-            let mode = LoopMode::from(status.as_str());
-            self.handle_loop_mode_changed(player_id, mode).await;
-        }
-    }
-
-    async fn handle_shuffle_signal(&self, player_id: PlayerId, signal: PropertyChanged<'_, bool>) {
-        if let Ok(shuffle) = signal.get().await {
-            let mode = ShuffleMode::from(shuffle);
-            self.handle_shuffle_mode_changed(player_id, mode).await;
-        }
-    }
-
-    async fn handle_position_changed(&self, player_id: PlayerId, position: Duration) {
-        {
-            let mut players = self.players.write().await;
-            if let Some(tracker) = players.get_mut(&player_id) {
-                tracker.last_position = position;
-            }
-        }
-
-        let _ = self.events_tx.send(PlayerEvent::PositionChanged {
-            player_id,
-            position,
-        });
-    }
-
-    async fn handle_playback_state_changed(&self, player_id: PlayerId, state: PlaybackState) {
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
@@ -184,7 +152,17 @@ impl PlayerMonitoring {
             .send(PlayerEvent::PlaybackStateChanged { player_id, state });
     }
 
-    async fn handle_metadata_changed(&self, player_id: PlayerId, metadata: TrackMetadata) {
+    async fn handle_metadata_signal(
+        &self,
+        player_id: PlayerId,
+        signal: PropertyChanged<'_, HashMap<String, OwnedValue>>,
+    ) {
+        let Ok(metadata_map) = signal.get().await else {
+            return;
+        };
+
+        let metadata = TrackMetadata::from(metadata_map);
+
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
@@ -198,7 +176,17 @@ impl PlayerMonitoring {
         });
     }
 
-    async fn handle_loop_mode_changed(&self, player_id: PlayerId, mode: LoopMode) {
+    async fn handle_loop_status_signal(
+        &self,
+        player_id: PlayerId,
+        signal: PropertyChanged<'_, String>,
+    ) {
+        let Ok(status) = signal.get().await else {
+            return;
+        };
+
+        let mode = LoopMode::from(status.as_str());
+
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
@@ -211,7 +199,13 @@ impl PlayerMonitoring {
             .send(PlayerEvent::LoopModeChanged { player_id, mode });
     }
 
-    async fn handle_shuffle_mode_changed(&self, player_id: PlayerId, mode: ShuffleMode) {
+    async fn handle_shuffle_signal(&self, player_id: PlayerId, signal: PropertyChanged<'_, bool>) {
+        let Ok(shuffle) = signal.get().await else {
+            return;
+        };
+
+        let mode = ShuffleMode::from(shuffle);
+
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
