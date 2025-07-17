@@ -1,7 +1,6 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use async_stream::stream;
-use async_trait::async_trait;
 use futures::Stream;
 use tokio::sync::{RwLock, broadcast};
 use tracing::{info, instrument};
@@ -18,16 +17,12 @@ pub type PlayerEventSender = broadcast::Sender<PlayerEvent>;
 
 /// Media control operations
 pub mod controller;
-/// Player discovery and lifecycle management
 /// Media player error types
 pub mod error;
-/// Player management functionality
 /// Player types and capabilities
 pub mod player;
 /// D-Bus proxy trait definitions
 pub mod proxy;
-/// Domain service trait definitions
-pub mod service;
 /// Track-related types
 pub mod track;
 /// MPRIS utility functions
@@ -36,7 +31,6 @@ pub mod utils;
 pub use error::*;
 pub use player::{PlayerCapabilities, PlayerEvent, PlayerId, PlayerInfo, PlayerState, state::*};
 pub use proxy::*;
-pub use service::*;
 pub use track::*;
 
 use controller::MediaControl;
@@ -48,7 +42,7 @@ use player::monitoring::PlayerMonitoring;
 ///
 /// Provides reactive media player control through D-Bus MPRIS protocol.
 /// Automatically discovers players and provides streams for UI updates.
-pub struct MprisMediaService {
+pub struct MediaService {
     /// Player management functionality
     player_manager: PlayerManagement,
 
@@ -62,7 +56,7 @@ pub struct MprisMediaService {
     events_tx: PlayerEventSender,
 }
 
-impl MprisMediaService {
+impl MediaService {
     /// Create a new MPRIS media service
     ///
     /// Initializes D-Bus connection and starts player discovery.
@@ -150,7 +144,7 @@ impl MprisMediaService {
     }
 }
 
-impl Clone for MprisMediaService {
+impl Clone for MediaService {
     fn clone(&self) -> Self {
         Self {
             player_manager: PlayerManagement::new(
@@ -168,9 +162,12 @@ impl Clone for MprisMediaService {
     }
 }
 
-impl MprisMediaService {
-    // Stream methods
-    fn players_stream(&self) -> impl Stream<Item = Vec<PlayerId>> + Send {
+impl MediaService {
+    /// Stream of currently available media players
+    ///
+    /// Returns a stream that emits the current list of players immediately,
+    /// then emits updates whenever players are added or removed.
+    pub fn players(&self) -> impl Stream<Item = Vec<PlayerId>> + Send {
         let mut rx = self.player_list_tx.subscribe();
 
         stream! {
@@ -186,7 +183,16 @@ impl MprisMediaService {
         }
     }
 
-    fn player_info_stream(
+    /// Stream of player information for a specific player
+    ///
+    /// Returns a stream that emits the current player info immediately,
+    /// then emits updates when the player's capabilities change.
+    /// Stream ends when the player is removed.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError` if the player is not found.
+    pub fn player_info(
         &self,
         player_id: PlayerId,
     ) -> impl Stream<Item = Result<PlayerInfo, MediaError>> + Send {
@@ -237,7 +243,11 @@ impl MprisMediaService {
         }
     }
 
-    fn playback_state_stream(&self, player_id: PlayerId) -> impl Stream<Item = PlaybackState> + Send {
+    /// Stream of playback state changes for a specific player
+    ///
+    /// Returns a stream that emits the current playback state immediately,
+    /// then emits updates whenever the state changes (Playing/Paused/Stopped).
+    pub fn playback_state(&self, player_id: PlayerId) -> impl Stream<Item = PlaybackState> + Send {
         let players = Arc::clone(&self.player_manager.players);
         let mut events_rx = self.events_tx.subscribe();
 
@@ -265,7 +275,11 @@ impl MprisMediaService {
         }
     }
 
-    fn position_stream(&self, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
+    /// Stream of playback position updates for a specific player
+    ///
+    /// Returns a stream that emits the current position immediately,
+    /// then emits updates as the track progresses.
+    pub fn position(&self, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
         let players = Arc::clone(&self.player_manager.players);
         let mut events_rx = self.events_tx.subscribe();
 
@@ -293,7 +307,11 @@ impl MprisMediaService {
         }
     }
 
-    fn metadata_stream(&self, player_id: PlayerId) -> impl Stream<Item = TrackMetadata> + Send {
+    /// Stream of track metadata changes for a specific player
+    ///
+    /// Returns a stream that emits the current track metadata immediately,
+    /// then emits updates when the track changes.
+    pub fn metadata(&self, player_id: PlayerId) -> impl Stream<Item = TrackMetadata> + Send {
         let players = Arc::clone(&self.player_manager.players);
         let mut events_rx = self.events_tx.subscribe();
 
@@ -321,7 +339,11 @@ impl MprisMediaService {
         }
     }
 
-    fn loop_mode_stream(&self, player_id: PlayerId) -> impl Stream<Item = LoopMode> + Send {
+    /// Stream of loop mode changes for a specific player
+    ///
+    /// Returns a stream that emits the current loop mode immediately,
+    /// then emits updates when the mode changes (None/Track/Playlist).
+    pub fn loop_mode(&self, player_id: PlayerId) -> impl Stream<Item = LoopMode> + Send {
         let players = Arc::clone(&self.player_manager.players);
         let mut events_rx = self.events_tx.subscribe();
 
@@ -349,7 +371,11 @@ impl MprisMediaService {
         }
     }
 
-    fn shuffle_mode_stream(&self, player_id: PlayerId) -> impl Stream<Item = ShuffleMode> + Send {
+    /// Stream of shuffle mode changes for a specific player
+    ///
+    /// Returns a stream that emits the current shuffle mode immediately,
+    /// then emits updates when the mode changes (On/Off).
+    pub fn shuffle_mode(&self, player_id: PlayerId) -> impl Stream<Item = ShuffleMode> + Send {
         let players = Arc::clone(&self.player_manager.players);
         let mut events_rx = self.events_tx.subscribe();
 
@@ -377,7 +403,12 @@ impl MprisMediaService {
         }
     }
 
-    fn player_state_stream(&self, player_id: PlayerId) -> impl Stream<Item = PlayerState> + Send {
+    /// Stream of complete player state for a specific player
+    ///
+    /// Returns a stream that emits the full player state immediately,
+    /// then emits updates whenever any aspect of the state changes.
+    /// Combines all other state streams into a single unified state object.
+    pub fn player_state(&self, player_id: PlayerId) -> impl Stream<Item = PlayerState> + Send {
         let players = Arc::clone(&self.player_manager.players);
         let mut events_rx = self.events_tx.subscribe();
 
@@ -440,91 +471,127 @@ impl MprisMediaService {
             }
         }
     }
-}
 
-impl Drop for MprisMediaService {
-    fn drop(&mut self) {
-        // PlayerManager handles its own cleanup in Drop
-    }
-}
-
-#[async_trait]
-impl MediaService for MprisMediaService {
-    type Error = MediaError;
-
-    fn players(&self) -> impl Stream<Item = Vec<PlayerId>> + Send {
-        self.players_stream()
-    }
-
-    fn player_info(
-        &self,
-        player_id: PlayerId,
-    ) -> impl Stream<Item = Result<PlayerInfo, Self::Error>> + Send {
-        self.player_info_stream(player_id)
-    }
-
-    fn playback_state(&self, player_id: PlayerId) -> impl Stream<Item = PlaybackState> + Send {
-        self.playback_state_stream(player_id)
-    }
-
-    fn position(&self, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
-        self.position_stream(player_id)
-    }
-
-    fn metadata(&self, player_id: PlayerId) -> impl Stream<Item = TrackMetadata> + Send {
-        self.metadata_stream(player_id)
-    }
-
-    fn loop_mode(&self, player_id: PlayerId) -> impl Stream<Item = LoopMode> + Send {
-        self.loop_mode_stream(player_id)
-    }
-
-    fn shuffle_mode(&self, player_id: PlayerId) -> impl Stream<Item = ShuffleMode> + Send {
-        self.shuffle_mode_stream(player_id)
-    }
-
-    fn player_state(&self, player_id: PlayerId) -> impl Stream<Item = PlayerState> + Send {
-        self.player_state_stream(player_id)
-    }
-
-    async fn play_pause(&self, player_id: PlayerId) -> Result<(), Self::Error> {
+    /// Toggle play/pause state for a specific player
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError` if:
+    /// - Player is not found
+    /// - Player doesn't support play/pause operations
+    /// - D-Bus communication fails
+    pub async fn play_pause(&self, player_id: PlayerId) -> Result<(), MediaError> {
         self.control.play_pause(player_id).await
     }
 
-    async fn next(&self, player_id: PlayerId) -> Result<(), Self::Error> {
+    /// Skip to next track for a specific player
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError` if:
+    /// - Player is not found
+    /// - Player doesn't support next track operation
+    /// - D-Bus communication fails
+    pub async fn next(&self, player_id: PlayerId) -> Result<(), MediaError> {
         self.control.next(player_id).await
     }
 
-    async fn previous(&self, player_id: PlayerId) -> Result<(), Self::Error> {
+    /// Skip to previous track for a specific player
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError` if:
+    /// - Player is not found
+    /// - Player doesn't support previous track operation
+    /// - D-Bus communication fails
+    pub async fn previous(&self, player_id: PlayerId) -> Result<(), MediaError> {
         self.control.previous(player_id).await
     }
 
-    async fn seek(&self, player_id: PlayerId, position: Duration) -> Result<(), Self::Error> {
+    /// Seek to a specific position in the current track
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError` if:
+    /// - Player is not found
+    /// - Player doesn't support seeking
+    /// - Position is beyond track length
+    /// - D-Bus communication fails
+    pub async fn seek(&self, player_id: PlayerId, position: Duration) -> Result<(), MediaError> {
         self.control.seek(player_id, position).await
     }
 
-    async fn toggle_loop(&self, player_id: PlayerId) -> Result<(), Self::Error> {
+    /// Toggle loop mode for a specific player
+    ///
+    /// Cycles through: None → Track → Playlist → None
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError` if:
+    /// - Player is not found
+    /// - Player doesn't support loop mode changes
+    /// - D-Bus communication fails
+    pub async fn toggle_loop(&self, player_id: PlayerId) -> Result<(), MediaError> {
         self.control.toggle_loop(player_id).await
     }
 
-    async fn toggle_shuffle(&self, player_id: PlayerId) -> Result<(), Self::Error> {
+    /// Toggle shuffle mode for a specific player
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError` if:
+    /// - Player is not found
+    /// - Player doesn't support shuffle mode changes
+    /// - D-Bus communication fails
+    pub async fn toggle_shuffle(&self, player_id: PlayerId) -> Result<(), MediaError> {
         self.control.toggle_shuffle(player_id).await
     }
 
-    async fn active_player(&self) -> Option<PlayerId> {
+    /// Get the currently active player
+    ///
+    /// Returns the player ID that was last set as active, or None if no player
+    /// is active. If the active player has been removed, attempts to find a
+    /// fallback player.
+    pub async fn active_player(&self) -> Option<PlayerId> {
         self.player_manager.active_player().await
     }
 
-    async fn set_active_player(&self, player_id: Option<PlayerId>) -> Result<(), Self::Error> {
+    /// Set the active player
+    ///
+    /// The active player is persisted to disk and restored on restart.
+    /// Pass None to clear the active player.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError` if the specified player is not found.
+    pub async fn set_active_player(&self, player_id: Option<PlayerId>) -> Result<(), MediaError> {
         self.player_manager.set_active_player(player_id).await
     }
 
-    async fn control_active_player<F, R>(&self, action: F) -> Option<Result<R, Self::Error>>
+    /// Execute an action on the active player
+    ///
+    /// Convenience method that gets the active player and executes the provided
+    /// action on it. Returns None if no player is active.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let result = service.control_active_player(|id| {
+    ///     Box::pin(service.play_pause(id))
+    /// }).await;
+    /// ```
+    pub async fn control_active_player<F, R>(&self, action: F) -> Option<Result<R, MediaError>>
     where
-        F: FnOnce(PlayerId) -> Pin<Box<dyn Future<Output = Result<R, Self::Error>> + Send>> + Send,
+        F: FnOnce(PlayerId) -> Pin<Box<dyn Future<Output = Result<R, MediaError>> + Send>> + Send,
         R: Send,
     {
         let active_id = self.active_player().await?;
         Some(action(active_id).await)
+    }
+}
+
+impl Drop for MediaService {
+    fn drop(&mut self) {
+        // PlayerManager handles its own cleanup in Drop
     }
 }

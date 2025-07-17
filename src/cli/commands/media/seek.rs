@@ -9,7 +9,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::{MediaService, MprisMediaService},
+    services::mpris::{MediaService},
 };
 
 use super::utils::{get_player_display_name, get_player_id_or_active};
@@ -152,7 +152,7 @@ impl Command for SeekCommand {
         let player_arg = args.get(1);
 
         let media_service =
-            MprisMediaService::new(Vec::new())
+            MediaService::new(Vec::new())
                 .await
                 .map_err(|e| CliError::ServiceError {
                     service: "Media".to_string(),

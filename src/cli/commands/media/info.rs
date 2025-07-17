@@ -10,7 +10,7 @@ use crate::{
         types::{ArgType, CommandArg, CommandMetadata},
     },
     services::mpris::{
-        LoopMode, MediaService, MprisMediaService, PlaybackState, PlayerId, ShuffleMode,
+        LoopMode, MediaService, PlaybackState, PlayerId, ShuffleMode,
         TrackMetadata,
     },
 };
@@ -50,7 +50,7 @@ impl Command for InfoCommand {
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
         let media_service =
-            MprisMediaService::new(Vec::new())
+            MediaService::new(Vec::new())
                 .await
                 .map_err(|e| CliError::ServiceError {
                     service: "Media".to_string(),
@@ -94,7 +94,7 @@ impl Command for InfoCommand {
 impl InfoCommand {
     async fn add_player_info(
         &self,
-        service: &impl MediaService,
+        service: &MediaService,
         player_id: &PlayerId,
         output: &mut String,
     ) {
@@ -123,7 +123,7 @@ impl InfoCommand {
 
     async fn add_playback_state(
         &self,
-        service: &impl MediaService,
+        service: &MediaService,
         player_id: &PlayerId,
         output: &mut String,
     ) {
@@ -141,7 +141,7 @@ impl InfoCommand {
 
     async fn add_modes(
         &self,
-        service: &impl MediaService,
+        service: &MediaService,
         player_id: &PlayerId,
         output: &mut String,
     ) {
@@ -171,7 +171,7 @@ impl InfoCommand {
 
     async fn add_track_info(
         &self,
-        service: &impl MediaService,
+        service: &MediaService,
         player_id: &PlayerId,
         output: &mut String,
     ) {
@@ -202,7 +202,7 @@ impl InfoCommand {
 
     async fn add_position_info(
         &self,
-        service: &impl MediaService,
+        service: &MediaService,
         player_id: &PlayerId,
         metadata: &TrackMetadata,
         output: &mut String,

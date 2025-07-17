@@ -4,7 +4,7 @@ use tokio::pin;
 
 use crate::{
     cli::{CliError, Command, CommandResult, types::CommandMetadata},
-    services::mpris::{MediaService, MprisMediaService, PlaybackState},
+    services::mpris::{MediaService, PlaybackState},
 };
 
 /// Command to list all available media players
@@ -32,7 +32,7 @@ impl Command for ListCommand {
     /// Returns CliError if media service initialization fails
     async fn execute(&self, _args: &[String]) -> CommandResult {
         let media_service =
-            MprisMediaService::new(Vec::new())
+            MediaService::new(Vec::new())
                 .await
                 .map_err(|e| CliError::ServiceError {
                     service: "Media".to_string(),

@@ -5,7 +5,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::{MediaService, MprisMediaService},
+    services::mpris::{MediaService},
 };
 
 use super::utils::{find_player_by_identifier, get_player_display_name};
@@ -36,7 +36,7 @@ impl Command for ActiveCommand {
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
         let media_service =
-            MprisMediaService::new(Vec::new())
+            MediaService::new(Vec::new())
                 .await
                 .map_err(|e| CliError::ServiceError {
                     service: "Media".to_string(),

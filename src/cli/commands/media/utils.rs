@@ -3,7 +3,7 @@ use tokio::pin;
 
 use crate::{
     cli::CliError,
-    services::mpris::{MediaService, MprisMediaService, PlayerId},
+    services::mpris::{MediaService, PlayerId},
 };
 
 /// Finds a player by identifier (index or partial name match)
@@ -22,7 +22,7 @@ use crate::{
 ///
 /// Returns CliError if no matching player is found or multiple matches exist
 pub async fn find_player_by_identifier(
-    service: &MprisMediaService,
+    service: &MediaService,
     identifier: &str,
 ) -> Result<PlayerId, CliError> {
     let players_stream = service.players();
@@ -105,7 +105,7 @@ pub async fn find_player_by_identifier(
 ///
 /// Returns CliError if no player is found
 pub async fn get_player_id_or_active(
-    service: &MprisMediaService,
+    service: &MediaService,
     identifier: Option<&String>,
 ) -> Result<PlayerId, CliError> {
     if let Some(id) = identifier {
@@ -133,7 +133,7 @@ pub async fn get_player_id_or_active(
 /// Formats a player's display name for output
 ///
 /// Returns the player's identity if available, otherwise returns the bus name
-pub async fn get_player_display_name(service: &MprisMediaService, player_id: &PlayerId) -> String {
+pub async fn get_player_display_name(service: &MediaService, player_id: &PlayerId) -> String {
     let info_stream = service.player_info(player_id.clone());
     pin!(info_stream);
     if let Some(Ok(info)) = info_stream.next().await {
