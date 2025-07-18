@@ -119,7 +119,7 @@ impl PlayerMonitoring {
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
-                tracker.last_position = duration;
+                tracker.state.position = duration;
             }
         }
 
@@ -143,7 +143,7 @@ impl PlayerMonitoring {
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
-                tracker.last_playback_state = state;
+                tracker.state.playback_state = state;
             }
         }
 
@@ -166,7 +166,7 @@ impl PlayerMonitoring {
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
-                tracker.last_metadata = metadata.clone();
+                tracker.state.metadata = metadata.clone();
             }
         }
 
@@ -190,7 +190,7 @@ impl PlayerMonitoring {
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
-                tracker.last_loop_mode = mode;
+                tracker.state.loop_mode = mode;
             }
         }
 
@@ -209,7 +209,7 @@ impl PlayerMonitoring {
         {
             let mut players = self.players.write().await;
             if let Some(tracker) = players.get_mut(&player_id) {
-                tracker.last_shuffle_mode = mode;
+                tracker.state.shuffle_mode = mode;
             }
         }
 

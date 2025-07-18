@@ -44,7 +44,7 @@ pub async fn find_player_by_identifier(
 
     if let Ok(index) = identifier.parse::<usize>() {
         if index > 0 && index <= players.len() {
-            return Ok(players[index - 1].clone());
+            return Ok(players[index - 1].player_info.id.clone());
         } else {
             return Err(CliError::InvalidArgument {
                 arg: "player-id".to_string(),
@@ -56,18 +56,14 @@ pub async fn find_player_by_identifier(
     let identifier_lower = identifier.to_lowercase();
     let mut matches = Vec::new();
 
-    for player_id in &players {
-        let info_stream = service.player_info(player_id.clone());
-        pin!(info_stream);
-        if let Some(Ok(info)) = info_stream.next().await {
-            let identity_lower = info.identity.to_lowercase();
-            let bus_name_lower = player_id.bus_name().to_lowercase();
+    for player_state in &players {
+        let info = &player_state.player_info;
+        let identity_lower = info.identity.to_lowercase();
+        let bus_name_lower = info.id.bus_name().to_lowercase();
 
-            if identity_lower.contains(&identifier_lower)
-                || bus_name_lower.contains(&identifier_lower)
-            {
-                matches.push((player_id.clone(), info.identity));
-            }
+        if identity_lower.contains(&identifier_lower) || bus_name_lower.contains(&identifier_lower)
+        {
+            matches.push((info.id.clone(), info.identity.clone()));
         }
     }
 

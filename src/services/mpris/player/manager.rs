@@ -28,11 +28,7 @@ pub struct PlayerManagement {
     /// Player monitoring handler
     pub monitoring: PlayerMonitoring,
 
-    /// Handle to the player discovery task
-    pub discovery_handle: Option<tokio::task::JoinHandle<()>>,
 
-    /// List of player bus names to ignore during discovery
-    pub ignored_players: Arc<RwLock<Vec<String>>>,
 }
 
 impl PlayerManagement {
@@ -43,7 +39,6 @@ impl PlayerManagement {
         active_player: Arc<RwLock<Option<PlayerId>>>,
         discovery: PlayerDiscovery,
         monitoring: PlayerMonitoring,
-        ignored_players: Arc<RwLock<Vec<String>>>,
     ) -> Self {
         Self {
             connection,
@@ -51,28 +46,9 @@ impl PlayerManagement {
             active_player,
             discovery,
             monitoring,
-            discovery_handle: None,
-            ignored_players,
         }
     }
 
-    /// Start player discovery
-    ///
-    /// # Errors
-    /// Returns error if discovery initialization fails
-    pub async fn start_discovery(&mut self) -> Result<(), MediaError> {
-        let discovery_clone = self.discovery.clone();
-        let discovery_handle = tokio::spawn(async move {
-            if let Err(e) = discovery_clone.start_discovery().await {
-                eprintln!("Player discovery failed: {e}");
-            }
-        });
-
-        self.discovery_handle = Some(discovery_handle);
-        self.discovery.discover_existing_players().await?;
-        self.validate_loaded_active_player().await;
-        Ok(())
-    }
 
     /// Load active player from runtime state file
     pub async fn load_active_player_from_file() -> Option<PlayerId> {
@@ -111,7 +87,7 @@ impl PlayerManagement {
     }
 
     /// Validate the loaded active player after discovery completes
-    async fn validate_loaded_active_player(&self) {
+    pub async fn validate_loaded_active_player(&self) {
         let needs_fallback = {
             let active = self.active_player.read().await;
             if let Some(ref player_id) = *active {
@@ -127,28 +103,6 @@ impl PlayerManagement {
         }
     }
 
-    /// Configure which players to ignore during discovery
-    ///
-    /// Players matching any of the provided patterns will be ignored.
-    /// Patterns are matched using `contains()` against the D-Bus bus name.
-    ///
-    /// # Arguments
-    /// * `patterns` - List of patterns to match against player bus names
-    pub async fn set_ignored_players(&self, patterns: Vec<String>) {
-        let mut ignored = self.ignored_players.write().await;
-        *ignored = patterns;
-    }
-
-    /// Get currently ignored player patterns
-    pub async fn get_ignored_players(&self) -> Vec<String> {
-        let ignored = self.ignored_players.read().await;
-        ignored.clone()
-    }
-
-    /// Check if a player should be ignored based on its bus name
-    pub async fn should_ignore_player(&self, bus_name: &str) -> bool {
-        self.discovery.should_ignore_player(bus_name).await
-    }
 
     /// Get active player
     pub async fn active_player(&self) -> Option<PlayerId> {
@@ -189,10 +143,6 @@ impl PlayerManagement {
 
     /// Shutdown the player manager and clean up all resources
     pub async fn shutdown(&mut self) {
-        if let Some(handle) = self.discovery_handle.take() {
-            handle.abort();
-        }
-
         let mut players = self.players.write().await;
         for (_, mut tracker) in players.drain() {
             if let Some(handle) = tracker.monitoring_handle.take() {
@@ -204,10 +154,6 @@ impl PlayerManagement {
 
 impl Drop for PlayerManagement {
     fn drop(&mut self) {
-        if let Some(handle) = self.discovery_handle.take() {
-            handle.abort();
-        }
-
         let mut players = match self.players.try_write() {
             Ok(players) => players,
             Err(_) => {

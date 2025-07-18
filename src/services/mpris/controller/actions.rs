@@ -87,7 +87,7 @@ impl MediaControl {
                 return Err(MediaError::PlayerNotFound(player_id));
             };
 
-            if let Some(length) = tracker.last_metadata.length {
+            if let Some(length) = tracker.state.metadata.length {
                 if position > length {
                     return Err(MediaError::InvalidSeekPosition {
                         position,
@@ -97,7 +97,8 @@ impl MediaControl {
             }
 
             tracker
-                .last_metadata
+                .state
+                .metadata
                 .track_id
                 .clone()
                 .unwrap_or_else(|| "/".to_string())

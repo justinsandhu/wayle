@@ -55,39 +55,22 @@ impl Command for ListCommand {
         let active_player = media_service.active_player().await;
         let mut output = format!("Found {} media player(s):\n\n", players.len());
 
-        for (index, player_id) in players.iter().enumerate() {
+        for (index, player_state) in players.iter().enumerate() {
             let player_num = index + 1;
+            let player_id = &player_state.player_info.id;
             let is_active = active_player.as_ref() == Some(player_id);
             let active_marker = if is_active { " (active)" } else { "" };
 
-            let info_stream = media_service.player_info(player_id.clone());
-            pin!(info_stream);
-            let identity = if let Some(Ok(info)) = info_stream.next().await {
-                info.identity
-            } else {
-                player_id.bus_name().to_string()
+            let identity = player_state.player_info.identity.clone();
+
+            let playback_state = match player_state.playback_state {
+                PlaybackState::Playing => "▶ Playing",
+                PlaybackState::Paused => "⏸ Paused",
+                PlaybackState::Stopped => "⏹ Stopped",
             };
 
-            let state_stream = media_service.playback_state(player_id.clone());
-            pin!(state_stream);
-            let playback_state = if let Some(state) = state_stream.next().await {
-                match state {
-                    PlaybackState::Playing => "▶ Playing",
-                    PlaybackState::Paused => "⏸ Paused",
-                    PlaybackState::Stopped => "⏹ Stopped",
-                }
-            } else {
-                "Unknown"
-            };
-
-            let metadata_stream = media_service.metadata(player_id.clone());
-            pin!(metadata_stream);
-            let track_info = if let Some(metadata) = metadata_stream.next().await {
-                if !metadata.title.is_empty() {
-                    format!(" - {} by {}", metadata.title, metadata.artist)
-                } else {
-                    String::new()
-                }
+            let track_info = if !player_state.metadata.title.is_empty() {
+                format!(" - {} by {}", player_state.metadata.title, player_state.metadata.artist)
             } else {
                 String::new()
             };

@@ -54,6 +54,9 @@ pub struct MediaService {
 
     /// Broadcast channel for player events
     events_tx: PlayerEventSender,
+
+    /// Handle to the discovery monitoring task
+    discovery_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl MediaService {
@@ -96,17 +99,13 @@ impl MediaService {
         let monitoring = PlayerMonitoring::new(Arc::clone(&players), events_tx.clone());
         let control = MediaControl::new(Arc::clone(&players));
 
-        let mut player_manager = PlayerManagement::new(
-            connection,
-            players,
-            active_player,
-            discovery,
-            monitoring,
-            ignored_players,
-        );
+        let player_manager =
+            PlayerManagement::new(connection, players, active_player, discovery, monitoring);
 
         info!("Starting MPRIS player discovery");
-        player_manager.start_discovery().await?;
+        let discovery_handle = player_manager.discovery.start_discovery().await?;
+        player_manager.discovery.discover_existing_players().await?;
+        player_manager.validate_loaded_active_player().await;
         info!("MPRIS service fully initialized");
 
         Ok(Self {
@@ -114,12 +113,8 @@ impl MediaService {
             control,
             player_list_tx: player_list_tx.clone(),
             events_tx: events_tx.clone(),
+            discovery_handle: Some(discovery_handle),
         })
-    }
-
-    /// Shutdown the service and clean up all resources
-    pub async fn shutdown(&mut self) {
-        self.player_manager.shutdown().await;
     }
 
     /// Configure which players to ignore during discovery
@@ -130,55 +125,47 @@ impl MediaService {
     /// # Arguments
     /// * `patterns` - List of patterns to match against player bus names
     pub async fn set_ignored_players(&self, patterns: Vec<String>) {
-        self.player_manager.set_ignored_players(patterns).await;
+        self.player_manager
+            .discovery
+            .set_ignored_players(patterns)
+            .await;
     }
 
     /// Get currently ignored player patterns
-    pub async fn get_ignored_players(&self) -> Vec<String> {
-        self.player_manager.get_ignored_players().await
+    pub async fn ignored_players(&self) -> Vec<String> {
+        self.player_manager.discovery.ignored_players().await
     }
 
     /// Check if a player should be ignored based on its bus name
     pub async fn should_ignore_player(&self, bus_name: &str) -> bool {
-        self.player_manager.should_ignore_player(bus_name).await
+        self.player_manager
+            .discovery
+            .should_ignore_player(bus_name)
+            .await
     }
-}
 
-impl Clone for MediaService {
-    fn clone(&self) -> Self {
-        Self {
-            player_manager: PlayerManagement::new(
-                self.player_manager.connection.clone(),
-                Arc::clone(&self.player_manager.players),
-                Arc::clone(&self.player_manager.active_player),
-                self.player_manager.discovery.clone(),
-                self.player_manager.monitoring.clone(),
-                Arc::clone(&self.player_manager.ignored_players),
-            ),
-            control: MediaControl::new(Arc::clone(&self.player_manager.players)),
-            player_list_tx: self.player_list_tx.clone(),
-            events_tx: self.events_tx.clone(),
-        }
-    }
-}
-
-impl MediaService {
     /// Stream of currently available media players
     ///
-    /// Returns a stream that emits the current list of players immediately,
+    /// Returns a stream that emits the current list of player states immediately,
     /// then emits updates whenever players are added or removed.
-    pub fn players(&self) -> impl Stream<Item = Vec<PlayerId>> + Send {
+    pub fn players(&self) -> impl Stream<Item = Vec<PlayerState>> + Send {
         let mut rx = self.player_list_tx.subscribe();
+        let players = Arc::clone(&self.player_manager.players);
 
         stream! {
-            let current_players: Vec<PlayerId> = {
-                let players = self.player_manager.players.read().await;
-                players.keys().cloned().collect()
+            let current_players: Vec<PlayerState> = {
+                let players_guard = players.read().await;
+                players_guard.values().map(|tracker| tracker.state.clone()).collect()
             };
             yield current_players;
 
-            while let Ok(players) = rx.recv().await {
-                yield players;
+            while let Ok(player_ids) = rx.recv().await {
+                let players_guard = players.read().await;
+                let player_states: Vec<PlayerState> = player_ids
+                    .iter()
+                    .filter_map(|id| players_guard.get(id).map(|tracker| tracker.state.clone()))
+                    .collect();
+                yield player_states;
             }
         }
     }
@@ -202,7 +189,7 @@ impl MediaService {
         stream! {
             let current_info = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.info.clone())
+                players_guard.get(&player_id).map(|tracker| tracker.state.player_info.clone())
             };
 
             if let Some(info) = current_info {
@@ -227,7 +214,7 @@ impl MediaService {
                         let updated_info = {
                             let players_guard = players.read().await;
                             players_guard.get(&player_id).map(|tracker| {
-                                let mut info = tracker.info.clone();
+                                let mut info = tracker.state.player_info.clone();
                                 info.capabilities = capabilities;
                                 info
                             })
@@ -254,7 +241,7 @@ impl MediaService {
         stream! {
             let current_state = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.last_playback_state)
+                players_guard.get(&player_id).map(|tracker| tracker.state.playback_state)
             };
 
             if let Some(state) = current_state {
@@ -286,7 +273,7 @@ impl MediaService {
         stream! {
             let current_position = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.last_position)
+                players_guard.get(&player_id).map(|tracker| tracker.state.position)
             };
 
             if let Some(position) = current_position {
@@ -318,7 +305,7 @@ impl MediaService {
         stream! {
             let current_metadata = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.last_metadata.clone())
+                players_guard.get(&player_id).map(|tracker| tracker.state.metadata.clone())
             };
 
             if let Some(metadata) = current_metadata {
@@ -350,7 +337,7 @@ impl MediaService {
         stream! {
             let current_mode = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.last_loop_mode)
+                players_guard.get(&player_id).map(|tracker| tracker.state.loop_mode)
             };
 
             if let Some(mode) = current_mode {
@@ -382,7 +369,7 @@ impl MediaService {
         stream! {
             let current_mode = {
                 let players_guard = players.read().await;
-                players_guard.get(&player_id).map(|tracker| tracker.last_shuffle_mode)
+                players_guard.get(&player_id).map(|tracker| tracker.state.shuffle_mode)
             };
 
             if let Some(mode) = current_mode {
@@ -416,14 +403,7 @@ impl MediaService {
             loop {
                 let current_state = {
                     let players_guard = players.read().await;
-                    players_guard.get(&player_id).map(|tracker| PlayerState {
-                        player_info: tracker.info.clone(),
-                        playback_state: tracker.last_playback_state,
-                        position: tracker.last_position,
-                        metadata: tracker.last_metadata.clone(),
-                        loop_mode: tracker.last_loop_mode,
-                        shuffle_mode: tracker.last_shuffle_mode,
-                    })
+                    players_guard.get(&player_id).map(|tracker| tracker.state.clone())
                 };
 
                 if let Some(state) = current_state {
@@ -452,14 +432,7 @@ impl MediaService {
 
                         let state = {
                             let players_guard = players.read().await;
-                            players_guard.get(&player_id).map(|tracker| PlayerState {
-                                player_info: tracker.info.clone(),
-                                playback_state: tracker.last_playback_state,
-                                position: tracker.last_position,
-                                metadata: tracker.last_metadata.clone(),
-                                loop_mode: tracker.last_loop_mode,
-                                shuffle_mode: tracker.last_shuffle_mode,
-                            })
+                            players_guard.get(&player_id).map(|tracker| tracker.state.clone())
                         };
 
                         if let Some(state) = state {
@@ -588,10 +561,38 @@ impl MediaService {
         let active_id = self.active_player().await?;
         Some(action(active_id).await)
     }
+
+    /// Shutdown the service and clean up all resources
+    pub async fn shutdown(&mut self) {
+        if let Some(handle) = self.discovery_handle.take() {
+            handle.abort();
+        }
+        self.player_manager.shutdown().await;
+    }
+}
+
+impl Clone for MediaService {
+    fn clone(&self) -> Self {
+        Self {
+            player_manager: PlayerManagement::new(
+                self.player_manager.connection.clone(),
+                Arc::clone(&self.player_manager.players),
+                Arc::clone(&self.player_manager.active_player),
+                self.player_manager.discovery.clone(),
+                self.player_manager.monitoring.clone(),
+            ),
+            control: MediaControl::new(Arc::clone(&self.player_manager.players)),
+            player_list_tx: self.player_list_tx.clone(),
+            events_tx: self.events_tx.clone(),
+            discovery_handle: None,
+        }
+    }
 }
 
 impl Drop for MediaService {
     fn drop(&mut self) {
-        // PlayerManager handles its own cleanup in Drop
+        if let Some(handle) = self.discovery_handle.take() {
+            handle.abort();
+        }
     }
 }

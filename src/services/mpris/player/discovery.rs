@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::StreamExt;
-use tokio::sync::RwLock;
+use tokio::{sync::RwLock, task};
 use tracing::{info, instrument, warn};
 use zbus::{Connection, fdo::DBusProxy};
 
@@ -51,10 +51,12 @@ impl PlayerDiscovery {
 
     /// Start monitoring for new players
     ///
+    /// Returns a handle to the monitoring task that should be aborted on cleanup.
+    ///
     /// # Errors
     /// Returns error if D-Bus proxy creation or signal subscription fails
     #[instrument(skip(self))]
-    pub async fn start_discovery(&self) -> Result<(), MediaError> {
+    pub async fn start_discovery(&self) -> Result<task::JoinHandle<()>, MediaError> {
         info!("Starting MPRIS player discovery monitoring");
         let dbus_proxy = DBusProxy::new(&self.connection)
             .await
@@ -66,7 +68,7 @@ impl PlayerDiscovery {
             })?;
 
         let discovery = self.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             while let Some(signal) = name_owner_changed.next().await {
                 let Ok(args) = signal.args().map_err(MediaError::DbusError) else {
                     continue;
@@ -75,6 +77,9 @@ impl PlayerDiscovery {
                 if !args.name().starts_with("org.mpris.MediaPlayer2.") {
                     continue;
                 }
+
+                println!("signal:");
+                println!("{signal:#?}");
 
                 let player_id = PlayerId::from_bus_name(args.name());
 
@@ -93,7 +98,7 @@ impl PlayerDiscovery {
         });
 
         info!("MPRIS player discovery monitoring started successfully");
-        Ok(())
+        Ok(handle)
     }
 
     /// Discover existing players on the bus
@@ -246,6 +251,21 @@ impl PlayerDiscovery {
         let _ = self.events_tx.send(PlayerEvent::PlayerRemoved(player_id));
         self.broadcast_player_list().await;
         info!("MPRIS player removed successfully");
+    }
+
+    /// Configure which players to ignore during discovery
+    ///
+    /// Players matching any of the provided patterns will be ignored.
+    /// Patterns are matched using `contains()` against the D-Bus bus name.
+    pub async fn set_ignored_players(&self, patterns: Vec<String>) {
+        let mut ignored = self.ignored_players.write().await;
+        *ignored = patterns;
+    }
+
+    /// Get currently ignored player patterns
+    pub async fn ignored_players(&self) -> Vec<String> {
+        let ignored = self.ignored_players.read().await;
+        ignored.clone()
     }
 
     /// Check if a player should be ignored based on its bus name
