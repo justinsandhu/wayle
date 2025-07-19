@@ -22,6 +22,10 @@ pub enum MediaError {
         operation: String,
     },
 
+    /// Operation not supported (simplified version)
+    #[error("Operation not supported: {0}")]
+    OperationNotSupported(String),
+
     /// Seek position is invalid for the current track
     #[error("Invalid seek position: {position:?} (track length: {length:?})")]
     InvalidSeekPosition {

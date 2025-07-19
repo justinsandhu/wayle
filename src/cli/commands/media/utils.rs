@@ -117,7 +117,7 @@ pub async fn get_player_id_or_active(
 
         Ok(player_id)
     } else {
-        service.active_player().await.ok_or_else(|| {
+        service.get_active_player().await.ok_or_else(|| {
             CliError::InvalidArgument {
                 arg: "player-id".to_string(),
                 reason: "No active player set. Specify a player ID or set one first with 'wayle media active <player-id>'.".to_string(),
@@ -130,9 +130,7 @@ pub async fn get_player_id_or_active(
 ///
 /// Returns the player's identity if available, otherwise returns the bus name
 pub async fn get_player_display_name(service: &MediaService, player_id: &PlayerId) -> String {
-    let info_stream = service.player_info(player_id.clone());
-    pin!(info_stream);
-    if let Some(Ok(info)) = info_stream.next().await {
+    if let Some(info) = service.player_info(player_id).await {
         info.identity
     } else {
         player_id.bus_name().to_string()

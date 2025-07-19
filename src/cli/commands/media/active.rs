@@ -5,7 +5,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::{MediaService},
+    services::mpris::MediaService,
 };
 
 use super::utils::{find_player_by_identifier, get_player_display_name};
@@ -57,7 +57,7 @@ impl Command for ActiveCommand {
 
             Ok(format!("Set active player to: {player_name}"))
         } else {
-            match media_service.active_player().await {
+            match media_service.get_active_player().await {
                 Some(player_id) => {
                     let player_name = get_player_display_name(&media_service, &player_id).await;
                     Ok(format!("Active player: {player_name}"))

@@ -98,9 +98,7 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        let info_stream = service.player_info(player_id.clone());
-        pin!(info_stream);
-        if let Some(Ok(info)) = info_stream.next().await {
+        if let Some(info) = service.player_info(player_id).await {
             output.push_str(&format!("Player: {}\n", info.identity));
             output.push_str(&format!("Bus Name: {}\n", player_id.bus_name()));
             output.push_str(&format!("Can Control: {}\n\n", info.can_control));
@@ -192,7 +190,7 @@ impl InfoCommand {
             self.add_position_info(service, player_id, &metadata, output)
                 .await;
 
-            if let Some(url) = &metadata.artwork_url {
+            if let Some(url) = &metadata.art_url {
                 output.push_str(&format!("  Artwork URL: {url}\n"));
             }
         } else {

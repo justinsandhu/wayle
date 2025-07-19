@@ -52,7 +52,7 @@ impl Command for ListCommand {
             return Ok("No media players found".to_string());
         }
 
-        let active_player = media_service.active_player().await;
+        let active_player = media_service.get_active_player().await;
         let mut output = format!("Found {} media player(s):\n\n", players.len());
 
         for (index, player_state) in players.iter().enumerate() {
@@ -70,7 +70,10 @@ impl Command for ListCommand {
             };
 
             let track_info = if !player_state.metadata.title.is_empty() {
-                format!(" - {} by {}", player_state.metadata.title, player_state.metadata.artist)
+                format!(
+                    " - {} by {}",
+                    player_state.metadata.title, player_state.metadata.artist
+                )
             } else {
                 String::new()
             };
