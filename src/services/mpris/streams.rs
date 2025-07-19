@@ -6,24 +6,23 @@ use futures::Stream;
 
 use crate::services::mpris::{
     core::Core,
-    subsystems::query,
     types::{
-        LoopMode, PlaybackState, PlayerEvent, PlayerId, PlayerState, ShuffleMode, TrackMetadata,
+        LoopMode, PlaybackState, PlayerEvent, PlayerId, Player, ShuffleMode, TrackMetadata,
     },
 };
 
 /// Create a stream of player list updates
-pub fn players(core: &Arc<Core>) -> impl Stream<Item = Vec<PlayerState>> + Send {
+pub fn players(core: &Arc<Core>) -> impl Stream<Item = Vec<Player>> + Send {
     let mut events_rx = core.events.subscribe();
     let core = Arc::clone(core);
 
     stream! {
-        yield query::list_players(&core).await;
+        yield core.list_players().await;
 
         while let Ok(event) = events_rx.recv().await {
             match event {
                 PlayerEvent::PlayerAdded(_) | PlayerEvent::PlayerRemoved(_) => {
-                    yield query::list_players(&core).await;
+                    yield core.list_players().await;
                 }
                 _ => {
                     // Ignore other events - they're for individual player state updates
@@ -33,23 +32,23 @@ pub fn players(core: &Arc<Core>) -> impl Stream<Item = Vec<PlayerState>> + Send 
     }
 }
 
-/// Create a stream of state updates for a specific player
-pub fn player_state(
+/// Create a stream of updates for a specific player
+pub fn player(
     core: &Arc<Core>,
     player_id: PlayerId,
-) -> impl Stream<Item = PlayerState> + Send {
+) -> impl Stream<Item = Player> + Send {
     let mut events_rx = core.events.subscribe();
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(state) = query::player_state(&core, &player_id).await {
-            yield state;
+        if let Some(player) = core.get_player(&player_id).await {
+            yield player;
         } else {
             loop {
                 match events_rx.recv().await {
                     Ok(PlayerEvent::PlayerAdded(info)) if info.id == player_id => {
-                        if let Some(state) = query::player_state(&core, &player_id).await {
-                            yield state;
+                        if let Some(player) = core.get_player(&player_id).await {
+                            yield player;
                             break;
                         }
                     }
@@ -68,12 +67,10 @@ pub fn player_state(
                 | PlayerEvent::MetadataChanged { player_id: id, .. }
                 | PlayerEvent::PositionChanged { player_id: id, .. }
                 | PlayerEvent::LoopModeChanged { player_id: id, .. }
-                | PlayerEvent::ShuffleModeChanged { player_id: id, .. }
-                | PlayerEvent::CapabilitiesChanged { player_id: id, .. } => {
+                | PlayerEvent::ShuffleModeChanged { player_id: id, .. } => {
                     if id == player_id {
-                        if let Some(state) = query::player_state(&core, &player_id).await {
-                            println!("player_state: {state:#?}");
-                            yield state;
+                        if let Some(player) = core.get_player(&player_id).await {
+                            yield player;
                         }
                     }
                 }
@@ -92,8 +89,8 @@ pub fn playback_state(
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(state) = query::player_state(&core, &player_id).await {
-            yield state.playback_state;
+        if let Some(player) = core.get_player(&player_id).await {
+            yield player.playback_state;
         }
 
         while let Ok(event) = events_rx.recv().await {
@@ -112,8 +109,16 @@ pub fn metadata(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Tra
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(state) = query::player_state(&core, &player_id).await {
-            yield state.metadata;
+        if let Some(player) = core.get_player(&player_id).await {
+            yield TrackMetadata {
+                title: player.title,
+                artist: player.artist,
+                album: player.album,
+                album_artist: player.album_artist,
+                length: player.length,
+                art_url: player.art_url,
+                track_id: player.track_id,
+            };
         }
 
         while let Ok(event) = events_rx.recv().await {
@@ -132,8 +137,8 @@ pub fn position(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Dur
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(state) = query::player_state(&core, &player_id).await {
-            yield state.position;
+        if let Some(player) = core.get_player(&player_id).await {
+            yield player.position;
         }
 
         while let Ok(event) = events_rx.recv().await {
@@ -152,8 +157,8 @@ pub fn loop_mode(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Lo
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(state) = query::player_state(&core, &player_id).await {
-            yield state.loop_mode;
+        if let Some(player) = core.get_player(&player_id).await {
+            yield player.loop_mode;
         }
 
         while let Ok(event) = events_rx.recv().await {
@@ -175,8 +180,8 @@ pub fn shuffle_mode(
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(state) = query::player_state(&core, &player_id).await {
-            yield state.shuffle_mode;
+        if let Some(player) = core.get_player(&player_id).await {
+            yield player.shuffle_mode;
         }
 
         while let Ok(event) = events_rx.recv().await {
@@ -195,23 +200,69 @@ pub fn active_player(core: &Arc<Core>) -> impl Stream<Item = Option<PlayerId>> +
     let core = Arc::clone(core);
 
     stream! {
-        let mut last_active = query::active_player(&core).await;
+        let mut last_active = core.active_player().await;
         yield last_active.clone();
 
         while let Ok(event) = events_rx.recv().await {
             match event {
                 PlayerEvent::PlayerAdded(_info) => {
-                    let current = query::active_player(&core).await;
+                    let current = core.active_player().await;
                     if current != last_active {
                         last_active = current.clone();
                         yield current;
                     }
                 }
                 PlayerEvent::PlayerRemoved(_) => {
-                    let current = query::active_player(&core).await;
+                    let current = core.active_player().await;
                     if current != last_active {
                         last_active = current.clone();
                         yield current;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// Create a stream of all player events
+///
+/// This is useful for applications that want to handle all events in one place
+pub fn events(core: &Arc<Core>) -> impl Stream<Item = PlayerEvent> + Send {
+    let mut events_rx = core.events.subscribe();
+
+    stream! {
+        while let Ok(event) = events_rx.recv().await {
+            yield event;
+        }
+    }
+}
+
+/// Create a stream of events for a specific player
+///
+/// This filters the global event stream to only include events for the specified player
+pub fn player_events(
+    core: &Arc<Core>,
+    player_id: PlayerId,
+) -> impl Stream<Item = PlayerEvent> + Send {
+    let mut events_rx = core.events.subscribe();
+
+    stream! {
+        while let Ok(event) = events_rx.recv().await {
+            match &event {
+                PlayerEvent::PlayerAdded(player) if player.id == player_id => {
+                    yield event;
+                }
+                PlayerEvent::PlayerRemoved(id) if *id == player_id => {
+                    yield event;
+                }
+                PlayerEvent::PlaybackStateChanged { player_id: id, .. }
+                | PlayerEvent::MetadataChanged { player_id: id, .. }
+                | PlayerEvent::PositionChanged { player_id: id, .. }
+                | PlayerEvent::LoopModeChanged { player_id: id, .. }
+                | PlayerEvent::ShuffleModeChanged { player_id: id, .. } => {
+                    if *id == player_id {
+                        yield event;
                     }
                 }
                 _ => {}

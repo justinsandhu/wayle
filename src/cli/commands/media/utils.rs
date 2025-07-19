@@ -44,7 +44,7 @@ pub async fn find_player_by_identifier(
 
     if let Ok(index) = identifier.parse::<usize>() {
         if index > 0 && index <= players.len() {
-            return Ok(players[index - 1].player_info.id.clone());
+            return Ok(players[index - 1].id.clone());
         } else {
             return Err(CliError::InvalidArgument {
                 arg: "player-id".to_string(),
@@ -56,14 +56,13 @@ pub async fn find_player_by_identifier(
     let identifier_lower = identifier.to_lowercase();
     let mut matches = Vec::new();
 
-    for player_state in &players {
-        let info = &player_state.player_info;
-        let identity_lower = info.identity.to_lowercase();
-        let bus_name_lower = info.id.bus_name().to_lowercase();
+    for player in &players {
+        let identity_lower = player.identity.to_lowercase();
+        let bus_name_lower = player.id.bus_name().to_lowercase();
 
         if identity_lower.contains(&identifier_lower) || bus_name_lower.contains(&identifier_lower)
         {
-            matches.push((info.id.clone(), info.identity.clone()));
+            matches.push((player.id.clone(), player.identity.clone()));
         }
     }
 
@@ -130,8 +129,8 @@ pub async fn get_player_id_or_active(
 ///
 /// Returns the player's identity if available, otherwise returns the bus name
 pub async fn get_player_display_name(service: &MediaService, player_id: &PlayerId) -> String {
-    if let Some(info) = service.player_info(player_id).await {
-        info.identity
+    if let Some(player) = service.get_player(player_id).await {
+        player.identity
     } else {
         player_id.bus_name().to_string()
     }

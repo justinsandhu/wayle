@@ -81,7 +81,7 @@ pub async fn next(core: &Core, player_id: PlayerId) -> Result<(), MediaError> {
         .get(&player_id)
         .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
 
-    if !handle.info.capabilities.can_go_next {
+    if !handle.player.can_go_next {
         return Err(MediaError::OperationNotSupported("Next track".to_string()));
     }
 
@@ -99,7 +99,7 @@ pub async fn previous(core: &Core, player_id: PlayerId) -> Result<(), MediaError
         .get(&player_id)
         .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
 
-    if !handle.info.capabilities.can_go_previous {
+    if !handle.player.can_go_previous {
         return Err(MediaError::OperationNotSupported(
             "Previous track".to_string(),
         ));
@@ -119,12 +119,12 @@ pub async fn seek(core: &Core, player_id: PlayerId, position: Duration) -> Resul
         .get(&player_id)
         .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
 
-    if !handle.info.capabilities.can_seek {
+    if !handle.player.can_seek {
         return Err(MediaError::OperationNotSupported("Seek".to_string()));
     }
 
     let position_micros = utils::to_mpris_micros(position);
-    let track_id = handle.state.metadata.track_id.as_deref().unwrap_or("/");
+    let track_id = handle.player.track_id.as_deref().unwrap_or("/");
     let track_path = ObjectPath::try_from(track_id)
         .map_err(|e| MediaError::OperationNotSupported(format!("Invalid track ID: {e}")))?;
 
@@ -148,11 +148,11 @@ pub async fn toggle_loop(core: &Core, player_id: PlayerId) -> Result<(), MediaEr
         .get(&player_id)
         .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
 
-    if !handle.info.capabilities.can_loop {
+    if !handle.player.can_loop {
         return Err(MediaError::OperationNotSupported("Loop mode".to_string()));
     }
 
-    let current_mode = handle.state.loop_mode;
+    let current_mode = handle.player.loop_mode;
     let next_mode = match current_mode {
         LoopMode::None => LoopMode::Track,
         LoopMode::Track => LoopMode::Playlist,
@@ -177,7 +177,7 @@ pub async fn set_loop_mode(
         .get(&player_id)
         .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
 
-    if !handle.info.capabilities.can_loop {
+    if !handle.player.can_loop {
         return Err(MediaError::OperationNotSupported("Loop mode".to_string()));
     }
 
@@ -206,13 +206,13 @@ pub async fn toggle_shuffle(core: &Core, player_id: PlayerId) -> Result<(), Medi
         .get(&player_id)
         .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
 
-    if !handle.info.capabilities.can_shuffle {
+    if !handle.player.can_shuffle {
         return Err(MediaError::OperationNotSupported(
             "Shuffle mode".to_string(),
         ));
     }
 
-    let current_mode = handle.state.shuffle_mode;
+    let current_mode = handle.player.shuffle_mode;
     let next_mode = match current_mode {
         ShuffleMode::Off => ShuffleMode::On,
         ShuffleMode::On | ShuffleMode::Unsupported => ShuffleMode::Off,
@@ -236,7 +236,7 @@ pub async fn set_shuffle_mode(
         .get(&player_id)
         .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
 
-    if !handle.info.capabilities.can_shuffle {
+    if !handle.player.can_shuffle {
         return Err(MediaError::OperationNotSupported(
             "Shuffle mode".to_string(),
         ));

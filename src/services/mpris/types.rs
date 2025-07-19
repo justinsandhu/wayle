@@ -26,25 +26,58 @@ impl fmt::Display for PlayerId {
     }
 }
 
-/// Information about a media player
+/// Complete player information including identity, state, and capabilities
 #[derive(Debug, Clone)]
-pub struct PlayerInfo {
+pub struct Player {
+    // Identity
     /// Unique player identifier
     pub id: PlayerId,
 
     /// Human-readable player name
     pub identity: String,
 
+    /// Desktop entry name (if available)
+    pub desktop_entry: Option<String>,
+
+    // Dynamic state
+    /// Current playback state
+    pub playback_state: PlaybackState,
+
+    /// Current playback position
+    pub position: Duration,
+
+    /// Current loop mode
+    pub loop_mode: LoopMode,
+
+    /// Current shuffle mode
+    pub shuffle_mode: ShuffleMode,
+
+    // Track metadata
+    /// Track title
+    pub title: String,
+
+    /// Track artist(s)
+    pub artist: String,
+
+    /// Album name
+    pub album: String,
+
+    /// Album artist(s)
+    pub album_artist: String,
+
+    /// Track length
+    pub length: Option<Duration>,
+
+    /// Artwork URL
+    pub art_url: Option<String>,
+
+    /// Track ID (unique identifier)
+    pub track_id: Option<String>,
+
+    // Capabilities
     /// Whether the player can be controlled
     pub can_control: bool,
 
-    /// Player capabilities
-    pub capabilities: PlayerCapabilities,
-}
-
-/// Capabilities of a media player
-#[derive(Debug, Clone, Copy, Default)]
-pub struct PlayerCapabilities {
     /// Can start playback
     pub can_play: bool,
 
@@ -62,28 +95,6 @@ pub struct PlayerCapabilities {
 
     /// Supports shuffle mode
     pub can_shuffle: bool,
-}
-
-/// Complete state of a media player
-#[derive(Debug, Clone)]
-pub struct PlayerState {
-    /// Basic player information
-    pub player_info: PlayerInfo,
-
-    /// Current playback state
-    pub playback_state: PlaybackState,
-
-    /// Current track metadata
-    pub metadata: TrackMetadata,
-
-    /// Current playback position
-    pub position: Duration,
-
-    /// Current loop mode
-    pub loop_mode: LoopMode,
-
-    /// Current shuffle mode
-    pub shuffle_mode: ShuffleMode,
 }
 
 /// Current playback state of a media player
@@ -285,18 +296,10 @@ impl From<HashMap<String, OwnedValue>> for TrackMetadata {
 #[derive(Debug, Clone)]
 pub enum PlayerEvent {
     /// A new player was discovered
-    PlayerAdded(PlayerInfo),
+    PlayerAdded(Player),
 
     /// A player was removed
     PlayerRemoved(PlayerId),
-
-    /// Player capabilities changed
-    CapabilitiesChanged {
-        /// ID of the player whose capabilities changed
-        player_id: PlayerId,
-        /// New capabilities of the player
-        capabilities: PlayerCapabilities,
-    },
 
     /// Playback state changed
     PlaybackStateChanged {

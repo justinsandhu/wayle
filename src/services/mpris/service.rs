@@ -11,10 +11,8 @@ use crate::services::mpris::{
     core::Core,
     error::MediaError,
     streams,
-    subsystems::{control, discovery::Discovery, management, monitoring, query},
-    types::{
-        LoopMode, PlaybackState, PlayerId, PlayerInfo, PlayerState, ShuffleMode, TrackMetadata,
-    },
+    subsystems::{control, discovery::Discovery, management},
+    types::{LoopMode, PlaybackState, Player, PlayerEvent, PlayerId, ShuffleMode, TrackMetadata},
 };
 
 /// Configuration for the MPRIS service
@@ -36,8 +34,6 @@ pub struct MprisService {
     /// Discovery subsystem handle (kept alive for its Drop impl)
     _discovery: Option<Arc<Discovery>>,
 
-    /// Event monitoring task handle
-    event_monitor: Option<Arc<tokio::task::JoinHandle<()>>>,
 }
 
 impl MprisService {
@@ -75,48 +71,37 @@ impl MprisService {
 
         let discovery = Discovery::start(Arc::clone(&core)).await?;
 
-        let core_clone = Arc::clone(&core);
-        let event_monitor = tokio::spawn(async move {
-            monitor_events(core_clone).await;
-        });
-
         info!("MPRIS service started successfully");
         Ok(Self {
             core,
             _discovery: Some(Arc::new(discovery)),
-            event_monitor: Some(Arc::new(event_monitor)),
         })
     }
 
     /// Get a list of all current players
-    pub async fn list_players(&self) -> Vec<PlayerState> {
-        query::list_players(&self.core).await
+    pub async fn list_players(&self) -> Vec<Player> {
+        self.core.list_players().await
     }
 
     /// Get a stream of player list updates
     ///
     /// This returns a stream that yields the current players immediately,
     /// then yields updates whenever players are added or removed.
-    pub fn players(&self) -> impl Stream<Item = Vec<PlayerState>> + Send {
+    pub fn players(&self) -> impl Stream<Item = Vec<Player>> + Send {
         streams::players(&self.core)
     }
 
     /// Get information about a specific player
-    pub async fn player_info(&self, player_id: &PlayerId) -> Option<PlayerInfo> {
-        query::player_info(&self.core, player_id).await
-    }
-
-    /// Get the current state of a specific player
-    pub async fn player_state_snapshot(&self, player_id: &PlayerId) -> Option<PlayerState> {
-        query::player_state(&self.core, player_id).await
+    pub async fn get_player(&self, player_id: &PlayerId) -> Option<Player> {
+        self.core.get_player(player_id).await
     }
 
     /// Get a stream of state updates for a specific player
     ///
     /// This returns a stream that yields the current state immediately,
     /// then yields updates whenever the state changes.
-    pub fn player_state(&self, player_id: PlayerId) -> impl Stream<Item = PlayerState> + Send {
-        streams::player_state(&self.core, player_id)
+    pub fn player(&self, player_id: PlayerId) -> impl Stream<Item = Player> + Send {
+        streams::player(&self.core, player_id)
     }
 
     /// Get a stream of playback state changes for a specific player
@@ -136,9 +121,10 @@ impl MprisService {
 
     /// Get the current playback position for a player
     pub async fn current_position(&self, player_id: &PlayerId) -> Option<Duration> {
-        query::player_state(&self.core, player_id)
+        self.core
+            .get_player(player_id)
             .await
-            .map(|state| state.position)
+            .map(|player| player.position)
     }
 
     /// Get a stream of loop mode changes for a specific player
@@ -158,12 +144,12 @@ impl MprisService {
 
     /// Get the currently active player
     pub async fn get_active_player(&self) -> Option<PlayerId> {
-        query::active_player(&self.core).await
+        self.core.active_player().await
     }
 
     /// Get the list of ignored player patterns
     pub async fn ignored_players(&self) -> Vec<String> {
-        query::ignored_patterns(&self.core).await
+        self.core.ignored_patterns().await
     }
 
     /// Toggle play/pause for a player
@@ -275,6 +261,20 @@ impl MprisService {
         management::set_ignored_players(&self.core, patterns).await
     }
 
+    /// Get a stream of all player events
+    ///
+    /// This provides access to the raw event stream for advanced use cases
+    pub fn events(&self) -> impl Stream<Item = PlayerEvent> + Send {
+        streams::events(&self.core)
+    }
+
+    /// Get a stream of events for a specific player
+    ///
+    /// This filters the global event stream to only include events for the specified player
+    pub fn player_events(&self, player_id: PlayerId) -> impl Stream<Item = PlayerEvent> + Send {
+        streams::player_events(&self.core, player_id)
+    }
+
     /// Execute an action on the active player
     pub async fn control_active_player<F, R>(&self, action: F) -> Option<Result<R, MediaError>>
     where
@@ -286,21 +286,3 @@ impl MprisService {
     }
 }
 
-impl Drop for MprisService {
-    fn drop(&mut self) {
-        if let Some(monitor) = self.event_monitor.take() {
-            if let Ok(handle) = Arc::try_unwrap(monitor) {
-                handle.abort();
-            }
-        }
-    }
-}
-
-/// Monitor events and update core state
-async fn monitor_events(core: Arc<Core>) {
-    let mut events_rx = core.events.subscribe();
-
-    while let Ok(event) = events_rx.recv().await {
-        monitoring::update_player_state(&core, &event).await;
-    }
-}

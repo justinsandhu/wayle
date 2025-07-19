@@ -55,24 +55,24 @@ impl Command for ListCommand {
         let active_player = media_service.get_active_player().await;
         let mut output = format!("Found {} media player(s):\n\n", players.len());
 
-        for (index, player_state) in players.iter().enumerate() {
+        for (index, player) in players.iter().enumerate() {
             let player_num = index + 1;
-            let player_id = &player_state.player_info.id;
+            let player_id = &player.id;
             let is_active = active_player.as_ref() == Some(player_id);
             let active_marker = if is_active { " (active)" } else { "" };
 
-            let identity = player_state.player_info.identity.clone();
+            let identity = player.identity.clone();
 
-            let playback_state = match player_state.playback_state {
+            let playback_state = match player.playback_state {
                 PlaybackState::Playing => "▶ Playing",
                 PlaybackState::Paused => "⏸ Paused",
                 PlaybackState::Stopped => "⏹ Stopped",
             };
 
-            let track_info = if !player_state.metadata.title.is_empty() {
+            let track_info = if !player.title.is_empty() {
                 format!(
                     " - {} by {}",
-                    player_state.metadata.title, player_state.metadata.artist
+                    player.title, player.artist
                 )
             } else {
                 String::new()

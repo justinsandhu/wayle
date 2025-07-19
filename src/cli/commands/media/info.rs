@@ -98,24 +98,24 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        if let Some(info) = service.player_info(player_id).await {
-            output.push_str(&format!("Player: {}\n", info.identity));
+        if let Some(player) = service.get_player(player_id).await {
+            output.push_str(&format!("Player: {}\n", player.identity));
             output.push_str(&format!("Bus Name: {}\n", player_id.bus_name()));
-            output.push_str(&format!("Can Control: {}\n\n", info.can_control));
+            output.push_str(&format!("Can Control: {}\n\n", player.can_control));
 
             output.push_str("Capabilities:\n");
-            output.push_str(&format!("  Play/Pause: {}\n", info.capabilities.can_play));
+            output.push_str(&format!("  Play/Pause: {}\n", player.can_play));
             output.push_str(&format!(
                 "  Next Track: {}\n",
-                info.capabilities.can_go_next
+                player.can_go_next
             ));
             output.push_str(&format!(
                 "  Previous Track: {}\n",
-                info.capabilities.can_go_previous
+                player.can_go_previous
             ));
-            output.push_str(&format!("  Seek: {}\n", info.capabilities.can_seek));
-            output.push_str(&format!("  Loop: {}\n", info.capabilities.can_loop));
-            output.push_str(&format!("  Shuffle: {}\n\n", info.capabilities.can_shuffle));
+            output.push_str(&format!("  Seek: {}\n", player.can_seek));
+            output.push_str(&format!("  Loop: {}\n", player.can_loop));
+            output.push_str(&format!("  Shuffle: {}\n\n", player.can_shuffle));
         }
     }
 
