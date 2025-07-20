@@ -145,6 +145,38 @@ impl MprisService {
         streams::volume(&self.core, player_id)
     }
 
+    /// Get a stream of CanGoNext capability changes for a specific player
+    ///
+    /// Emits when the player's ability to skip to the next track changes.
+    /// This typically changes when reaching the last track in a playlist.
+    pub async fn watch_can_go_next(&self, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
+        streams::can_go_next(&self.core, player_id)
+    }
+
+    /// Get a stream of CanGoPrevious capability changes for a specific player
+    ///
+    /// Emits when the player's ability to go to the previous track changes.
+    /// This typically changes when at the first track or based on playback history.
+    pub async fn watch_can_go_prev(&self, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
+        streams::can_go_previous(&self.core, player_id)
+    }
+
+    /// Get a stream of CanPlay capability changes for a specific player
+    ///
+    /// Emits when the player's ability to start/resume playback changes.
+    /// This may change based on content availability or player state.
+    pub async fn watch_can_play(&self, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
+        streams::can_play(&self.core, player_id)
+    }
+
+    /// Get a stream of CanSeek capability changes for a specific player
+    ///
+    /// Emits when the player's ability to seek within tracks changes.
+    /// Some content (like live streams) may not support seeking.
+    pub async fn watch_can_seek(&self, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
+        streams::can_seek(&self.core, player_id)
+    }
+
     /// Get a stream of active player changes
     pub fn watch_active_player(&self) -> impl Stream<Item = Option<PlayerId>> + Send {
         streams::active_player(&self.core)

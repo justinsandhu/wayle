@@ -7,7 +7,7 @@ use tracing::{debug, error, info, instrument, warn};
 use zbus::fdo::DBusProxy;
 
 use crate::services::mpris::{
-    Volume,
+    Capability, Volume,
     core::{Core, PlayerHandle},
     error::MediaError,
     proxy::{MediaPlayer2PlayerProxy, MediaPlayer2Proxy},
@@ -280,6 +280,7 @@ fn monitor_player(
 }
 
 #[allow(clippy::cognitive_complexity)]
+#[allow(clippy::too_many_lines)]
 async fn monitor_player_properties(
     core: Arc<Core>,
     player_id: PlayerId,
@@ -291,6 +292,10 @@ async fn monitor_player_properties(
     let mut loop_status_changes = player_proxy.receive_loop_status_changed().await;
     let mut shuffle_changes = player_proxy.receive_shuffle_changed().await;
     let mut volume_changes = player_proxy.receive_volume_changed().await;
+    let mut can_go_next = player_proxy.receive_can_go_next_changed().await;
+    let mut can_go_previous = player_proxy.receive_can_go_previous_changed().await;
+    let mut can_play = player_proxy.receive_can_play_changed().await;
+    let mut can_seek = player_proxy.receive_can_seek_changed().await;
 
     loop {
         tokio::select! {
@@ -360,6 +365,50 @@ async fn monitor_player_properties(
                     }
                     None => {
                         debug!("Volume stream ended for {}", player_id);
+                        break;
+                    }
+                }
+            }
+            signal = can_go_next.next() => {
+                match signal {
+                    Some(signal) => {
+                        handle_capability_changed(&player_id, signal, &events, Capability::CanGoNext).await;
+                    }
+                    None => {
+                        debug!("Can go next stream ended for {}", player_id);
+                        break;
+                    }
+                }
+            }
+            signal = can_go_previous.next() => {
+                match signal {
+                    Some(signal) => {
+                        handle_capability_changed(&player_id, signal, &events, Capability::CanGoPrevious).await;
+                    }
+                    None => {
+                        debug!("Can go previous stream ended for {}", player_id);
+                        break;
+                    }
+                }
+            }
+            signal = can_play.next() => {
+                match signal {
+                    Some(signal) => {
+                        handle_capability_changed(&player_id, signal, &events, Capability::CanPlay).await;
+                    }
+                    None => {
+                        debug!("Can play stream ended for {}", player_id);
+                        break;
+                    }
+                }
+            }
+            signal = can_seek.next() => {
+                match signal {
+                    Some(signal) => {
+                        handle_capability_changed(&player_id, signal, &events, Capability::CanSeek).await;
+                    }
+                    None => {
+                        debug!("Can seek stream ended for {}", player_id);
                         break;
                     }
                 }
@@ -441,5 +490,22 @@ async fn handle_volume_change(
         });
     } else {
         error!("Failed to get volume from signal");
+    }
+}
+
+async fn handle_capability_changed(
+    player_id: &PlayerId,
+    signal: PropertyChanged<'_, bool>,
+    events: &broadcast::Sender<PlayerEvent>,
+    capability: Capability,
+) {
+    if let Ok(can_do) = signal.get().await {
+        let _ = events.send(PlayerEvent::CapabilityChanged {
+            player_id: player_id.clone(),
+            capability,
+            can_do,
+        });
+    } else {
+        error!("Failed to get {capability:#?} capability from signal");
     }
 }

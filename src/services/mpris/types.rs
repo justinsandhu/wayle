@@ -368,6 +368,16 @@ pub enum PlayerEvent {
         /// New playback state
         volume: Volume,
     },
+
+    /// Player capability changed
+    CapabilityChanged {
+        /// ID of the player whose capability changed
+        player_id: PlayerId,
+        /// Type of capability that changed
+        capability: Capability,
+        /// Whether the player can perform this action
+        can_do: bool,
+    },
 }
 
 /// Player control actions
@@ -390,4 +400,23 @@ pub enum PlayerAction {
 
     /// Set shuffle mode
     SetShuffleMode(ShuffleMode),
+}
+
+/// Player capability flags
+///
+/// Represents the various capabilities a media player can have.
+/// These capabilities can change during playback (e.g., CanGoNext becomes false on last track).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Capability {
+    /// Player can skip to the next track
+    CanGoNext,
+
+    /// Player can go to the previous track
+    CanGoPrevious,
+
+    /// Player can start/resume playback
+    CanPlay,
+
+    /// Player can seek within the current track
+    CanSeek,
 }

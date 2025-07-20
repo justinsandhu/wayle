@@ -5,6 +5,7 @@ use async_stream::stream;
 use futures::Stream;
 
 use crate::services::mpris::{
+    Capability,
     core::Core,
     types::{LoopMode, PlaybackState, Player, PlayerEvent, PlayerId, ShuffleMode, TrackMetadata},
 };
@@ -224,6 +225,60 @@ pub fn volume(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Volum
                 if id == player_id {
                     yield volume;
                 }
+            }
+        }
+    }
+}
+
+// Create a stream of the can_go_next capability of the player
+pub fn can_go_next(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
+    capability_handler(core, player_id, Capability::CanGoNext, |player| {
+        player.can_go_next
+    })
+}
+
+// Create a stream of the can_go_previous capability of the player
+pub fn can_go_previous(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
+    capability_handler(core, player_id, Capability::CanGoPrevious, |player| {
+        player.can_go_previous
+    })
+}
+
+// Create a stream of the can_play capability of the player
+pub fn can_play(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
+    capability_handler(core, player_id, Capability::CanPlay, |player| {
+        player.can_play
+    })
+}
+
+// Create a stream of the can_seek capability of the player
+pub fn can_seek(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
+    capability_handler(core, player_id, Capability::CanSeek, |player| {
+        player.can_seek
+    })
+}
+
+fn capability_handler(
+    core: &Arc<Core>,
+    player_id: PlayerId,
+    capability: Capability,
+    initial_value_fn: impl Fn(&Player) -> bool + Send + 'static,
+) -> impl Stream<Item = bool> + Send {
+    let mut events_rx = core.events.subscribe();
+    let core = Arc::clone(core);
+
+    stream! {
+        if let Some(player) = core.player(&player_id).await {
+            yield initial_value_fn(&player);
+        }
+
+        while let Ok(PlayerEvent::CapabilityChanged {
+            player_id: id,
+            capability: cap,
+            can_do
+        }) = events_rx.recv().await {
+            if player_id == id && cap == capability {
+                yield can_do;
             }
         }
     }
