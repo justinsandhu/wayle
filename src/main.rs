@@ -9,7 +9,7 @@ use tracing::{Level, info, instrument, span};
 use wayle::{
     cli::{CliService, formatting::format_error},
     config::ConfigPaths,
-    config_store::ConfigStore,
+    config_runtime::ConfigRuntime,
     tracing_config,
 };
 
@@ -56,8 +56,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 /// # Errors
 /// Returns error if command execution fails or config store initialization fails.
 async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn Error>> {
-    let config_store = ConfigStore::load()?;
-    let cli_service = CliService::new(config_store);
+    let config_runtime = ConfigRuntime::load()?;
+    let cli_service = CliService::new(config_runtime);
 
     let category = args.first().map(|s| s.as_str()).unwrap_or("help");
     let command = args.get(1).map(|s| s.as_str()).unwrap_or("");

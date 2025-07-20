@@ -19,10 +19,10 @@ impl CliService {
     /// commands across all categories.
     ///
     /// # Arguments
-    /// * `config_store` - Configuration store for commands that need config access
-    pub fn new(config_store: ConfigRuntime) -> Self {
-        let config_store = Arc::new(config_store);
-        let mut registry = CommandRegistry::new(config_store);
+    /// * `config_runtime` - Configuration store for commands that need config access
+    pub fn new(config_runtime: ConfigRuntime) -> Self {
+        let config_runtime = Arc::new(config_runtime);
+        let mut registry = CommandRegistry::new(config_runtime);
         registry.register_all_commands();
 
         CliService { registry }

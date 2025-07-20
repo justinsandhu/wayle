@@ -24,7 +24,7 @@ use async_trait::async_trait;
 /// ```
 pub struct GetCommand {
     /// Shared reference to the configuration store.
-    config_store: Arc<ConfigRuntime>,
+    config_runtime: Arc<ConfigRuntime>,
 }
 
 impl GetCommand {
@@ -32,9 +32,9 @@ impl GetCommand {
     ///
     /// # Arguments
     ///
-    /// * `config_store` - Shared reference to the configuration store
-    pub fn new(config_store: Arc<ConfigRuntime>) -> Self {
-        Self { config_store }
+    /// * `config_runtime` - Shared reference to the configuration store
+    pub fn new(config_runtime: Arc<ConfigRuntime>) -> Self {
+        Self { config_runtime }
     }
 }
 
@@ -54,7 +54,7 @@ impl Command for GetCommand {
     async fn execute(&self, args: &[String]) -> CommandResult {
         let path = args.first().ok_or(CliError::MissingPath)?;
 
-        let value = self.config_store.get_by_path(path).map_err(|e| match e {
+        let value = self.config_runtime.get_by_path(path).map_err(|e| match e {
             ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound { path: path.clone() },
             _ => CliError::ConfigOperationFailed {
                 operation: "get".to_string(),

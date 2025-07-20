@@ -34,7 +34,7 @@ pub struct ConfigRuntime {
 }
 
 impl ConfigRuntime {
-    /// Creates a new ConfigStore with default configuration values.
+    /// Creates a new ConfigRuntime with default configuration values.
     pub fn with_defaults() -> Self {
         let config = Config::default();
         let broadcast_service = BroadcastService::new();
@@ -46,7 +46,7 @@ impl ConfigRuntime {
         }
     }
 
-    /// Loads a ConfigStore from the main configuration file.
+    /// Loads a ConfigRuntime from the main configuration file.
     ///
     /// # Errors
     ///

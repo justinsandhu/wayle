@@ -19,22 +19,22 @@ use crate::{cli::CommandRegistry, config_runtime::ConfigRuntime};
 /// # Arguments
 ///
 /// * `registry` - Mutable reference to the command registry
-/// * `config_store` - Shared configuration store for the commands
-pub fn register_commands(registry: &mut CommandRegistry, config_store: Arc<ConfigRuntime>) {
+/// * `config_runtime` - Shared configuration store for the commands
+pub fn register_commands(registry: &mut CommandRegistry, config_runtime: Arc<ConfigRuntime>) {
     const CATEGORY_NAME: &str = "config";
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(GetCommand::new(Arc::clone(&config_store))),
+        Box::new(GetCommand::new(Arc::clone(&config_runtime))),
     );
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(SetCommand::new(Arc::clone(&config_store))),
+        Box::new(SetCommand::new(Arc::clone(&config_runtime))),
     );
 
     registry.register_command(
         CATEGORY_NAME,
-        Box::new(WatchCommand::new(Arc::clone(&config_store))),
+        Box::new(WatchCommand::new(Arc::clone(&config_runtime))),
     );
 }

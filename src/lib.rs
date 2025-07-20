@@ -11,13 +11,13 @@
 //! # Quick Start
 //!
 //! ```rust,no_run
-//! use wayle::config_store::ConfigStore;
+//! use wayle::config_runtime::ConfigRuntime;
 //!
 //! // Create configuration store with defaults
-//! let config_store = ConfigStore::with_defaults();
+//! let config_runtime = ConfigRuntime::with_defaults();
 //!
 //! // Access configuration values  
-//! let config = config_store.get_current();
+//! let config = config_runtime.get_current();
 //! println!("Config loaded: {:?}", config.general);
 //! ```
 

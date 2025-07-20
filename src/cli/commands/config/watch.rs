@@ -11,12 +11,12 @@ use crate::{
 use async_trait::async_trait;
 
 pub struct WatchCommand {
-    config_store: Arc<ConfigRuntime>,
+    config_runtime: Arc<ConfigRuntime>,
 }
 
 impl WatchCommand {
-    pub fn new(config_store: Arc<ConfigRuntime>) -> Self {
-        Self { config_store }
+    pub fn new(config_runtime: Arc<ConfigRuntime>) -> Self {
+        Self { config_runtime }
     }
 }
 
@@ -28,7 +28,7 @@ impl Command for WatchCommand {
         println!("Watching changes on path '{}'...", path);
         println!("Press Ctrl+C to stop");
 
-        let _file_watch_handle = self.config_store.start_file_watching().map_err(|e| {
+        let _file_watch_handle = self.config_runtime.start_file_watching().map_err(|e| {
             CliError::ConfigOperationFailed {
                 operation: "start file watching".to_string(),
                 path: path.clone(),
@@ -37,7 +37,7 @@ impl Command for WatchCommand {
         })?;
 
         let mut subscription = self
-            .config_store
+            .config_runtime
             .subscribe_to_path(path)
             .await
             .map_err(|e| CliError::ConfigOperationFailed {

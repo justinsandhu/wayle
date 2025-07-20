@@ -35,7 +35,7 @@ use super::{
 pub struct CommandRegistry {
     /// Nested HashMap structure: category name -> (command name -> command implementation)
     categories: CommandCategories,
-    config_store: Arc<ConfigRuntime>,
+    config_runtime: Arc<ConfigRuntime>,
 }
 
 impl CommandRegistry {
@@ -43,11 +43,11 @@ impl CommandRegistry {
     ///
     /// The registry starts with no commands registered. Commands must be added
     /// using the `register_command` method, typically during application initialization.
-    pub fn new(config_store: Arc<ConfigRuntime>) -> Self {
+    pub fn new(config_runtime: Arc<ConfigRuntime>) -> Self {
         let categories = CommandCategories::new();
         Self {
             categories,
-            config_store,
+            config_runtime,
         }
     }
 
@@ -66,11 +66,11 @@ impl CommandRegistry {
     ///
     /// ```rust,no_run
     /// use wayle::cli::CommandRegistry;
-    /// use wayle::config_store::ConfigRuntime;
+    /// use wayle::config_runtime::ConfigRuntime;
     /// use std::sync::Arc;
     ///
-    /// let config_store = Arc::new(ConfigRuntime::with_defaults());
-    /// let mut registry = CommandRegistry::new(config_store);
+    /// let config_runtime = Arc::new(ConfigRuntime::with_defaults());
+    /// let mut registry = CommandRegistry::new(config_runtime);
     /// // registry.register_command("config", Box::new(SomeCommand::new()));
     /// ```
     pub fn register_command(&mut self, category: &str, command: Box<dyn Command>) {
@@ -236,7 +236,7 @@ impl CommandRegistry {
     /// This function serves as the central registration point for all CLI commands,
     /// delegating to individual modules to register their commands.
     pub fn register_all_commands(&mut self) {
-        config::register_commands(self, Arc::clone(&self.config_store));
+        config::register_commands(self, Arc::clone(&self.config_runtime));
         media::register_commands(self);
     }
 }

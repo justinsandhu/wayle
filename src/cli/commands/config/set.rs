@@ -12,7 +12,7 @@ use serde_json;
 use toml;
 
 pub struct SetCommand {
-    config_store: Arc<ConfigRuntime>,
+    config_runtime: Arc<ConfigRuntime>,
 }
 
 impl SetCommand {
@@ -20,9 +20,9 @@ impl SetCommand {
     ///
     /// # Arguments
     ///
-    /// * `config_store` - Shared reference to the configuration store
-    pub fn new(config_store: Arc<ConfigRuntime>) -> Self {
-        Self { config_store }
+    /// * `config_runtime` - Shared reference to the configuration store
+    pub fn new(config_runtime: Arc<ConfigRuntime>) -> Self {
+        Self { config_runtime }
     }
 
     fn parse_config_value(&self, value_str: &str) -> toml::Value {
@@ -57,7 +57,7 @@ impl Command for SetCommand {
 
         let value = self.parse_config_value(value_str);
 
-        self.config_store
+        self.config_runtime
             .set_by_path(path, value)
             .map_err(|e| match e {
                 ConfigError::InvalidPath(_) => CliError::ConfigPathNotFound { path: path.clone() },
