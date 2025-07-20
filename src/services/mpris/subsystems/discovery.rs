@@ -52,7 +52,6 @@ impl Drop for Discovery {
     }
 }
 
-/// Discover players already on the bus
 #[instrument(skip(core))]
 async fn discover_existing_players(core: &Arc<Core>) -> Result<(), MediaError> {
     let dbus_proxy = DBusProxy::new(&core.connection)
@@ -83,7 +82,6 @@ async fn discover_existing_players(core: &Arc<Core>) -> Result<(), MediaError> {
     Ok(())
 }
 
-/// Monitor for player additions/removals
 async fn monitor_player_changes(core: Arc<Core>) {
     let Ok(dbus_proxy) = DBusProxy::new(&core.connection).await else {
         warn!("Failed to create DBus proxy for monitoring");
@@ -122,14 +120,12 @@ async fn monitor_player_changes(core: Arc<Core>) {
     }
 }
 
-/// Check if a player should be ignored
 async fn should_ignore_player(player_id: &PlayerId, core: &Arc<Core>) -> bool {
     let ignored = core.ignored_players.read().await;
     let bus_name = player_id.bus_name();
     ignored.iter().any(|pattern| bus_name.contains(pattern))
 }
 
-/// Add a new player to the service
 #[instrument(skip(core), fields(bus_name = %player_id.bus_name()))]
 async fn add_player(core: &Arc<Core>, player_id: PlayerId) -> Result<(), MediaError> {
     let base_proxy = MediaPlayer2Proxy::builder(&core.connection)
@@ -174,11 +170,10 @@ async fn add_player(core: &Arc<Core>, player_id: PlayerId) -> Result<(), MediaEr
     Ok(())
 }
 
-/// Remove a player from the service
 #[instrument(skip(core), fields(bus_name = %player_id.bus_name()))]
 async fn handle_player_removed(core: &Arc<Core>, player_id: PlayerId) {
     info!("Removing MPRIS player");
-    
+
     let removed = {
         let mut players = core.players.write().await;
         players.remove(&player_id).is_some()
@@ -192,15 +187,16 @@ async fn handle_player_removed(core: &Arc<Core>, player_id: PlayerId) {
             }
         }
 
-        let _ = core.events.send(PlayerEvent::PlayerRemoved(player_id.clone()));
-        
+        let _ = core
+            .events
+            .send(PlayerEvent::PlayerRemoved(player_id.clone()));
+
         info!("Player removed successfully");
     } else {
         warn!("Player was not in our list");
     }
 }
 
-/// Create a complete player from D-Bus proxies
 async fn create_player(
     player_id: &PlayerId,
     base_proxy: &MediaPlayer2Proxy<'_>,
@@ -267,10 +263,6 @@ async fn create_player(
     })
 }
 
-/// Start monitoring a player's properties for changes
-///
-/// Returns a task handle that should be stored with the player.
-/// The task will run until aborted.
 #[instrument(skip(core, proxy, events))]
 fn monitor_player(
     core: Arc<Core>,
@@ -283,7 +275,6 @@ fn monitor_player(
     })
 }
 
-/// Main monitoring loop for a player
 #[allow(clippy::cognitive_complexity)]
 async fn monitor_player_properties(
     core: Arc<Core>,
@@ -360,7 +351,6 @@ async fn monitor_player_properties(
     debug!("Monitoring ended for player {}", player_id);
 }
 
-/// Handle playback status change events
 async fn handle_playback_status_change(
     player_id: &PlayerId,
     signal: PropertyChanged<'_, String>,
@@ -377,7 +367,6 @@ async fn handle_playback_status_change(
     }
 }
 
-/// Handle metadata change events
 async fn handle_metadata_change(
     player_id: &PlayerId,
     signal: PropertyChanged<'_, std::collections::HashMap<String, zvariant::OwnedValue>>,
@@ -392,7 +381,6 @@ async fn handle_metadata_change(
     }
 }
 
-/// Handle loop status change events
 async fn handle_loop_status_change(
     player_id: &PlayerId,
     signal: PropertyChanged<'_, String>,
@@ -407,7 +395,6 @@ async fn handle_loop_status_change(
     }
 }
 
-/// Handle shuffle change events
 async fn handle_shuffle_change(
     player_id: &PlayerId,
     signal: PropertyChanged<'_, bool>,

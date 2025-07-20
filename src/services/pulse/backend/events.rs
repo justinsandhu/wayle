@@ -134,7 +134,6 @@ pub async fn process_change_notification(
     }
 }
 
-/// Handle device-related change notifications
 async fn handle_device_change(
     facility: Facility,
     operation: Operation,
@@ -175,7 +174,6 @@ async fn handle_device_change(
     }
 }
 
-/// Handle stream-related change notifications
 async fn handle_stream_change(
     facility: Facility,
     operation: Operation,
@@ -220,7 +218,6 @@ async fn handle_stream_change(
     }
 }
 
-/// Handle server-related change notifications
 async fn handle_server_change(
     _facility: Facility,
     operation: Operation,

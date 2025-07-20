@@ -25,7 +25,6 @@ pub fn trigger_device_discovery(
     debug!("PulseAudio device discovery initiated");
 }
 
-/// Discover output devices (sinks)
 fn discover_sinks(
     context: &Context,
     devices: &DeviceStore,
@@ -50,7 +49,6 @@ fn discover_sinks(
     });
 }
 
-/// Discover input devices (sources)
 fn discover_sources(
     context: &Context,
     devices: &DeviceStore,
@@ -75,7 +73,6 @@ fn discover_sources(
     });
 }
 
-/// Process device information and emit appropriate events
 fn process_device_info(device_info: DeviceInfo, devices: &DeviceStore, events_tx: &EventSender) {
     if let Ok(mut devices_guard) = devices.write() {
         let device_key = device_info.key;
@@ -93,7 +90,6 @@ fn process_device_info(device_info: DeviceInfo, devices: &DeviceStore, events_tx
     }
 }
 
-/// Emit events for device property changes
 fn emit_device_change_events(
     existing_device: &DeviceInfo,
     new_device: &DeviceInfo,

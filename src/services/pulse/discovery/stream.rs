@@ -25,7 +25,6 @@ pub fn trigger_stream_discovery(
     debug!("PulseAudio stream discovery initiated");
 }
 
-/// Discover playback streams (sink inputs)
 fn discover_sink_inputs(
     context: &Context,
     streams: &StreamStore,
@@ -50,7 +49,6 @@ fn discover_sink_inputs(
     });
 }
 
-/// Discover recording streams (source outputs)
 fn discover_source_outputs(
     context: &Context,
     streams: &StreamStore,
@@ -75,7 +73,6 @@ fn discover_source_outputs(
     });
 }
 
-/// Process stream information and emit appropriate events
 fn process_stream_info(stream_info: StreamInfo, streams: &StreamStore, events_tx: &EventSender) {
     if let Ok(mut streams_guard) = streams.write() {
         let is_new_stream = !streams_guard.contains_key(&stream_info.key);
@@ -92,7 +89,6 @@ fn process_stream_info(stream_info: StreamInfo, streams: &StreamStore, events_tx
     }
 }
 
-/// Emit events for stream property changes
 fn emit_stream_change_events(
     existing_stream: &StreamInfo,
     new_stream: &StreamInfo,

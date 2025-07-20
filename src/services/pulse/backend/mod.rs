@@ -87,13 +87,6 @@ impl PulseBackend {
         conversion::convert_volume_from_pulse(pulse_volume)
     }
 
-    /// Main monitoring loop for PulseAudio events
-    ///
-    /// Establishes connection to PulseAudio server and runs the event processing loop.
-    /// Handles both external commands and internal change notifications.
-    ///
-    /// # Errors
-    /// Returns error if connection fails or event setup fails
     #[allow(clippy::too_many_arguments)]
     async fn monitor_pulse_events(
         command_rx: ExternalCommandReceiver,
@@ -191,10 +184,6 @@ impl PulseBackend {
         Ok(())
     }
 
-    /// Run the command processing loop
-    ///
-    /// Processes both external and internal commands until shutdown is requested
-    /// or a channel is closed.
     #[allow(clippy::too_many_arguments)]
     async fn run_command_loop(
         context: &mut Context,

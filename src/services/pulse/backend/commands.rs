@@ -79,7 +79,6 @@ pub fn handle_external_command(
     }
 }
 
-/// Set device volume through PulseAudio
 fn set_device_volume(
     context: &Context,
     device_key: DeviceKey,
@@ -116,7 +115,6 @@ fn set_device_volume(
     }
 }
 
-/// Set device mute state through PulseAudio
 fn set_device_mute(context: &Context, device_key: DeviceKey, muted: bool, devices: &DeviceStore) {
     let devices_clone = Arc::clone(devices);
     let mut introspect = context.introspect();
@@ -144,7 +142,6 @@ fn set_device_mute(context: &Context, device_key: DeviceKey, muted: bool, device
     }
 }
 
-/// Set default input device
 fn set_default_input(context: &mut Context, device_key: DeviceKey, devices: &DeviceStore) {
     if let Ok(devices_guard) = devices.read() {
         if let Some(device_info) = devices_guard.values().find(|d| d.key == device_key) {
@@ -153,7 +150,6 @@ fn set_default_input(context: &mut Context, device_key: DeviceKey, devices: &Dev
     }
 }
 
-/// Set default output device
 fn set_default_output(context: &mut Context, device_key: DeviceKey, devices: &DeviceStore) {
     if let Ok(devices_guard) = devices.read() {
         if let Some(device_info) = devices_guard.values().find(|d| d.key == device_key) {
@@ -162,7 +158,6 @@ fn set_default_output(context: &mut Context, device_key: DeviceKey, devices: &De
     }
 }
 
-/// Set stream volume through PulseAudio
 fn set_stream_volume(
     context: &Context,
     stream_key: StreamKey,
@@ -192,7 +187,6 @@ fn set_stream_volume(
     }
 }
 
-/// Set stream mute state through PulseAudio
 fn set_stream_mute(context: &Context, stream_key: StreamKey, muted: bool, streams: &StreamStore) {
     let streams_clone = Arc::clone(streams);
     let mut introspect = context.introspect();
@@ -217,7 +211,6 @@ fn set_stream_mute(context: &Context, stream_key: StreamKey, muted: bool, stream
     }
 }
 
-/// Move stream to different device
 fn move_stream(
     context: &Context,
     stream_key: StreamKey,
