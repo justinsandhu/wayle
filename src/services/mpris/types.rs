@@ -272,10 +272,14 @@ impl From<HashMap<String, OwnedValue>> for TrackMetadata {
         }
 
         if let Some(length) = metadata.get("mpris:length") {
-            if let Ok(length_micros) = u64::try_from(length.clone()) {
-                if length_micros > 0 {
-                    track.length = Some(Duration::from_micros(length_micros));
-                }
+            if let Ok(length_i64) = i64::try_from(length.clone())
+                && length_i64 > 0
+            {
+                track.length = Some(Duration::from_micros(length_i64 as u64));
+            } else if let Ok(length_u64) = u64::try_from(length.clone())
+                && length_u64 > 0
+            {
+                track.length = Some(Duration::from_micros(length_u64));
             }
         }
 
