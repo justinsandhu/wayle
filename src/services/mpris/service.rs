@@ -33,7 +33,6 @@ pub struct MprisService {
 
     /// Discovery subsystem handle (kept alive for its Drop impl)
     _discovery: Option<Arc<Discovery>>,
-
 }
 
 impl MprisService {
@@ -115,16 +114,27 @@ impl MprisService {
     }
 
     /// Get a stream of position updates for a specific player
+    ///
+    /// This polls position every second. Use `position_with_interval` for custom intervals.
     pub fn position(&self, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
         streams::position(&self.core, player_id)
     }
 
+    /// Get a stream of position updates with a custom polling interval
+    ///
+    /// The interval parameter specifies how often to poll for position updates.
+    /// A shorter interval provides smoother updates but uses more resources.
+    pub fn position_with_interval(
+        &self,
+        player_id: PlayerId,
+        interval: Duration,
+    ) -> impl Stream<Item = Duration> + Send {
+        streams::position_with_interval(&self.core, player_id, interval)
+    }
+
     /// Get the current playback position for a player
     pub async fn current_position(&self, player_id: &PlayerId) -> Option<Duration> {
-        self.core
-            .get_player(player_id)
-            .await
-            .map(|player| player.position)
+        self.core.fetch_position(player_id).await
     }
 
     /// Get a stream of loop mode changes for a specific player
@@ -285,4 +295,3 @@ impl MprisService {
         Some(action(active_id).await)
     }
 }
-

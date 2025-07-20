@@ -3,7 +3,7 @@ use std::sync::Arc;
 use futures::StreamExt;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use zbus::fdo::DBusProxy;
 
 use crate::services::mpris::{
@@ -12,7 +12,6 @@ use crate::services::mpris::{
     proxy::{MediaPlayer2PlayerProxy, MediaPlayer2Proxy},
     subsystems::management,
     types::{LoopMode, PlaybackState, Player, PlayerEvent, PlayerId, ShuffleMode, TrackMetadata},
-    utils,
 };
 use zbus::proxy::PropertyChanged;
 use zbus::zvariant;
@@ -56,8 +55,6 @@ impl Drop for Discovery {
 /// Discover players already on the bus
 #[instrument(skip(core))]
 async fn discover_existing_players(core: &Arc<Core>) -> Result<(), MediaError> {
-    info!("Discovering existing MPRIS players");
-
     let dbus_proxy = DBusProxy::new(&core.connection)
         .await
         .map_err(|e| MediaError::InitializationFailed(format!("DBus proxy failed: {e}")))?;
@@ -66,12 +63,6 @@ async fn discover_existing_players(core: &Arc<Core>) -> Result<(), MediaError> {
         .list_names()
         .await
         .map_err(|e| MediaError::DbusError(e.into()))?;
-
-    let mpris_count = names
-        .iter()
-        .filter(|n| n.starts_with("org.mpris.MediaPlayer2."))
-        .count();
-    info!("Found {} MPRIS players on D-Bus", mpris_count);
 
     for name in names {
         if !name.starts_with("org.mpris.MediaPlayer2.") {
@@ -89,7 +80,6 @@ async fn discover_existing_players(core: &Arc<Core>) -> Result<(), MediaError> {
         }
     }
 
-    info!("Finished discovering existing players");
     Ok(())
 }
 
@@ -115,10 +105,12 @@ async fn monitor_player_changes(core: Arc<Core>) {
         let player_id = PlayerId::from_bus_name(args.name());
 
         match (args.old_owner().as_deref(), args.new_owner().as_deref()) {
-            (Some(_), None) => {
+            (Some(old), None) => {
+                info!("Player {} lost owner (was: {})", args.name(), old);
                 handle_player_removed(&core, player_id).await;
             }
-            (None, Some(_)) => {
+            (None, Some(new)) => {
+                info!("Player {} gained owner: {}", args.name(), new);
                 if !should_ignore_player(&player_id, &core).await {
                     if let Err(e) = add_player(&core, player_id).await {
                         warn!("Failed to add new player: {e}");
@@ -140,8 +132,6 @@ async fn should_ignore_player(player_id: &PlayerId, core: &Arc<Core>) -> bool {
 /// Add a new player to the service
 #[instrument(skip(core), fields(bus_name = %player_id.bus_name()))]
 async fn add_player(core: &Arc<Core>, player_id: PlayerId) -> Result<(), MediaError> {
-    info!("Adding new MPRIS player");
-
     let base_proxy = MediaPlayer2Proxy::builder(&core.connection)
         .destination(player_id.bus_name().to_string())
         .map_err(MediaError::DbusError)?
@@ -181,7 +171,6 @@ async fn add_player(core: &Arc<Core>, player_id: PlayerId) -> Result<(), MediaEr
 
     let _ = core.events.send(PlayerEvent::PlayerAdded(player));
 
-    info!("Player added successfully");
     Ok(())
 }
 
@@ -189,7 +178,7 @@ async fn add_player(core: &Arc<Core>, player_id: PlayerId) -> Result<(), MediaEr
 #[instrument(skip(core), fields(bus_name = %player_id.bus_name()))]
 async fn handle_player_removed(core: &Arc<Core>, player_id: PlayerId) {
     info!("Removing MPRIS player");
-
+    
     let removed = {
         let mut players = core.players.write().await;
         players.remove(&player_id).is_some()
@@ -203,9 +192,11 @@ async fn handle_player_removed(core: &Arc<Core>, player_id: PlayerId) {
             }
         }
 
-        let _ = core.events.send(PlayerEvent::PlayerRemoved(player_id));
-
+        let _ = core.events.send(PlayerEvent::PlayerRemoved(player_id.clone()));
+        
         info!("Player removed successfully");
+    } else {
+        warn!("Player was not in our list");
     }
 }
 
@@ -232,12 +223,6 @@ async fn create_player(
 
     let metadata = TrackMetadata::from(metadata_map);
 
-    let position = player_proxy
-        .position()
-        .await
-        .map(utils::from_mpris_micros)
-        .unwrap_or_default();
-
     let loop_mode = player_proxy
         .loop_status()
         .await
@@ -263,7 +248,6 @@ async fn create_player(
         identity,
         desktop_entry,
         playback_state,
-        position,
         loop_mode,
         shuffle_mode,
         title: metadata.title,
@@ -307,7 +291,6 @@ async fn monitor_player_properties(
     player_proxy: MediaPlayer2PlayerProxy<'static>,
     events: broadcast::Sender<PlayerEvent>,
 ) {
-    let mut position_changes = player_proxy.receive_position_changed().await;
     let mut playback_status_changes = player_proxy.receive_playback_status_changed().await;
     let mut metadata_changes = player_proxy.receive_metadata_changed().await;
     let mut loop_status_changes = player_proxy.receive_loop_status_changed().await;
@@ -315,27 +298,13 @@ async fn monitor_player_properties(
 
     loop {
         tokio::select! {
-            signal = position_changes.next() => {
-                match signal {
-                    Some(signal) => {
-                        handle_position_change(&player_id, signal, &events).await;
-                        if let Err(e) = core.refresh_player(&player_id).await {
-                            debug!("Failed to refresh player {}: {:?}", player_id, e);
-                        }
-                    }
-                    None => {
-                        debug!("Position stream ended for {}", player_id);
-                        break;
-                    }
-                }
-            }
             signal = playback_status_changes.next() => {
                 match signal {
                     Some(signal) => {
-                        handle_playback_status_change(&player_id, signal, &events).await;
                         if let Err(e) = core.refresh_player(&player_id).await {
-                            debug!("Failed to refresh player {}: {:?}", player_id, e);
+                            error!("Failed to refresh player {}: {:?}", player_id, e);
                         }
+                        handle_playback_status_change(&player_id, signal, &events).await;
                     }
                     None => {
                         debug!("Playback status stream ended for {}", player_id);
@@ -391,21 +360,6 @@ async fn monitor_player_properties(
     debug!("Monitoring ended for player {}", player_id);
 }
 
-/// Handle position change events
-async fn handle_position_change(
-    player_id: &PlayerId,
-    signal: PropertyChanged<'_, i64>,
-    events: &broadcast::Sender<PlayerEvent>,
-) {
-    if let Ok(position_micros) = signal.get().await {
-        let position = utils::from_mpris_micros(position_micros);
-        let _ = events.send(PlayerEvent::PositionChanged {
-            player_id: player_id.clone(),
-            position,
-        });
-    }
-}
-
 /// Handle playback status change events
 async fn handle_playback_status_change(
     player_id: &PlayerId,
@@ -418,6 +372,8 @@ async fn handle_playback_status_change(
             player_id: player_id.clone(),
             state,
         });
+    } else {
+        error!("Failed to get playback status from signal");
     }
 }
 

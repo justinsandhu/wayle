@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::sync::{RwLock, broadcast};
 use zbus::Connection;
+use zbus::fdo::PropertiesProxy;
+use zbus::names::{InterfaceName, MemberName};
 
 use crate::services::mpris::proxy::MediaPlayer2PlayerProxy;
-use crate::services::mpris::{PlayerEvent, PlayerId, Player};
+use crate::services::mpris::{Player, PlayerEvent, PlayerId};
 
 /// Core shared state for the MPRIS service
 ///
@@ -94,6 +97,46 @@ impl Core {
             .map(|handle| handle.player.clone())
     }
 
+    /// Fetch current position directly from D-Bus
+    pub async fn fetch_position(&self, player_id: &PlayerId) -> Option<Duration> {
+        let players = self.players.read().await;
+        let handle = players.get(player_id)?;
+
+        let destination = handle.proxy.inner().destination().to_owned();
+        let path = handle.proxy.inner().path().to_owned();
+
+        drop(players);
+
+        let proxy = PropertiesProxy::builder(&self.connection)
+            .destination(destination)
+            .ok()?
+            .path(path)
+            .ok()?
+            .build()
+            .await
+            .ok()?;
+
+        let interface = match InterfaceName::try_from("org.mpris.MediaPlayer2.Player") {
+            Ok(name) => name,
+            Err(_) => return None,
+        };
+        let property = match MemberName::try_from("Position") {
+            Ok(name) => name,
+            Err(_) => return None,
+        };
+
+        match proxy.get(interface, &property).await {
+            Ok(value) => {
+                if let Ok(micros) = i64::try_from(&value) {
+                    Some(Duration::from_micros(micros.max(0) as u64))
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        }
+    }
+
     /// Get the currently active player
     pub async fn active_player(&self) -> Option<PlayerId> {
         let active = self.active_player.read().await;
@@ -122,46 +165,35 @@ impl Core {
         &self,
         player_id: &PlayerId,
     ) -> Result<(), crate::services::mpris::error::MediaError> {
-        use crate::services::mpris::types::{
-            LoopMode, PlaybackState, ShuffleMode, TrackMetadata,
-        };
+        use crate::services::mpris::types::{LoopMode, PlaybackState, ShuffleMode, TrackMetadata};
 
         let mut players = self.players.write().await;
 
         if let Some(handle) = players.get_mut(player_id) {
             let proxy = &handle.proxy;
 
-            let (
-                playback_status,
-                metadata_map,
-                position,
-                loop_status,
-                shuffle,
-                can_control,
-                can_play,
-                can_go_next,
-                can_go_previous,
-                can_seek,
-            ) = tokio::try_join!(
-                proxy.playback_status(),
-                proxy.metadata(),
-                proxy.position(),
-                proxy.loop_status(),
-                proxy.shuffle(),
-                proxy.can_control(),
-                proxy.can_play(),
-                proxy.can_go_next(),
-                proxy.can_go_previous(),
-                proxy.can_seek(),
-            )?;
+            let playback_status = proxy
+                .playback_status()
+                .await
+                .unwrap_or_else(|_| "Stopped".to_string());
+            let metadata_map = proxy.metadata().await.unwrap_or_default();
+            let loop_status = proxy
+                .loop_status()
+                .await
+                .unwrap_or_else(|_| "None".to_string());
+            let shuffle = proxy.shuffle().await.unwrap_or(false);
+            let can_control = proxy.can_control().await.unwrap_or(false);
+            let can_play = proxy.can_play().await.unwrap_or(false);
+            let can_go_next = proxy.can_go_next().await.unwrap_or(false);
+            let can_go_previous = proxy.can_go_previous().await.unwrap_or(false);
+            let can_seek = proxy.can_seek().await.unwrap_or(false);
 
             let can_loop = proxy.loop_status().await.is_ok();
             let can_shuffle = proxy.shuffle().await.is_ok();
 
-            // Update all player fields
             let metadata = TrackMetadata::from(metadata_map);
+
             handle.player.playback_state = PlaybackState::from(playback_status.as_str());
-            handle.player.position = std::time::Duration::from_micros(position.max(0) as u64);
             handle.player.loop_mode = LoopMode::from(loop_status.as_str());
             handle.player.shuffle_mode = ShuffleMode::from(shuffle);
             handle.player.title = metadata.title;

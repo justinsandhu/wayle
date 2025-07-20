@@ -6,9 +6,7 @@ use futures::Stream;
 
 use crate::services::mpris::{
     core::Core,
-    types::{
-        LoopMode, PlaybackState, PlayerEvent, PlayerId, Player, ShuffleMode, TrackMetadata,
-    },
+    types::{LoopMode, PlaybackState, Player, PlayerEvent, PlayerId, ShuffleMode, TrackMetadata},
 };
 
 /// Create a stream of player list updates
@@ -33,10 +31,7 @@ pub fn players(core: &Arc<Core>) -> impl Stream<Item = Vec<Player>> + Send {
 }
 
 /// Create a stream of updates for a specific player
-pub fn player(
-    core: &Arc<Core>,
-    player_id: PlayerId,
-) -> impl Stream<Item = Player> + Send {
+pub fn player(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Player> + Send {
     let mut events_rx = core.events.subscribe();
     let core = Arc::clone(core);
 
@@ -65,7 +60,6 @@ pub fn player(
                 }
                 PlayerEvent::PlaybackStateChanged { player_id: id, .. }
                 | PlayerEvent::MetadataChanged { player_id: id, .. }
-                | PlayerEvent::PositionChanged { player_id: id, .. }
                 | PlayerEvent::LoopModeChanged { player_id: id, .. }
                 | PlayerEvent::ShuffleModeChanged { player_id: id, .. } => {
                     if id == player_id {
@@ -132,21 +126,36 @@ pub fn metadata(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Tra
 }
 
 /// Create a stream of position updates for a player
+///
+/// This polls the position at a 1 second interval by default.
+/// Use `position_with_interval` to specify a custom polling interval.
 pub fn position(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
-    let mut events_rx = core.events.subscribe();
+    position_with_interval(core, player_id, Duration::from_secs(1))
+}
+
+/// Create a stream of position updates with a custom polling interval
+///
+/// The interval parameter specifies how often to poll for position updates.
+/// A shorter interval provides smoother updates but uses more resources.
+/// Only emits when the position actually changes.
+pub fn position_with_interval(
+    core: &Arc<Core>,
+    player_id: PlayerId,
+    interval: Duration,
+) -> impl Stream<Item = Duration> + Send {
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(player) = core.get_player(&player_id).await {
-            yield player.position;
-        }
+        let mut last_position: Option<Duration> = None;
 
-        while let Ok(event) = events_rx.recv().await {
-            if let PlayerEvent::PositionChanged { player_id: id, position } = event {
-                if id == player_id {
+        loop {
+            if let Some(position) = core.fetch_position(&player_id).await {
+                if last_position != Some(position) {
+                    last_position = Some(position);
                     yield position;
                 }
             }
+            tokio::time::sleep(interval).await;
         }
     }
 }
@@ -258,7 +267,6 @@ pub fn player_events(
                 }
                 PlayerEvent::PlaybackStateChanged { player_id: id, .. }
                 | PlayerEvent::MetadataChanged { player_id: id, .. }
-                | PlayerEvent::PositionChanged { player_id: id, .. }
                 | PlayerEvent::LoopModeChanged { player_id: id, .. }
                 | PlayerEvent::ShuffleModeChanged { player_id: id, .. } => {
                     if *id == player_id {

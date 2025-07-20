@@ -29,7 +29,6 @@ impl fmt::Display for PlayerId {
 /// Complete player information including identity, state, and capabilities
 #[derive(Debug, Clone)]
 pub struct Player {
-    // Identity
     /// Unique player identifier
     pub id: PlayerId,
 
@@ -39,12 +38,8 @@ pub struct Player {
     /// Desktop entry name (if available)
     pub desktop_entry: Option<String>,
 
-    // Dynamic state
     /// Current playback state
     pub playback_state: PlaybackState,
-
-    /// Current playback position
-    pub position: Duration,
 
     /// Current loop mode
     pub loop_mode: LoopMode,
@@ -52,7 +47,6 @@ pub struct Player {
     /// Current shuffle mode
     pub shuffle_mode: ShuffleMode,
 
-    // Track metadata
     /// Track title
     pub title: String,
 
@@ -74,7 +68,6 @@ pub struct Player {
     /// Track ID (unique identifier)
     pub track_id: Option<String>,
 
-    // Capabilities
     /// Whether the player can be controlled
     pub can_control: bool,
 
@@ -315,14 +308,6 @@ pub enum PlayerEvent {
         player_id: PlayerId,
         /// New track metadata
         metadata: TrackMetadata,
-    },
-
-    /// Playback position changed
-    PositionChanged {
-        /// ID of the player whose position changed
-        player_id: PlayerId,
-        /// New playback position
-        position: Duration,
     },
 
     /// Loop mode changed
