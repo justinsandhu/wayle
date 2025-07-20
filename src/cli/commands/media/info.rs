@@ -10,8 +10,7 @@ use crate::{
         types::{ArgType, CommandArg, CommandMetadata},
     },
     services::mpris::{
-        LoopMode, MediaService, PlaybackState, PlayerId, ShuffleMode,
-        TrackMetadata,
+        LoopMode, MediaService, PlaybackState, PlayerId, ShuffleMode, TrackMetadata,
     },
 };
 
@@ -98,21 +97,15 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        if let Some(player) = service.get_player(player_id).await {
+        if let Some(player) = service.player(player_id).await {
             output.push_str(&format!("Player: {}\n", player.identity));
             output.push_str(&format!("Bus Name: {}\n", player_id.bus_name()));
             output.push_str(&format!("Can Control: {}\n\n", player.can_control));
 
             output.push_str("Capabilities:\n");
             output.push_str(&format!("  Play/Pause: {}\n", player.can_play));
-            output.push_str(&format!(
-                "  Next Track: {}\n",
-                player.can_go_next
-            ));
-            output.push_str(&format!(
-                "  Previous Track: {}\n",
-                player.can_go_previous
-            ));
+            output.push_str(&format!("  Next Track: {}\n", player.can_go_next));
+            output.push_str(&format!("  Previous Track: {}\n", player.can_go_previous));
             output.push_str(&format!("  Seek: {}\n", player.can_seek));
             output.push_str(&format!("  Loop: {}\n", player.can_loop));
             output.push_str(&format!("  Shuffle: {}\n\n", player.can_shuffle));
@@ -125,7 +118,7 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        let state_stream = service.playback_state(player_id.clone());
+        let state_stream = service.watch_playback_state(player_id.clone());
         pin!(state_stream);
         if let Some(state) = state_stream.next().await {
             let state_str = match state {
@@ -137,13 +130,8 @@ impl InfoCommand {
         }
     }
 
-    async fn add_modes(
-        &self,
-        service: &MediaService,
-        player_id: &PlayerId,
-        output: &mut String,
-    ) {
-        let loop_stream = service.loop_mode(player_id.clone());
+    async fn add_modes(&self, service: &MediaService, player_id: &PlayerId, output: &mut String) {
+        let loop_stream = service.watch_loop_mode(player_id.clone());
         pin!(loop_stream);
         if let Some(loop_mode) = loop_stream.next().await {
             let loop_str = match loop_mode {
@@ -155,7 +143,7 @@ impl InfoCommand {
             output.push_str(&format!("Loop Mode: {loop_str}\n"));
         }
 
-        let shuffle_stream = service.shuffle_mode(player_id.clone());
+        let shuffle_stream = service.watch_shuffle_mode(player_id.clone());
         pin!(shuffle_stream);
         if let Some(shuffle_mode) = shuffle_stream.next().await {
             let shuffle_str = match shuffle_mode {
@@ -173,7 +161,7 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        let metadata_stream = service.metadata(player_id.clone());
+        let metadata_stream = service.watch_metadata(player_id.clone());
         pin!(metadata_stream);
         if let Some(metadata) = metadata_stream.next().await {
             output.push_str("Current Track:\n");
@@ -205,7 +193,7 @@ impl InfoCommand {
         metadata: &TrackMetadata,
         output: &mut String,
     ) {
-        let position_stream = service.position(player_id.clone());
+        let position_stream = service.watch_position(player_id.clone());
         pin!(position_stream);
         let position = position_stream.next().await.unwrap_or(Duration::ZERO);
 

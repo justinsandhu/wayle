@@ -9,7 +9,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::{MediaService},
+    services::mpris::MediaService,
 };
 
 use super::utils::{get_player_display_name, get_player_id_or_active};
@@ -161,11 +161,11 @@ impl Command for SeekCommand {
         let player_id = get_player_id_or_active(&media_service, player_arg).await?;
         let player_name = get_player_display_name(&media_service, &player_id).await;
 
-        let position_stream = media_service.position(player_id.clone());
+        let position_stream = media_service.watch_position(player_id.clone());
         pin!(position_stream);
         let current_position = position_stream.next().await;
 
-        let metadata_stream = media_service.metadata(player_id.clone());
+        let metadata_stream = media_service.watch_metadata(player_id.clone());
         pin!(metadata_stream);
         let track_length = if let Some(metadata) = metadata_stream.next().await {
             metadata.length

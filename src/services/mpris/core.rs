@@ -79,7 +79,7 @@ impl Core {
     }
 
     /// Get a list of all current players
-    pub async fn list_players(&self) -> Vec<Player> {
+    pub async fn players(&self) -> Vec<Player> {
         self.players
             .read()
             .await
@@ -89,7 +89,7 @@ impl Core {
     }
 
     /// Get a specific player
-    pub async fn get_player(&self, player_id: &PlayerId) -> Option<Player> {
+    pub async fn player(&self, player_id: &PlayerId) -> Option<Player> {
         self.players
             .read()
             .await
@@ -98,7 +98,7 @@ impl Core {
     }
 
     /// Fetch current position directly from D-Bus
-    pub async fn fetch_position(&self, player_id: &PlayerId) -> Option<Duration> {
+    pub async fn position(&self, player_id: &PlayerId) -> Option<Duration> {
         let players = self.players.read().await;
         let handle = players.get(player_id)?;
 

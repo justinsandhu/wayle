@@ -15,12 +15,12 @@ pub fn players(core: &Arc<Core>) -> impl Stream<Item = Vec<Player>> + Send {
     let core = Arc::clone(core);
 
     stream! {
-        yield core.list_players().await;
+        yield core.players().await;
 
         while let Ok(event) = events_rx.recv().await {
             match event {
                 PlayerEvent::PlayerAdded(_) | PlayerEvent::PlayerRemoved(_) => {
-                    yield core.list_players().await;
+                    yield core.players().await;
                 }
                 _ => {
                     // Ignore other events - they're for individual player state updates
@@ -36,13 +36,13 @@ pub fn player(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Playe
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(player) = core.get_player(&player_id).await {
+        if let Some(player) = core.player(&player_id).await {
             yield player;
         } else {
             loop {
                 match events_rx.recv().await {
                     Ok(PlayerEvent::PlayerAdded(info)) if info.id == player_id => {
-                        if let Some(player) = core.get_player(&player_id).await {
+                        if let Some(player) = core.player(&player_id).await {
                             yield player;
                             break;
                         }
@@ -63,7 +63,7 @@ pub fn player(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Playe
                 | PlayerEvent::LoopModeChanged { player_id: id, .. }
                 | PlayerEvent::ShuffleModeChanged { player_id: id, .. } => {
                     if id == player_id {
-                        if let Some(player) = core.get_player(&player_id).await {
+                        if let Some(player) = core.player(&player_id).await {
                             yield player;
                         }
                     }
@@ -83,7 +83,7 @@ pub fn playback_state(
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(player) = core.get_player(&player_id).await {
+        if let Some(player) = core.player(&player_id).await {
             yield player.playback_state;
         }
 
@@ -103,7 +103,7 @@ pub fn metadata(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Tra
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(player) = core.get_player(&player_id).await {
+        if let Some(player) = core.player(&player_id).await {
             yield TrackMetadata {
                 title: player.title,
                 artist: player.artist,
@@ -149,7 +149,11 @@ pub fn position_with_interval(
         let mut last_position: Option<Duration> = None;
 
         loop {
-            if let Some(position) = core.fetch_position(&player_id).await {
+            if core.player(&player_id).await.is_none() {
+                return;
+            }
+
+            if let Some(position) = core.position(&player_id).await {
                 if last_position != Some(position) {
                     last_position = Some(position);
                     yield position;
@@ -166,7 +170,7 @@ pub fn loop_mode(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Lo
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(player) = core.get_player(&player_id).await {
+        if let Some(player) = core.player(&player_id).await {
             yield player.loop_mode;
         }
 
@@ -189,7 +193,7 @@ pub fn shuffle_mode(
     let core = Arc::clone(core);
 
     stream! {
-        if let Some(player) = core.get_player(&player_id).await {
+        if let Some(player) = core.player(&player_id).await {
             yield player.shuffle_mode;
         }
 

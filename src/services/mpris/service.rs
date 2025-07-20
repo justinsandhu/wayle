@@ -77,46 +77,39 @@ impl MprisService {
         })
     }
 
-    /// Get a list of all current players
-    pub async fn list_players(&self) -> Vec<Player> {
-        self.core.list_players().await
-    }
-
     /// Get a stream of player list updates
     ///
     /// This returns a stream that yields the current players immediately,
     /// then yields updates whenever players are added or removed.
-    pub fn players(&self) -> impl Stream<Item = Vec<Player>> + Send {
+    pub fn watch_players(&self) -> impl Stream<Item = Vec<Player>> + Send {
         streams::players(&self.core)
-    }
-
-    /// Get information about a specific player
-    pub async fn get_player(&self, player_id: &PlayerId) -> Option<Player> {
-        self.core.get_player(player_id).await
     }
 
     /// Get a stream of state updates for a specific player
     ///
     /// This returns a stream that yields the current state immediately,
     /// then yields updates whenever the state changes.
-    pub fn player(&self, player_id: PlayerId) -> impl Stream<Item = Player> + Send {
+    pub fn watch_player(&self, player_id: PlayerId) -> impl Stream<Item = Player> + Send {
         streams::player(&self.core, player_id)
     }
 
     /// Get a stream of playback state changes for a specific player
-    pub fn playback_state(&self, player_id: PlayerId) -> impl Stream<Item = PlaybackState> + Send {
+    pub fn watch_playback_state(
+        &self,
+        player_id: PlayerId,
+    ) -> impl Stream<Item = PlaybackState> + Send {
         streams::playback_state(&self.core, player_id)
     }
 
     /// Get a stream of track metadata changes for a specific player
-    pub fn metadata(&self, player_id: PlayerId) -> impl Stream<Item = TrackMetadata> + Send {
+    pub fn watch_metadata(&self, player_id: PlayerId) -> impl Stream<Item = TrackMetadata> + Send {
         streams::metadata(&self.core, player_id)
     }
 
     /// Get a stream of position updates for a specific player
     ///
     /// This polls position every second. Use `position_with_interval` for custom intervals.
-    pub fn position(&self, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
+    pub fn watch_position(&self, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
         streams::position(&self.core, player_id)
     }
 
@@ -124,7 +117,7 @@ impl MprisService {
     ///
     /// The interval parameter specifies how often to poll for position updates.
     /// A shorter interval provides smoother updates but uses more resources.
-    pub fn position_with_interval(
+    pub fn watch_position_with_interval(
         &self,
         player_id: PlayerId,
         interval: Duration,
@@ -132,34 +125,67 @@ impl MprisService {
         streams::position_with_interval(&self.core, player_id, interval)
     }
 
-    /// Get the current playback position for a player
-    pub async fn current_position(&self, player_id: &PlayerId) -> Option<Duration> {
-        self.core.fetch_position(player_id).await
-    }
-
     /// Get a stream of loop mode changes for a specific player
-    pub fn loop_mode(&self, player_id: PlayerId) -> impl Stream<Item = LoopMode> + Send {
+    pub fn watch_loop_mode(&self, player_id: PlayerId) -> impl Stream<Item = LoopMode> + Send {
         streams::loop_mode(&self.core, player_id)
     }
 
     /// Get a stream of shuffle mode changes for a specific player  
-    pub fn shuffle_mode(&self, player_id: PlayerId) -> impl Stream<Item = ShuffleMode> + Send {
+    pub fn watch_shuffle_mode(
+        &self,
+        player_id: PlayerId,
+    ) -> impl Stream<Item = ShuffleMode> + Send {
         streams::shuffle_mode(&self.core, player_id)
     }
 
     /// Get a stream of active player changes
-    pub fn active_player(&self) -> impl Stream<Item = Option<PlayerId>> + Send {
+    pub fn watch_active_player(&self) -> impl Stream<Item = Option<PlayerId>> + Send {
         streams::active_player(&self.core)
     }
 
+    /// Get a stream of all player events
+    ///
+    /// This provides access to the raw event stream for advanced use cases
+    pub fn watch_events(&self) -> impl Stream<Item = PlayerEvent> + Send {
+        streams::events(&self.core)
+    }
+
+    /// Get a stream of events for a specific player
+    ///
+    /// This filters the global event stream to only include events for the specified player
+    pub fn watch_player_events(
+        &self,
+        player_id: PlayerId,
+    ) -> impl Stream<Item = PlayerEvent> + Send {
+        streams::player_events(&self.core, player_id)
+    }
+
+    /// Get a list of all current players
+    pub async fn players(&self) -> Vec<Player> {
+        self.core.players().await
+    }
+
+    /// Get information about a specific player
+    pub async fn player(&self, player_id: &PlayerId) -> Option<Player> {
+        self.core.player(player_id).await
+    }
+
     /// Get the currently active player
-    pub async fn get_active_player(&self) -> Option<PlayerId> {
+    pub async fn active_player(&self) -> Option<PlayerId> {
         self.core.active_player().await
     }
 
-    /// Get the list of ignored player patterns
-    pub async fn ignored_players(&self) -> Vec<String> {
-        self.core.ignored_patterns().await
+    /// Set the active player
+    ///
+    /// # Errors
+    /// Returns error if player not found when specified
+    pub async fn set_active_player(&self, player_id: Option<PlayerId>) -> Result<(), MediaError> {
+        management::set_active_player(&self.core, player_id).await
+    }
+
+    /// Get the current playback position for a player
+    pub async fn position(&self, player_id: &PlayerId) -> Option<Duration> {
+        self.core.position(player_id).await
     }
 
     /// Toggle play/pause for a player
@@ -258,31 +284,14 @@ impl MprisService {
         control::set_shuffle_mode(&self.core, player_id, mode).await
     }
 
-    /// Set the active player
-    ///
-    /// # Errors
-    /// Returns error if player not found when specified
-    pub async fn set_active_player(&self, player_id: Option<PlayerId>) -> Result<(), MediaError> {
-        management::set_active_player(&self.core, player_id).await
+    /// Get the list of ignored player patterns
+    pub async fn ignored_players(&self) -> Vec<String> {
+        self.core.ignored_patterns().await
     }
 
     /// Set patterns for players to ignore
     pub async fn set_ignored_players(&self, patterns: Vec<String>) {
         management::set_ignored_players(&self.core, patterns).await
-    }
-
-    /// Get a stream of all player events
-    ///
-    /// This provides access to the raw event stream for advanced use cases
-    pub fn events(&self) -> impl Stream<Item = PlayerEvent> + Send {
-        streams::events(&self.core)
-    }
-
-    /// Get a stream of events for a specific player
-    ///
-    /// This filters the global event stream to only include events for the specified player
-    pub fn player_events(&self, player_id: PlayerId) -> impl Stream<Item = PlayerEvent> + Send {
-        streams::player_events(&self.core, player_id)
     }
 
     /// Execute an action on the active player
@@ -291,7 +300,7 @@ impl MprisService {
         F: FnOnce(PlayerId) -> Pin<Box<dyn Future<Output = Result<R, MediaError>> + Send>> + Send,
         R: Send,
     {
-        let active_id = self.get_active_player().await?;
+        let active_id = self.active_player().await?;
         Some(action(active_id).await)
     }
 }
