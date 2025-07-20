@@ -3,6 +3,7 @@ use std::time::Duration;
 use tracing::instrument;
 
 use crate::services::mpris::{
+    Volume,
     core::Core,
     error::MediaError,
     types::{LoopMode, PlayerId, ShuffleMode},
@@ -251,6 +252,28 @@ pub async fn set_shuffle_mode(
     handle
         .proxy
         .set_shuffle(shuffle_value)
+        .await
+        .map_err(MediaError::DbusError)
+}
+
+/// Set volume for a player
+///
+/// # Errors
+/// Returns error if player not found or D-Bus operation fails
+#[instrument(skip(core))]
+pub async fn set_volume(
+    core: &Core,
+    player_id: PlayerId,
+    volume: Volume,
+) -> Result<(), MediaError> {
+    let players = core.players.read().await;
+    let handle = players
+        .get(&player_id)
+        .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+
+    handle
+        .proxy
+        .set_volume(*volume)
         .await
         .map_err(MediaError::DbusError)
 }

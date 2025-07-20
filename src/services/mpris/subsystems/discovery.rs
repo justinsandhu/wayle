@@ -7,6 +7,7 @@ use tracing::{debug, error, info, instrument, warn};
 use zbus::fdo::DBusProxy;
 
 use crate::services::mpris::{
+    Volume,
     core::{Core, PlayerHandle},
     error::MediaError,
     proxy::{MediaPlayer2PlayerProxy, MediaPlayer2Proxy},
@@ -219,6 +220,8 @@ async fn create_player(
 
     let metadata = TrackMetadata::from(metadata_map);
 
+    let volume = player_proxy.volume().await.unwrap_or(0.0);
+
     let loop_mode = player_proxy
         .loop_status()
         .await
@@ -246,6 +249,7 @@ async fn create_player(
         playback_state,
         loop_mode,
         shuffle_mode,
+        volume: Volume::from(volume),
         title: metadata.title,
         artist: metadata.artist,
         album: metadata.album,
@@ -286,6 +290,7 @@ async fn monitor_player_properties(
     let mut metadata_changes = player_proxy.receive_metadata_changed().await;
     let mut loop_status_changes = player_proxy.receive_loop_status_changed().await;
     let mut shuffle_changes = player_proxy.receive_shuffle_changed().await;
+    let mut volume_changes = player_proxy.receive_volume_changed().await;
 
     loop {
         tokio::select! {
@@ -307,8 +312,8 @@ async fn monitor_player_properties(
                 match signal {
                     Some(signal) => {
                         handle_metadata_change(&player_id, signal, &events).await;
-                        if let Err(e) = core.refresh_player(&player_id).await {
-                            debug!("Failed to refresh player {}: {:?}", player_id, e);
+                        if let Err(err) = core.refresh_player(&player_id).await {
+                            debug!("Failed to refresh player {}: {:?}", player_id, err);
                         }
                     }
                     None => {
@@ -321,8 +326,8 @@ async fn monitor_player_properties(
                 match signal {
                     Some(signal) => {
                         handle_loop_status_change(&player_id, signal, &events).await;
-                        if let Err(e) = core.refresh_player(&player_id).await {
-                            debug!("Failed to refresh player {}: {:?}", player_id, e);
+                        if let Err(err) = core.refresh_player(&player_id).await {
+                            debug!("Failed to refresh player {}: {:?}", player_id, err);
                         }
                     }
                     None => {
@@ -335,12 +340,26 @@ async fn monitor_player_properties(
                 match signal {
                     Some(signal) => {
                         handle_shuffle_change(&player_id, signal, &events).await;
-                        if let Err(e) = core.refresh_player(&player_id).await {
-                            debug!("Failed to refresh player {}: {:?}", player_id, e);
+                        if let Err(err) = core.refresh_player(&player_id).await {
+                            debug!("Failed to refresh player {}: {:?}", player_id, err);
                         }
                     }
                     None => {
                         debug!("Shuffle stream ended for {}", player_id);
+                        break;
+                    }
+                }
+            }
+            signal = volume_changes.next() => {
+                match signal {
+                    Some(signal) => {
+                        handle_volume_change(&player_id, signal, &events).await;
+                        if let Err(err) = core.refresh_player(&player_id).await {
+                            debug!("Failed to refresh player {}: {:?}", player_id, err);
+                        }
+                    }
+                    None => {
+                        debug!("Volume stream ended for {}", player_id);
                         break;
                     }
                 }
@@ -406,5 +425,21 @@ async fn handle_shuffle_change(
             player_id: player_id.clone(),
             mode,
         });
+    }
+}
+
+async fn handle_volume_change(
+    player_id: &PlayerId,
+    signal: PropertyChanged<'_, f64>,
+    events: &broadcast::Sender<PlayerEvent>,
+) {
+    if let Ok(vol) = signal.get().await {
+        let volume = Volume::from(vol);
+        let _ = events.send(PlayerEvent::VolumeChanged {
+            player_id: player_id.clone(),
+            volume,
+        });
+    } else {
+        error!("Failed to get volume from signal");
     }
 }

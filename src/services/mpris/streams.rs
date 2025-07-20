@@ -9,6 +9,8 @@ use crate::services::mpris::{
     types::{LoopMode, PlaybackState, Player, PlayerEvent, PlayerId, ShuffleMode, TrackMetadata},
 };
 
+use super::Volume;
+
 /// Create a stream of player list updates
 pub fn players(core: &Arc<Core>) -> impl Stream<Item = Vec<Player>> + Send {
     let mut events_rx = core.events.subscribe();
@@ -201,6 +203,26 @@ pub fn shuffle_mode(
             if let PlayerEvent::ShuffleModeChanged { player_id: id, mode } = event {
                 if id == player_id {
                     yield mode;
+                }
+            }
+        }
+    }
+}
+
+/// Create a stream of the volume changes of the player
+pub fn volume(core: &Arc<Core>, player_id: PlayerId) -> impl Stream<Item = Volume> + Send {
+    let mut events_rx = core.events.subscribe();
+    let core = Arc::clone(core);
+
+    stream! {
+        if let Some(player) = core.player(&player_id).await {
+            yield player.volume;
+        }
+
+        while let Ok(event) = events_rx.recv().await {
+            if let PlayerEvent::VolumeChanged { player_id: id, volume } = event {
+                if id == player_id {
+                    yield volume;
                 }
             }
         }

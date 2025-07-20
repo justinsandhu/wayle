@@ -8,7 +8,7 @@ use zbus::fdo::PropertiesProxy;
 use zbus::names::{InterfaceName, MemberName};
 
 use crate::services::mpris::proxy::MediaPlayer2PlayerProxy;
-use crate::services::mpris::{Player, PlayerEvent, PlayerId};
+use crate::services::mpris::{Player, PlayerEvent, PlayerId, Volume};
 
 /// Core shared state for the MPRIS service
 ///
@@ -191,6 +191,8 @@ impl Core {
             let can_loop = proxy.loop_status().await.is_ok();
             let can_shuffle = proxy.shuffle().await.is_ok();
 
+            let volume = proxy.volume().await.unwrap_or(0.0);
+
             let metadata = TrackMetadata::from(metadata_map);
 
             handle.player.playback_state = PlaybackState::from(playback_status.as_str());
@@ -210,6 +212,7 @@ impl Core {
             handle.player.can_seek = can_seek;
             handle.player.can_shuffle = can_shuffle;
             handle.player.can_loop = can_loop;
+            handle.player.volume = Volume::from(volume);
 
             Ok(())
         } else {

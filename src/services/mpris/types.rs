@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::ops::Deref;
 use std::time::Duration;
 
 use zbus::zvariant::OwnedValue;
@@ -46,6 +47,9 @@ pub struct Player {
 
     /// Current shuffle mode
     pub shuffle_mode: ShuffleMode,
+
+    /// Current volume
+    pub volume: Volume,
 
     /// Track title
     pub title: String,
@@ -285,6 +289,37 @@ impl From<HashMap<String, OwnedValue>> for TrackMetadata {
     }
 }
 
+/// Volume of the player
+#[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd)]
+pub struct Volume(f64);
+
+impl Volume {
+    /// Create a new instance of a volume with safeguarded values
+    pub fn new(value: f64) -> Self {
+        Self(value.clamp(0.0, 1.0))
+    }
+
+    /// Get the volume as a percentage
+    pub fn as_percentage(&self) -> f64 {
+        let clamped_volume = self.0.clamp(0.0, 1.0);
+        clamped_volume * 100.0
+    }
+}
+
+impl Deref for Volume {
+    type Target = f64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<f64> for Volume {
+    fn from(value: f64) -> Self {
+        Self::new(value)
+    }
+}
+
 /// Events emitted by the MPRIS service
 #[derive(Debug, Clone)]
 pub enum PlayerEvent {
@@ -324,6 +359,14 @@ pub enum PlayerEvent {
         player_id: PlayerId,
         /// New shuffle mode
         mode: ShuffleMode,
+    },
+
+    /// Volume of the player changed
+    VolumeChanged {
+        /// ID of the player whose state changed
+        player_id: PlayerId,
+        /// New playback state
+        volume: Volume,
     },
 }
 

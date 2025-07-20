@@ -15,6 +15,8 @@ use crate::services::mpris::{
     types::{LoopMode, PlaybackState, Player, PlayerEvent, PlayerId, ShuffleMode, TrackMetadata},
 };
 
+use super::Volume;
+
 /// Configuration for the MPRIS service
 #[derive(Default)]
 pub struct Config {
@@ -136,6 +138,11 @@ impl MprisService {
         player_id: PlayerId,
     ) -> impl Stream<Item = ShuffleMode> + Send {
         streams::shuffle_mode(&self.core, player_id)
+    }
+
+    /// Get a stream of volume events for a specific player
+    pub async fn watch_volume(&self, player_id: PlayerId) -> impl Stream<Item = Volume> + Send {
+        streams::volume(&self.core, player_id)
     }
 
     /// Get a stream of active player changes
@@ -282,6 +289,14 @@ impl MprisService {
         mode: ShuffleMode,
     ) -> Result<(), MediaError> {
         control::set_shuffle_mode(&self.core, player_id, mode).await
+    }
+
+    /// Set Volume for a player
+    ///
+    /// # Errors
+    /// Returns error if player not found, doesn't support volume changes, or D-Bus operation fails
+    pub async fn set_volume(&self, player_id: PlayerId, volume: Volume) -> Result<(), MediaError> {
+        control::set_volume(&self.core, player_id, volume).await
     }
 
     /// Get the list of ignored player patterns
