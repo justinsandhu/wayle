@@ -1,4 +1,4 @@
-use super::{ConfigChange, ConfigError, ConfigStore, diff};
+use super::{ConfigChange, ConfigError, ConfigRuntime, diff};
 use crate::config::{Config, ConfigPaths};
 
 use notify::{
@@ -34,7 +34,7 @@ impl Drop for FileWatcher {
     }
 }
 
-impl ConfigStore {
+impl ConfigRuntime {
     /// Starts monitoring configuration files for changes and broadcasts updates.
     ///
     /// Returns a `FileWatcher` that controls the file watching lifecycle.
@@ -121,7 +121,7 @@ impl ConfigStore {
 }
 
 /// Main file watching loop that processes events until cancelled.
-async fn file_watch_loop(event_rx: &mut Receiver<notify::Event>, store: ConfigStore) {
+async fn file_watch_loop(event_rx: &mut Receiver<notify::Event>, store: ConfigRuntime) {
     let mut pending_changes = false;
     let mut last_change = Instant::now();
     let debounce_duration = Duration::from_millis(100);

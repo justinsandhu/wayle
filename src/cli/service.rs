@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::config_store::ConfigStore;
+use crate::config_runtime::ConfigRuntime;
 
 use super::{CliError, CommandRegistry, CommandResult, formatting::*};
 
@@ -20,7 +20,7 @@ impl CliService {
     ///
     /// # Arguments
     /// * `config_store` - Configuration store for commands that need config access
-    pub fn new(config_store: ConfigStore) -> Self {
+    pub fn new(config_store: ConfigRuntime) -> Self {
         let config_store = Arc::new(config_store);
         let mut registry = CommandRegistry::new(config_store);
         registry.register_all_commands();

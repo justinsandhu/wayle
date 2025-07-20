@@ -6,6 +6,7 @@
 
 mod battery;
 mod clock;
+mod error;
 mod general;
 mod loading;
 mod media;
@@ -17,6 +18,7 @@ mod styling;
 mod tests;
 
 pub use clock::ClockConfig;
+pub use error::{Result, WayleError};
 pub use media::MediaConfig;
 pub use paths::ConfigPaths;
 pub use styling::*;

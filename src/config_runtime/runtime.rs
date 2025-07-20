@@ -27,13 +27,13 @@ use super::{
 /// Provides centralized configuration management with the ability to
 /// read, write, and observe configuration changes across the application.
 #[derive(Clone)]
-pub struct ConfigStore {
+pub struct ConfigRuntime {
     config: ConfigData,
     broadcast_service: BroadcastService,
     runtime_config: RuntimeConfig,
 }
 
-impl ConfigStore {
+impl ConfigRuntime {
     /// Creates a new ConfigStore with default configuration values.
     pub fn with_defaults() -> Self {
         let config = Config::default();

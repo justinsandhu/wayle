@@ -6,7 +6,7 @@ use crate::{
         formatting::format_toml_value,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    config_store::{ConfigError, ConfigStore},
+    config_runtime::{ConfigError, ConfigRuntime},
 };
 use async_trait::async_trait;
 
@@ -24,7 +24,7 @@ use async_trait::async_trait;
 /// ```
 pub struct GetCommand {
     /// Shared reference to the configuration store.
-    config_store: Arc<ConfigStore>,
+    config_store: Arc<ConfigRuntime>,
 }
 
 impl GetCommand {
@@ -33,7 +33,7 @@ impl GetCommand {
     /// # Arguments
     ///
     /// * `config_store` - Shared reference to the configuration store
-    pub fn new(config_store: Arc<ConfigStore>) -> Self {
+    pub fn new(config_store: Arc<ConfigRuntime>) -> Self {
         Self { config_store }
     }
 }

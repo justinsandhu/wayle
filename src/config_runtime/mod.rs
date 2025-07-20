@@ -8,7 +8,7 @@ mod changes;
 mod diff;
 mod file_watching;
 mod path_ops;
-mod store;
+mod runtime;
 
 #[cfg(test)]
 mod tests;
@@ -16,4 +16,4 @@ mod tests;
 pub use broadcast::Subscription;
 pub use changes::{ConfigChange, ConfigError};
 pub use file_watching::FileWatcher;
-pub use store::ConfigStore;
+pub use runtime::ConfigRuntime;

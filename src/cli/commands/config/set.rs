@@ -5,14 +5,14 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    config_store::{ConfigError, ConfigStore},
+    config_runtime::{ConfigError, ConfigRuntime},
 };
 use async_trait::async_trait;
 use serde_json;
 use toml;
 
 pub struct SetCommand {
-    config_store: Arc<ConfigStore>,
+    config_store: Arc<ConfigRuntime>,
 }
 
 impl SetCommand {
@@ -21,7 +21,7 @@ impl SetCommand {
     /// # Arguments
     ///
     /// * `config_store` - Shared reference to the configuration store
-    pub fn new(config_store: Arc<ConfigStore>) -> Self {
+    pub fn new(config_store: Arc<ConfigRuntime>) -> Self {
         Self { config_store }
     }
 

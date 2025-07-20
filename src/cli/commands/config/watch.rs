@@ -6,16 +6,16 @@ use crate::{
         formatting::format_toml_value,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    config_store::ConfigStore,
+    config_runtime::ConfigRuntime,
 };
 use async_trait::async_trait;
 
 pub struct WatchCommand {
-    config_store: Arc<ConfigStore>,
+    config_store: Arc<ConfigRuntime>,
 }
 
 impl WatchCommand {
-    pub fn new(config_store: Arc<ConfigStore>) -> Self {
+    pub fn new(config_store: Arc<ConfigRuntime>) -> Self {
         Self { config_store }
     }
 }

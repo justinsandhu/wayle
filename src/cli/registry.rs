@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 /// Nested command storage: category name -> (command name -> command implementation)
 pub type CommandCategories = HashMap<String, HashMap<String, Box<dyn Command>>>;
 
-use crate::config_store::ConfigStore;
+use crate::config_runtime::ConfigRuntime;
 
 use super::{
     CliError, Command,
@@ -35,7 +35,7 @@ use super::{
 pub struct CommandRegistry {
     /// Nested HashMap structure: category name -> (command name -> command implementation)
     categories: CommandCategories,
-    config_store: Arc<ConfigStore>,
+    config_store: Arc<ConfigRuntime>,
 }
 
 impl CommandRegistry {
@@ -43,7 +43,7 @@ impl CommandRegistry {
     ///
     /// The registry starts with no commands registered. Commands must be added
     /// using the `register_command` method, typically during application initialization.
-    pub fn new(config_store: Arc<ConfigStore>) -> Self {
+    pub fn new(config_store: Arc<ConfigRuntime>) -> Self {
         let categories = CommandCategories::new();
         Self {
             categories,
@@ -66,10 +66,10 @@ impl CommandRegistry {
     ///
     /// ```rust,no_run
     /// use wayle::cli::CommandRegistry;
-    /// use wayle::config_store::ConfigStore;
+    /// use wayle::config_store::ConfigRuntime;
     /// use std::sync::Arc;
     ///
-    /// let config_store = Arc::new(ConfigStore::with_defaults());
+    /// let config_store = Arc::new(ConfigRuntime::with_defaults());
     /// let mut registry = CommandRegistry::new(config_store);
     /// // registry.register_command("config", Box::new(SomeCommand::new()));
     /// ```

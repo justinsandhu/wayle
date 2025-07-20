@@ -24,14 +24,11 @@
 /// Configuration schema definitions and validation.
 pub mod config;
 
-/// Core error types and result aliases.
-pub mod core;
-
 /// Documentation generation for configuration schemas.
 pub mod docs;
 
-/// Reactive configuration store with change tracking.
-pub mod config_store;
+/// Reactive configuration runtime with change tracking.
+pub mod config_runtime;
 
 /// Command-line interface for configuration management.
 pub mod cli;
@@ -45,5 +42,5 @@ pub mod runtime_state;
 /// Tracing and logging configuration.
 pub mod tracing_config;
 
-/// Re-exported core types for convenience.
-pub use core::{Result, WayleError};
+/// Re-exported error types for convenience.
+pub use config::{Result, WayleError};
