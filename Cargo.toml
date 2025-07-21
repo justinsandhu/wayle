@@ -13,6 +13,7 @@ serde_json = "1"
 clap = { version = "4.0", features = ["derive"] }
 notify = "8"
 tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0", features = ["sync"] }
 regex = "1"
 futures = "0"
 relm4 = { version = "0" }
@@ -33,6 +34,15 @@ tempfile = "3"
 [[example]]
 name = "pulse_full_test"
 required-features = []
+
+[[example]]
+name = "mpris_player_ui"
+path = "examples/mpris_player_ui/main.rs"
+required-features = []
+
+[[bin]]
+name = "mpris-debug"
+path = "tools/mpris-debug.rs"
 
 [lints.rust]
 unsafe_code = "deny"

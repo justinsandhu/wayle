@@ -188,14 +188,17 @@ pub struct TrackMetadata {
     pub track_id: Option<String>,
 }
 
+/// Default value for unknown metadata fields.
+pub const UNKNOWN_METADATA: &str = "Unknown";
+
 impl TrackMetadata {
     /// Create empty metadata with "Unknown" defaults
     pub fn unknown() -> Self {
         Self {
-            title: "Unknown".to_string(),
-            artist: "Unknown".to_string(),
-            album: "Unknown".to_string(),
-            album_artist: "Unknown".to_string(),
+            title: UNKNOWN_METADATA.to_string(),
+            artist: UNKNOWN_METADATA.to_string(),
+            album: UNKNOWN_METADATA.to_string(),
+            album_artist: UNKNOWN_METADATA.to_string(),
             ..Default::default()
         }
     }

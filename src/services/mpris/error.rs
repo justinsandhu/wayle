@@ -42,4 +42,8 @@ pub enum MediaError {
     /// Failed to initialize the media service
     #[error("Failed to initialize media service: {0}")]
     InitializationFailed(String),
+
+    /// Failed to control the player
+    #[error("Failed to control player: {0}")]
+    ControlFailed(String),
 }

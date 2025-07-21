@@ -1,8 +1,6 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::StreamExt;
-use tokio::pin;
 
 use crate::{
     cli::{
@@ -11,6 +9,7 @@ use crate::{
     },
     services::mpris::{
         LoopMode, MediaService, PlaybackState, PlayerId, ShuffleMode, TrackMetadata,
+        UNKNOWN_METADATA,
     },
 };
 
@@ -98,17 +97,20 @@ impl InfoCommand {
         output: &mut String,
     ) {
         if let Some(player) = service.player(player_id).await {
-            output.push_str(&format!("Player: {}\n", player.identity));
+            output.push_str(&format!("Player: {}\n", player.identity.get()));
             output.push_str(&format!("Bus Name: {}\n", player_id.bus_name()));
-            output.push_str(&format!("Can Control: {}\n\n", player.can_control));
+            output.push_str(&format!("Can Control: {}\n\n", player.can_control.get()));
 
             output.push_str("Capabilities:\n");
-            output.push_str(&format!("  Play/Pause: {}\n", player.can_play));
-            output.push_str(&format!("  Next Track: {}\n", player.can_go_next));
-            output.push_str(&format!("  Previous Track: {}\n", player.can_go_previous));
-            output.push_str(&format!("  Seek: {}\n", player.can_seek));
-            output.push_str(&format!("  Loop: {}\n", player.can_loop));
-            output.push_str(&format!("  Shuffle: {}\n\n", player.can_shuffle));
+            output.push_str(&format!("  Play/Pause: {}\n", player.can_play.get()));
+            output.push_str(&format!("  Next Track: {}\n", player.can_go_next.get()));
+            output.push_str(&format!(
+                "  Previous Track: {}\n",
+                player.can_go_previous.get()
+            ));
+            output.push_str(&format!("  Seek: {}\n", player.can_seek.get()));
+            output.push_str(&format!("  Loop: {}\n", player.can_loop.get()));
+            output.push_str(&format!("  Shuffle: {}\n\n", player.can_shuffle.get()));
         }
     }
 
@@ -118,9 +120,8 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        let state_stream = service.watch_playback_state(player_id.clone());
-        pin!(state_stream);
-        if let Some(state) = state_stream.next().await {
+        if let Some(player) = service.player(player_id).await {
+            let state = player.playback_state.get();
             let state_str = match state {
                 PlaybackState::Playing => "▶ Playing",
                 PlaybackState::Paused => "⏸ Paused",
@@ -131,9 +132,8 @@ impl InfoCommand {
     }
 
     async fn add_modes(&self, service: &MediaService, player_id: &PlayerId, output: &mut String) {
-        let loop_stream = service.watch_loop_mode(player_id.clone());
-        pin!(loop_stream);
-        if let Some(loop_mode) = loop_stream.next().await {
+        if let Some(player) = service.player(player_id).await {
+            let loop_mode = player.loop_mode.get();
             let loop_str = match loop_mode {
                 LoopMode::None => "Off",
                 LoopMode::Track => "Track",
@@ -141,11 +141,8 @@ impl InfoCommand {
                 LoopMode::Unsupported => "Unsupported",
             };
             output.push_str(&format!("Loop Mode: {loop_str}\n"));
-        }
 
-        let shuffle_stream = service.watch_shuffle_mode(player_id.clone());
-        pin!(shuffle_stream);
-        if let Some(shuffle_mode) = shuffle_stream.next().await {
+            let shuffle_mode = player.shuffle_mode.get();
             let shuffle_str = match shuffle_mode {
                 ShuffleMode::On => "On",
                 ShuffleMode::Off => "Off",
@@ -161,24 +158,34 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        let metadata_stream = service.watch_metadata(player_id.clone());
-        pin!(metadata_stream);
-        if let Some(metadata) = metadata_stream.next().await {
+        if let Some(player) = service.player(player_id).await {
             output.push_str("Current Track:\n");
-            if !metadata.title.is_empty() {
-                output.push_str(&format!("  Title: {}\n", metadata.title));
+            let title = player.title.get();
+            if !title.is_empty() && title != UNKNOWN_METADATA {
+                output.push_str(&format!("  Title: {title}\n"));
             }
-            if !metadata.artist.is_empty() {
-                output.push_str(&format!("  Artist: {}\n", metadata.artist));
+            let artist = player.artist.get();
+            if !artist.is_empty() && artist != UNKNOWN_METADATA {
+                output.push_str(&format!("  Artist: {artist}\n"));
             }
-            if !metadata.album.is_empty() {
-                output.push_str(&format!("  Album: {}\n", metadata.album));
+            let album = player.album.get();
+            if !album.is_empty() && album != UNKNOWN_METADATA {
+                output.push_str(&format!("  Album: {album}\n"));
             }
 
+            let metadata = TrackMetadata {
+                title,
+                artist,
+                album,
+                album_artist: player.album_artist.get(),
+                length: player.length.get(),
+                art_url: player.art_url.get(),
+                track_id: player.track_id.get(),
+            };
             self.add_position_info(service, player_id, &metadata, output)
                 .await;
 
-            if let Some(url) = &metadata.art_url {
+            if let Some(url) = player.art_url.get() {
                 output.push_str(&format!("  Artwork URL: {url}\n"));
             }
         } else {
@@ -193,9 +200,7 @@ impl InfoCommand {
         metadata: &TrackMetadata,
         output: &mut String,
     ) {
-        let position_stream = service.watch_position(player_id.clone());
-        pin!(position_stream);
-        let position = position_stream.next().await.unwrap_or(Duration::ZERO);
+        let position = service.position(player_id).await.unwrap_or(Duration::ZERO);
 
         if let Some(length) = metadata.length {
             let percentage = (position.as_secs_f64() / length.as_secs_f64() * 100.0) as u32;

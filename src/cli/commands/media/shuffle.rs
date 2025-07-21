@@ -5,7 +5,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::{MediaService},
+    services::mpris::MediaService,
 };
 
 use super::utils::{get_player_display_name, get_player_id_or_active};
@@ -45,7 +45,7 @@ impl Command for ShuffleCommand {
         let player_name = get_player_display_name(&media_service, &player_id).await;
 
         media_service
-            .toggle_shuffle(player_id)
+            .toggle_shuffle(&player_id)
             .await
             .map_err(|e| CliError::ServiceError {
                 service: "Media".to_string(),

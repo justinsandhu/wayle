@@ -1,5 +1,9 @@
+/// Common utilities and abstractions for services
+pub mod common;
 /// MPRIS media player control service
 pub mod mpris;
+/// Network Manager control service
+pub mod network;
 /// PulseAudio control service
 pub mod pulse;
 

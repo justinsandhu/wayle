@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use async_stream::stream;
 use async_trait::async_trait;
 use device::DeviceKey;
 use stream::StreamKey;
@@ -310,8 +311,6 @@ impl StreamVolumeController for PulseService {
 impl PulseService {
     /// Stream of all audio events
     pub fn events(&self) -> impl futures::Stream<Item = AudioEvent> + Send {
-        use async_stream::stream;
-
         let mut events_rx = self.events_tx.subscribe();
         stream! {
             while let Ok(event) = events_rx.recv().await {

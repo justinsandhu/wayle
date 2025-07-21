@@ -1,5 +1,6 @@
 use crate::config::Config;
 use std::{collections::HashSet, error::Error, sync::OnceLock, time::Instant};
+use toml::Value;
 
 use super::{ConfigChange, ConfigError, path_ops::navigate_path};
 
@@ -35,8 +36,6 @@ fn diff_toml_values(
     new: &toml::Value,
     timestamp: Instant,
 ) -> Vec<ConfigChange> {
-    use toml::Value;
-
     let mut changes = Vec::new();
 
     match (old, new) {

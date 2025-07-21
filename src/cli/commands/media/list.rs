@@ -1,10 +1,8 @@
 use async_trait::async_trait;
-use futures::StreamExt;
-use tokio::pin;
 
 use crate::{
     cli::{CliError, Command, CommandResult, types::CommandMetadata},
-    services::mpris::{MediaService, PlaybackState},
+    services::mpris::{MediaService, PlaybackState, UNKNOWN_METADATA},
 };
 
 /// Command to list all available media players
@@ -38,21 +36,13 @@ impl Command for ListCommand {
                     service: "Media".to_string(),
                     details: e.to_string(),
                 })?;
-        let players_stream = media_service.watch_players();
-        pin!(players_stream);
-        let players = players_stream
-            .next()
-            .await
-            .ok_or_else(|| CliError::ServiceError {
-                service: "Media".to_string(),
-                details: "Failed to get player list".to_string(),
-            })?;
+        let players = media_service.players().await;
 
         if players.is_empty() {
             return Ok("No media players found".to_string());
         }
 
-        let active_player = media_service.active_player().await;
+        let active_player = media_service.active_player();
         let mut output = format!("Found {} media player(s):\n\n", players.len());
 
         for (index, player) in players.iter().enumerate() {
@@ -61,16 +51,18 @@ impl Command for ListCommand {
             let is_active = active_player.as_ref() == Some(player_id);
             let active_marker = if is_active { " (active)" } else { "" };
 
-            let identity = player.identity.clone();
+            let identity = player.identity.get();
 
-            let playback_state = match player.playback_state {
+            let playback_state = match player.playback_state.get() {
                 PlaybackState::Playing => "▶ Playing",
                 PlaybackState::Paused => "⏸ Paused",
                 PlaybackState::Stopped => "⏹ Stopped",
             };
 
-            let track_info = if !player.title.is_empty() {
-                format!(" - {} by {}", player.title, player.artist)
+            let title = player.title.get();
+            let artist = player.artist.get();
+            let track_info = if !title.is_empty() && title != UNKNOWN_METADATA {
+                format!(" - {title} by {artist}")
             } else {
                 String::new()
             };

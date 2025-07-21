@@ -1,21 +1,27 @@
-use std::future::Future;
-use std::pin::Pin;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures::Stream;
+use tokio::sync::RwLock;
 use tracing::{info, instrument};
 use zbus::Connection;
 
-use crate::services::mpris::{
-    core::Core,
-    error::MediaError,
-    streams,
-    subsystems::{control, discovery::Discovery, management},
-    types::{LoopMode, PlaybackState, Player, PlayerEvent, PlayerId, ShuffleMode, TrackMetadata},
-};
+use crate::services::common::Property;
 
-use super::Volume;
+use super::control::Control;
+use super::discovery::Discovery;
+use super::models::Player;
+use super::monitoring::PlayerMonitor;
+use super::proxy::MediaPlayer2PlayerProxy;
+use super::{LoopMode, MediaError, PlayerId, ShuffleMode, Volume};
+
+/// Player handle containing the reactive model and associated resources.
+pub(super) struct PlayerHandle {
+    pub(super) player: Arc<Player>,
+    pub(super) proxy: MediaPlayer2PlayerProxy<'static>,
+    pub(super) _monitor: PlayerMonitor,
+}
 
 /// Configuration for the MPRIS service
 #[derive(Default)]
@@ -24,330 +30,286 @@ pub struct Config {
     pub ignored_players: Vec<String>,
 }
 
-/// MPRIS media service
+/// MPRIS service with reactive property-based architecture.
 ///
-/// Provides reactive media player control through D-Bus MPRIS protocol.
-/// This is a thin facade that delegates to subsystems for actual functionality.
+/// Provides fine-grained reactive updates for efficient UI rendering.
 #[derive(Clone)]
 pub struct MprisService {
-    /// Core shared state
-    core: Arc<Core>,
-
-    /// Discovery subsystem handle (kept alive for its Drop impl)
-    _discovery: Option<Arc<Discovery>>,
+    connection: Connection,
+    players: Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
+    player_list: Property<Vec<PlayerId>>,
+    active_player: Property<Option<PlayerId>>,
+    ignored_patterns: Vec<String>,
 }
 
 impl MprisService {
-    /// Create a new MPRIS service (compatibility method)
+    /// Create a new MPRIS service (compatibility method).
     ///
     /// This is a compatibility method for the old API. Prefer using `start()` instead.
     ///
     /// # Errors
-    /// Returns error if D-Bus connection or discovery initialization fails
+    ///
+    /// Returns `MediaError::InitializationFailed` if D-Bus connection fails
     pub async fn new(ignored_players: Vec<String>) -> Result<Self, MediaError> {
         Self::start(Config { ignored_players }).await
     }
 
-    /// Start the MPRIS service
-    ///
-    /// This will establish a D-Bus connection, discover existing players,
-    /// and begin monitoring for new players.
+    /// Start the MPRIS service with the given configuration.
     ///
     /// # Errors
-    /// Returns error if D-Bus connection or discovery initialization fails
+    ///
+    /// Returns `MediaError::InitializationFailed` if D-Bus connection fails
     #[instrument(skip(config))]
     pub async fn start(config: Config) -> Result<Self, MediaError> {
-        info!("Starting MPRIS service");
+        info!("Starting MPRIS service with property-based architecture");
 
         let connection = Connection::session().await.map_err(|e| {
             MediaError::InitializationFailed(format!("D-Bus connection failed: {e}"))
         })?;
 
-        let core = Core::new(connection, config.ignored_players).await;
+        let service = Self {
+            connection,
+            players: Arc::new(RwLock::new(HashMap::new())),
+            player_list: Property::new(Vec::new()),
+            active_player: Property::new(None),
+            ignored_patterns: config.ignored_players,
+        };
 
-        if let Some(player_id) = management::load_active_player().await {
-            let mut active = core.active_player.write().await;
-            *active = Some(player_id);
-        }
+        Discovery::start(
+            &service.connection,
+            &service.players,
+            &service.player_list,
+            &service.active_player,
+            &service.ignored_patterns,
+        )
+        .await?;
 
-        let discovery = Discovery::start(Arc::clone(&core)).await?;
-
-        info!("MPRIS service started successfully");
-        Ok(Self {
-            core,
-            _discovery: Some(Arc::new(discovery)),
-        })
+        Ok(service)
     }
 
-    /// Get a stream of player list updates
+    /// Get a reactive player by ID.
+    pub async fn player(&self, player_id: &PlayerId) -> Option<Arc<Player>> {
+        self.players
+            .read()
+            .await
+            .get(player_id)
+            .map(|handle| Arc::clone(&handle.player))
+    }
+
+    /// Get all players.
+    pub async fn players(&self) -> Vec<Arc<Player>> {
+        self.players
+            .read()
+            .await
+            .values()
+            .map(|handle| Arc::clone(&handle.player))
+            .collect()
+    }
+
+    /// Watch for changes to the player list.
     ///
-    /// This returns a stream that yields the current players immediately,
-    /// then yields updates whenever players are added or removed.
-    pub fn watch_players(&self) -> impl Stream<Item = Vec<Player>> + Send {
-        streams::players(&self.core)
+    /// Emits whenever players are added or removed from the system.
+    pub fn watch_players(&self) -> impl Stream<Item = Vec<PlayerId>> + Send {
+        self.player_list.watch()
     }
 
-    /// Get a stream of state updates for a specific player
-    ///
-    /// This returns a stream that yields the current state immediately,
-    /// then yields updates whenever the state changes.
-    pub fn watch_player(&self, player_id: PlayerId) -> impl Stream<Item = Player> + Send {
-        streams::player(&self.core, player_id)
-    }
-
-    /// Get a stream of playback state changes for a specific player
-    pub fn watch_playback_state(
-        &self,
-        player_id: PlayerId,
-    ) -> impl Stream<Item = PlaybackState> + Send {
-        streams::playback_state(&self.core, player_id)
-    }
-
-    /// Get a stream of track metadata changes for a specific player
-    pub fn watch_metadata(&self, player_id: PlayerId) -> impl Stream<Item = TrackMetadata> + Send {
-        streams::metadata(&self.core, player_id)
-    }
-
-    /// Get a stream of position updates for a specific player
-    ///
-    /// This polls position every second. Use `position_with_interval` for custom intervals.
-    pub fn watch_position(&self, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
-        streams::position(&self.core, player_id)
-    }
-
-    /// Get a stream of position updates with a custom polling interval
-    ///
-    /// The interval parameter specifies how often to poll for position updates.
-    /// A shorter interval provides smoother updates but uses more resources.
-    pub fn watch_position_with_interval(
-        &self,
-        player_id: PlayerId,
-        interval: Duration,
-    ) -> impl Stream<Item = Duration> + Send {
-        streams::position_with_interval(&self.core, player_id, interval)
-    }
-
-    /// Get a stream of loop mode changes for a specific player
-    pub fn watch_loop_mode(&self, player_id: PlayerId) -> impl Stream<Item = LoopMode> + Send {
-        streams::loop_mode(&self.core, player_id)
-    }
-
-    /// Get a stream of shuffle mode changes for a specific player  
-    pub fn watch_shuffle_mode(
-        &self,
-        player_id: PlayerId,
-    ) -> impl Stream<Item = ShuffleMode> + Send {
-        streams::shuffle_mode(&self.core, player_id)
-    }
-
-    /// Get a stream of volume events for a specific player
-    pub async fn watch_volume(&self, player_id: PlayerId) -> impl Stream<Item = Volume> + Send {
-        streams::volume(&self.core, player_id)
-    }
-
-    /// Get a stream of CanGoNext capability changes for a specific player
-    ///
-    /// Emits when the player's ability to skip to the next track changes.
-    /// This typically changes when reaching the last track in a playlist.
-    pub async fn watch_can_go_next(&self, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
-        streams::can_go_next(&self.core, player_id)
-    }
-
-    /// Get a stream of CanGoPrevious capability changes for a specific player
-    ///
-    /// Emits when the player's ability to go to the previous track changes.
-    /// This typically changes when at the first track or based on playback history.
-    pub async fn watch_can_go_prev(&self, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
-        streams::can_go_previous(&self.core, player_id)
-    }
-
-    /// Get a stream of CanPlay capability changes for a specific player
-    ///
-    /// Emits when the player's ability to start/resume playback changes.
-    /// This may change based on content availability or player state.
-    pub async fn watch_can_play(&self, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
-        streams::can_play(&self.core, player_id)
-    }
-
-    /// Get a stream of CanSeek capability changes for a specific player
-    ///
-    /// Emits when the player's ability to seek within tracks changes.
-    /// Some content (like live streams) may not support seeking.
-    pub async fn watch_can_seek(&self, player_id: PlayerId) -> impl Stream<Item = bool> + Send {
-        streams::can_seek(&self.core, player_id)
-    }
-
-    /// Get a stream of active player changes
+    /// Watch for changes to the active player.
     pub fn watch_active_player(&self) -> impl Stream<Item = Option<PlayerId>> + Send {
-        streams::active_player(&self.core)
+        self.active_player.watch()
     }
 
-    /// Get a stream of all player events
-    ///
-    /// This provides access to the raw event stream for advanced use cases
-    pub fn watch_events(&self) -> impl Stream<Item = PlayerEvent> + Send {
-        streams::events(&self.core)
+    /// Get the currently active player ID.
+    pub fn active_player(&self) -> Option<PlayerId> {
+        self.active_player.get()
     }
 
-    /// Get a stream of events for a specific player
-    ///
-    /// This filters the global event stream to only include events for the specified player
-    pub fn watch_player_events(
-        &self,
-        player_id: PlayerId,
-    ) -> impl Stream<Item = PlayerEvent> + Send {
-        streams::player_events(&self.core, player_id)
-    }
-
-    /// Get a list of all current players
-    pub async fn players(&self) -> Vec<Player> {
-        self.core.players().await
-    }
-
-    /// Get information about a specific player
-    pub async fn player(&self, player_id: &PlayerId) -> Option<Player> {
-        self.core.player(player_id).await
-    }
-
-    /// Get the currently active player
-    pub async fn active_player(&self) -> Option<PlayerId> {
-        self.core.active_player().await
-    }
-
-    /// Set the active player
+    /// Set the active player.
     ///
     /// # Errors
-    /// Returns error if player not found when specified
+    ///
+    /// Returns `MediaError::PlayerNotFound` if the specified player doesn't exist
     pub async fn set_active_player(&self, player_id: Option<PlayerId>) -> Result<(), MediaError> {
-        management::set_active_player(&self.core, player_id).await
+        if let Some(ref id) = player_id {
+            let players = self.players.read().await;
+            if !players.contains_key(id) {
+                return Err(MediaError::PlayerNotFound(id.clone()));
+            }
+        }
+        self.active_player.set(player_id);
+        Ok(())
     }
 
-    /// Get the current playback position for a player
+    /// Get current playback position for a player.
+    ///
+    /// Position is polled on-demand rather than streamed.
     pub async fn position(&self, player_id: &PlayerId) -> Option<Duration> {
-        self.core.position(player_id).await
+        let players = self.players.read().await;
+        let handle = players.get(player_id)?;
+        Control::position(handle).await
     }
 
-    /// Toggle play/pause for a player
+    /// Control playback for a player.
     ///
     /// # Errors
-    /// Returns error if player not found or D-Bus operation fails
-    pub async fn play_pause(&self, player_id: PlayerId) -> Result<(), MediaError> {
-        control::play_pause(&self.core, player_id).await
+    ///
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// or `MediaError::ControlFailed` if the D-Bus operation fails
+    pub async fn play_pause(&self, player_id: &PlayerId) -> Result<(), MediaError> {
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+        Control::play_pause(handle).await
     }
 
-    /// Start playback
+    /// Skip to next track.
     ///
     /// # Errors
-    /// Returns error if player not found or D-Bus operation fails
-    pub async fn play(&self, player_id: PlayerId) -> Result<(), MediaError> {
-        control::play(&self.core, player_id).await
+    ///
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// or `MediaError::ControlFailed` if the D-Bus operation fails
+    pub async fn next(&self, player_id: &PlayerId) -> Result<(), MediaError> {
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+        Control::next(handle).await
     }
 
-    /// Pause playback
+    /// Go to previous track.
     ///
     /// # Errors
-    /// Returns error if player not found or D-Bus operation fails
-    pub async fn pause(&self, player_id: PlayerId) -> Result<(), MediaError> {
-        control::pause(&self.core, player_id).await
+    ///
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// or `MediaError::ControlFailed` if the D-Bus operation fails
+    pub async fn previous(&self, player_id: &PlayerId) -> Result<(), MediaError> {
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+        Control::previous(handle).await
     }
 
-    /// Stop playback
+    /// Seek to position.
     ///
     /// # Errors
-    /// Returns error if player not found or D-Bus operation fails
-    pub async fn stop(&self, player_id: PlayerId) -> Result<(), MediaError> {
-        control::stop(&self.core, player_id).await
+    ///
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// or `MediaError::ControlFailed` if the D-Bus operation fails
+    pub async fn seek(&self, player_id: &PlayerId, offset: Duration) -> Result<(), MediaError> {
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+        Control::seek(handle, offset).await
     }
 
-    /// Skip to next track
+    /// Set loop mode.
     ///
     /// # Errors
-    /// Returns error if player not found, doesn't support next, or D-Bus operation fails
-    pub async fn next(&self, player_id: PlayerId) -> Result<(), MediaError> {
-        control::next(&self.core, player_id).await
-    }
-
-    /// Go to previous track
     ///
-    /// # Errors
-    /// Returns error if player not found, doesn't support previous, or D-Bus operation fails
-    pub async fn previous(&self, player_id: PlayerId) -> Result<(), MediaError> {
-        control::previous(&self.core, player_id).await
-    }
-
-    /// Seek to a position
-    ///
-    /// # Errors
-    /// Returns error if player not found, doesn't support seeking, or D-Bus operation fails
-    pub async fn seek(&self, player_id: PlayerId, position: Duration) -> Result<(), MediaError> {
-        control::seek(&self.core, player_id, position).await
-    }
-
-    /// Toggle loop mode
-    ///
-    /// # Errors
-    /// Returns error if player not found, doesn't support loop modes, or D-Bus operation fails
-    pub async fn toggle_loop(&self, player_id: PlayerId) -> Result<(), MediaError> {
-        control::toggle_loop(&self.core, player_id).await
-    }
-
-    /// Set loop mode
-    ///
-    /// # Errors
-    /// Returns error if player not found, doesn't support loop modes, or D-Bus operation fails
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// `MediaError::ControlFailed` if the D-Bus operation fails,
+    /// or if the loop mode is unsupported
     pub async fn set_loop_mode(
         &self,
-        player_id: PlayerId,
+        player_id: &PlayerId,
         mode: LoopMode,
     ) -> Result<(), MediaError> {
-        control::set_loop_mode(&self.core, player_id, mode).await
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+        Control::set_loop_mode(handle, mode).await
     }
 
-    /// Toggle shuffle mode
+    /// Set shuffle mode.
     ///
     /// # Errors
-    /// Returns error if player not found, doesn't support shuffle, or D-Bus operation fails
-    pub async fn toggle_shuffle(&self, player_id: PlayerId) -> Result<(), MediaError> {
-        control::toggle_shuffle(&self.core, player_id).await
-    }
-
-    /// Set shuffle mode
     ///
-    /// # Errors
-    /// Returns error if player not found, doesn't support shuffle, or D-Bus operation fails
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// `MediaError::ControlFailed` if the D-Bus operation fails,
+    /// or if shuffle is unsupported
     pub async fn set_shuffle_mode(
         &self,
-        player_id: PlayerId,
+        player_id: &PlayerId,
         mode: ShuffleMode,
     ) -> Result<(), MediaError> {
-        control::set_shuffle_mode(&self.core, player_id, mode).await
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+        Control::set_shuffle_mode(handle, mode).await
     }
 
-    /// Set Volume for a player
+    /// Set volume.
     ///
     /// # Errors
-    /// Returns error if player not found, doesn't support volume changes, or D-Bus operation fails
-    pub async fn set_volume(&self, player_id: PlayerId, volume: Volume) -> Result<(), MediaError> {
-        control::set_volume(&self.core, player_id, volume).await
+    ///
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// or `MediaError::ControlFailed` if the D-Bus operation fails
+    pub async fn set_volume(&self, player_id: &PlayerId, volume: Volume) -> Result<(), MediaError> {
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+        Control::set_volume(handle, volume).await
     }
 
-    /// Get the list of ignored player patterns
-    pub async fn ignored_players(&self) -> Vec<String> {
-        self.core.ignored_patterns().await
+    /// Toggle loop mode to the next state.
+    ///
+    /// Cycles through: None → Track → Playlist → None
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// or `MediaError::OperationNotSupported` if loop mode is unsupported
+    pub async fn toggle_loop(&self, player_id: &PlayerId) -> Result<(), MediaError> {
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+
+        let current = handle.player.loop_mode.get();
+        let next = match current {
+            LoopMode::None => LoopMode::Track,
+            LoopMode::Track => LoopMode::Playlist,
+            LoopMode::Playlist => LoopMode::None,
+            LoopMode::Unsupported => {
+                return Err(MediaError::OperationNotSupported(
+                    "Loop mode not supported".to_string(),
+                ));
+            }
+        };
+
+        drop(players);
+        self.set_loop_mode(player_id, next).await
     }
 
-    /// Set patterns for players to ignore
-    pub async fn set_ignored_players(&self, patterns: Vec<String>) {
-        management::set_ignored_players(&self.core, patterns).await
-    }
+    /// Toggle shuffle mode between on and off.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// or `MediaError::OperationNotSupported` if shuffle is unsupported
+    pub async fn toggle_shuffle(&self, player_id: &PlayerId) -> Result<(), MediaError> {
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
 
-    /// Execute an action on the active player
-    pub async fn control_active_player<F, R>(&self, action: F) -> Option<Result<R, MediaError>>
-    where
-        F: FnOnce(PlayerId) -> Pin<Box<dyn Future<Output = Result<R, MediaError>> + Send>> + Send,
-        R: Send,
-    {
-        let active_id = self.active_player().await?;
-        Some(action(active_id).await)
+        let current = handle.player.shuffle_mode.get();
+        let next = match current {
+            ShuffleMode::Off => ShuffleMode::On,
+            ShuffleMode::On => ShuffleMode::Off,
+            ShuffleMode::Unsupported => {
+                return Err(MediaError::OperationNotSupported(
+                    "Shuffle not supported".to_string(),
+                ));
+            }
+        };
+
+        drop(players);
+        self.set_shuffle_mode(player_id, next).await
     }
 }

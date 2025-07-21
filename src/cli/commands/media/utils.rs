@@ -1,6 +1,3 @@
-use futures::StreamExt;
-use tokio::pin;
-
 use crate::{
     cli::CliError,
     services::mpris::{MediaService, PlayerId},
@@ -25,15 +22,7 @@ pub async fn find_player_by_identifier(
     service: &MediaService,
     identifier: &str,
 ) -> Result<PlayerId, CliError> {
-    let players_stream = service.watch_players();
-    pin!(players_stream);
-    let players = players_stream
-        .next()
-        .await
-        .ok_or_else(|| CliError::ServiceError {
-            service: "Media".to_string(),
-            details: "Failed to get player list".to_string(),
-        })?;
+    let players = service.players().await;
 
     if players.is_empty() {
         return Err(CliError::InvalidArgument {
@@ -57,12 +46,12 @@ pub async fn find_player_by_identifier(
     let mut matches = Vec::new();
 
     for player in &players {
-        let identity_lower = player.identity.to_lowercase();
+        let identity_lower = player.identity.get().to_lowercase();
         let bus_name_lower = player.id.bus_name().to_lowercase();
 
         if identity_lower.contains(&identifier_lower) || bus_name_lower.contains(&identifier_lower)
         {
-            matches.push((player.id.clone(), player.identity.clone()));
+            matches.push((player.id.clone(), player.identity.get()));
         }
     }
 
@@ -116,7 +105,7 @@ pub async fn get_player_id_or_active(
 
         Ok(player_id)
     } else {
-        service.active_player().await.ok_or_else(|| {
+        service.active_player().ok_or_else(|| {
             CliError::InvalidArgument {
                 arg: "player-id".to_string(),
                 reason: "No active player set. Specify a player ID or set one first with 'wayle media active <player-id>'.".to_string(),
@@ -130,7 +119,7 @@ pub async fn get_player_id_or_active(
 /// Returns the player's identity if available, otherwise returns the bus name
 pub async fn get_player_display_name(service: &MediaService, player_id: &PlayerId) -> String {
     if let Some(player) = service.player(player_id).await {
-        player.identity
+        player.identity.get()
     } else {
         player_id.bus_name().to_string()
     }
