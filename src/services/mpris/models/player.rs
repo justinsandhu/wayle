@@ -13,7 +13,7 @@ use crate::services::mpris::types::{
 ///
 /// Each property can be watched independently for efficient UI updates.
 /// Properties are updated by the D-Bus monitoring layer.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Player {
     /// Unique identifier for this player instance
     pub id: PlayerId,

@@ -1,10 +1,18 @@
 use std::time::Duration;
 
-use super::{MediaError, LoopMode, ShuffleMode, Volume};
+use zbus::Connection;
+use zbus::fdo::PropertiesProxy;
+use zbus::names::{InterfaceName, MemberName};
+use zbus::zvariant::ObjectPath;
+
 use super::service::PlayerHandle;
+use super::{LoopMode, MediaError, ShuffleMode, Volume};
+
+/// MPRIS service name for D-Bus Player.
+const MPRIS_BUS_PLAYER_PATH: &str = "org.mpris.MediaPlayer2.Player";
 
 /// Playback control operations for MPRIS players.
-/// 
+///
 /// This module handles all player control operations like play/pause,
 /// seek, volume control, etc.
 pub struct Control;
@@ -52,7 +60,7 @@ impl Control {
         Ok(())
     }
 
-    /// Seek to position.
+    /// Seek by offset (relative position change).
     ///
     /// # Errors
     ///
@@ -64,6 +72,26 @@ impl Control {
             .seek(offset_micros)
             .await
             .map_err(|e| MediaError::ControlFailed(format!("Seek failed: {e}")))?;
+        Ok(())
+    }
+
+    /// Set position to an absolute value.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError::ControlFailed` if the D-Bus operation fails
+    pub async fn set_position(handle: &PlayerHandle, position: Duration) -> Result<(), MediaError> {
+        let position_micros = position.as_micros() as i64;
+        let track_id = handle.player.track_id.get();
+        let track_path = track_id.as_deref().unwrap_or("/");
+        let track_object_path = ObjectPath::try_from(track_path)
+            .map_err(|e| MediaError::ControlFailed(format!("Invalid track ID: {e}")))?;
+
+        handle
+            .proxy
+            .set_position(&track_object_path, position_micros)
+            .await
+            .map_err(|e| MediaError::ControlFailed(format!("Set position failed: {e}")))?;
         Ok(())
     }
 
@@ -99,7 +127,10 @@ impl Control {
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails,
     /// or if shuffle is unsupported
-    pub async fn set_shuffle_mode(handle: &PlayerHandle, mode: ShuffleMode) -> Result<(), MediaError> {
+    pub async fn set_shuffle_mode(
+        handle: &PlayerHandle,
+        mode: ShuffleMode,
+    ) -> Result<(), MediaError> {
         let shuffle = match mode {
             ShuffleMode::On => true,
             ShuffleMode::Off => false,
@@ -135,9 +166,33 @@ impl Control {
     /// Get current playback position.
     ///
     /// Position is polled on-demand rather than streamed.
-    pub async fn position(handle: &PlayerHandle) -> Option<Duration> {
-        match handle.proxy.position().await {
-            Ok(micros) => Some(Duration::from_micros(micros.max(0) as u64)),
+    /// Creates a fresh properties proxy to avoid caching.
+    pub async fn position(handle: &PlayerHandle, connection: &Connection) -> Option<Duration> {
+        let destination = handle.proxy.inner().destination().to_owned();
+        let path = handle.proxy.inner().path().to_owned();
+
+        // Create fresh properties proxy to avoid cached values
+        let proxy = PropertiesProxy::builder(connection)
+            .destination(destination)
+            .ok()?
+            .path(path)
+            .ok()?
+            .build()
+            .await
+            .ok()?;
+
+        let interface = InterfaceName::try_from(MPRIS_BUS_PLAYER_PATH).ok()?;
+        let property = MemberName::try_from("Position").ok()?;
+
+        match proxy.get(interface, &property).await {
+            Ok(value) => {
+                if let Ok(micros) = i64::try_from(&value) {
+                    let duration = Duration::from_micros(micros.max(0) as u64);
+                    Some(duration)
+                } else {
+                    None
+                }
+            }
             Err(_) => None,
         }
     }

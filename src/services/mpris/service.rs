@@ -145,7 +145,41 @@ impl MprisService {
     pub async fn position(&self, player_id: &PlayerId) -> Option<Duration> {
         let players = self.players.read().await;
         let handle = players.get(player_id)?;
-        Control::position(handle).await
+        Control::position(handle, &self.connection).await
+    }
+
+    /// Watch position changes for a player.
+    ///
+    /// Polls position every second. Use `watch_position_with_interval` for custom intervals.
+    pub fn watch_position(&self, player_id: PlayerId) -> impl Stream<Item = Duration> + Send {
+        self.watch_position_with_interval(player_id, Duration::from_secs(1))
+    }
+
+    /// Watch position changes with a specified polling interval.
+    ///
+    /// Returns a stream that emits the current position at the specified interval.
+    /// Only emits when position actually changes to avoid redundant updates.
+    pub fn watch_position_with_interval(
+        &self,
+        player_id: PlayerId,
+        interval: Duration,
+    ) -> impl Stream<Item = Duration> + Send {
+        let service = self.clone();
+        async_stream::stream! {
+            let mut last_position: Option<Duration> = None;
+
+            loop {
+                if let Some(position) = service.position(&player_id).await {
+                    if last_position != Some(position) {
+                        last_position = Some(position);
+                        yield position;
+                    }
+                } else {
+                    break;
+                }
+                tokio::time::sleep(interval).await;
+            }
+        }
     }
 
     /// Control playback for a player.
@@ -190,7 +224,7 @@ impl MprisService {
         Control::previous(handle).await
     }
 
-    /// Seek to position.
+    /// Seek by offset (relative position change).
     ///
     /// # Errors
     ///
@@ -202,6 +236,24 @@ impl MprisService {
             .get(player_id)
             .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
         Control::seek(handle, offset).await
+    }
+
+    /// Set position to an absolute value.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError::PlayerNotFound` if player doesn't exist,
+    /// or `MediaError::ControlFailed` if the D-Bus operation fails
+    pub async fn set_position(
+        &self,
+        player_id: &PlayerId,
+        position: Duration,
+    ) -> Result<(), MediaError> {
+        let players = self.players.read().await;
+        let handle = players
+            .get(player_id)
+            .ok_or_else(|| MediaError::PlayerNotFound(player_id.clone()))?;
+        Control::set_position(handle, position).await
     }
 
     /// Set loop mode.
