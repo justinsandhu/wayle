@@ -4,10 +4,9 @@ use futures::StreamExt;
 use futures::stream::Stream;
 use tokio_stream::StreamExt as TokioStreamExt;
 
+use super::metadata::{TrackMetadata, UNKNOWN_METADATA};
 use crate::services::common::Property;
-use crate::services::mpris::types::{
-    LoopMode, PlaybackState, PlayerId, ShuffleMode, TrackMetadata, Volume, UNKNOWN_METADATA,
-};
+use crate::services::mpris::types::{LoopMode, PlaybackState, PlayerId, ShuffleMode, Volume};
 
 /// Reactive player model with fine-grained property updates.
 ///

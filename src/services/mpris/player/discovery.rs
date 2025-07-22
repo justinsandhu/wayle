@@ -6,11 +6,11 @@ use tokio::sync::RwLock;
 use zbus::Connection;
 use zbus::fdo::DBusProxy;
 
+use super::handle::PlayerHandle;
 use crate::services::common::Property;
+use crate::services::mpris::{MediaError, PlayerId};
 
-use super::player_manager::PlayerManager;
-use super::service::PlayerHandle;
-use super::{MediaError, PlayerId};
+use super::manager::PlayerManager;
 
 /// MPRIS service name prefix for D-Bus.
 const MPRIS_BUS_PREFIX: &str = "org.mpris.MediaPlayer2.";
@@ -19,9 +19,9 @@ const MPRIS_BUS_PREFIX: &str = "org.mpris.MediaPlayer2.";
 ///
 /// Discovers existing players on startup and monitors for new players
 /// being added or removed from the system.
-pub struct Discovery;
+pub(crate) struct PlayerDiscovery;
 
-impl Discovery {
+impl PlayerDiscovery {
     /// Start player discovery process.
     ///
     /// Discovers all existing MPRIS players and sets up monitoring
@@ -30,7 +30,7 @@ impl Discovery {
     /// # Errors
     ///
     /// Returns error if D-Bus proxy creation fails
-    pub async fn start(
+    pub(crate) async fn start(
         connection: &Connection,
         players: &Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
         player_list: &Property<Vec<PlayerId>>,

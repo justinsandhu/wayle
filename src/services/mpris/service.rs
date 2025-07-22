@@ -9,19 +9,8 @@ use zbus::Connection;
 
 use crate::services::common::Property;
 
-use super::control::Control;
-use super::discovery::Discovery;
-use super::models::Player;
-use super::monitoring::PlayerMonitor;
-use super::proxy::MediaPlayer2PlayerProxy;
+use super::player::{Control, Player, PlayerDiscovery, PlayerHandle};
 use super::{LoopMode, MediaError, PlayerId, ShuffleMode, Volume};
-
-/// Player handle containing the reactive model and associated resources.
-pub(super) struct PlayerHandle {
-    pub(super) player: Arc<Player>,
-    pub(super) proxy: MediaPlayer2PlayerProxy<'static>,
-    pub(super) _monitor: PlayerMonitor,
-}
 
 /// Configuration for the MPRIS service
 #[derive(Default)]
@@ -75,7 +64,7 @@ impl MprisService {
             ignored_patterns: config.ignored_players,
         };
 
-        Discovery::start(
+        PlayerDiscovery::start(
             &service.connection,
             &service.players,
             &service.player_list,

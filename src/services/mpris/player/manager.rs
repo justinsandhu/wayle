@@ -7,16 +7,17 @@ use zbus::names::OwnedBusName;
 
 use crate::services::common::Property;
 
-use super::models::Player;
+use super::handle::PlayerHandle;
+use super::metadata::TrackMetadata;
+use super::model::Player;
 use super::monitoring::PlayerMonitor;
-use super::proxy::{MediaPlayer2PlayerProxy, MediaPlayer2Proxy};
-use super::service::PlayerHandle;
-use super::{LoopMode, MediaError, PlaybackState, PlayerId, ShuffleMode, TrackMetadata, Volume};
+use crate::services::mpris::proxy::{MediaPlayer2PlayerProxy, MediaPlayer2Proxy};
+use crate::services::mpris::{LoopMode, MediaError, PlaybackState, PlayerId, ShuffleMode, Volume};
 
 /// Manages player lifecycle operations.
 ///
 /// Handles adding, removing, and refreshing player state.
-pub struct PlayerManager;
+pub(crate) struct PlayerManager;
 
 impl PlayerManager {
     /// Add a new player to the service.
@@ -26,7 +27,7 @@ impl PlayerManager {
     /// # Errors
     ///
     /// Returns error if D-Bus proxy creation fails or player initialization fails
-    pub async fn add_player(
+    pub(crate) async fn add_player(
         connection: &Connection,
         players: &Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
         player_list: &Property<Vec<PlayerId>>,
@@ -87,7 +88,7 @@ impl PlayerManager {
     /// Remove a player from the service.
     ///
     /// Also updates active player if the removed player was active.
-    pub async fn remove_player(
+    pub(crate) async fn remove_player(
         players: &Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
         player_list: &Property<Vec<PlayerId>>,
         active_player: &Property<Option<PlayerId>>,

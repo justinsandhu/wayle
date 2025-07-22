@@ -10,15 +10,11 @@ pub mod service;
 /// Type definitions for MPRIS functionality
 pub mod types;
 
-pub mod models;
-mod monitoring;
+pub mod player;
 mod proxy;
-mod control;
-mod discovery;
-mod player_manager;
 
 pub use error::MediaError;
-pub use models::Player;
+pub use player::{Player, TrackMetadata, UNKNOWN_METADATA};
 pub use service::{Config, MprisService};
 pub use types::*;
 

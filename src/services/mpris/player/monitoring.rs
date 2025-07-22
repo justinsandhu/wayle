@@ -4,14 +4,16 @@ use futures::StreamExt;
 use tokio::task::JoinHandle;
 use tracing::{debug, instrument};
 
+use super::metadata::TrackMetadata;
 use crate::services::mpris::{
-    models::Player,
     proxy::MediaPlayer2PlayerProxy,
-    types::{LoopMode, PlaybackState, PlayerId, ShuffleMode, TrackMetadata, Volume},
+    types::{LoopMode, PlaybackState, PlayerId, ShuffleMode, Volume},
 };
 
+use super::Player;
+
 /// Monitors D-Bus properties and updates the reactive Player model.
-pub struct PlayerMonitor {
+pub(crate) struct PlayerMonitor {
     handle: JoinHandle<()>,
 }
 

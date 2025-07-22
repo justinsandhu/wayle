@@ -5,8 +5,8 @@ use zbus::fdo::PropertiesProxy;
 use zbus::names::{InterfaceName, MemberName};
 use zbus::zvariant::ObjectPath;
 
-use super::service::PlayerHandle;
-use super::{LoopMode, MediaError, ShuffleMode, Volume};
+use super::handle::PlayerHandle;
+use crate::services::mpris::{LoopMode, MediaError, ShuffleMode, Volume};
 
 /// MPRIS service name for D-Bus Player.
 const MPRIS_BUS_PLAYER_PATH: &str = "org.mpris.MediaPlayer2.Player";
@@ -15,7 +15,7 @@ const MPRIS_BUS_PLAYER_PATH: &str = "org.mpris.MediaPlayer2.Player";
 ///
 /// This module handles all player control operations like play/pause,
 /// seek, volume control, etc.
-pub struct Control;
+pub(crate) struct Control;
 
 impl Control {
     /// Control playback for a player.
@@ -23,7 +23,7 @@ impl Control {
     /// # Errors
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails
-    pub async fn play_pause(handle: &PlayerHandle) -> Result<(), MediaError> {
+    pub(crate) async fn play_pause(handle: &PlayerHandle) -> Result<(), MediaError> {
         handle
             .proxy
             .play_pause()
@@ -37,7 +37,7 @@ impl Control {
     /// # Errors
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails
-    pub async fn next(handle: &PlayerHandle) -> Result<(), MediaError> {
+    pub(crate) async fn next(handle: &PlayerHandle) -> Result<(), MediaError> {
         handle
             .proxy
             .next()
@@ -51,7 +51,7 @@ impl Control {
     /// # Errors
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails
-    pub async fn previous(handle: &PlayerHandle) -> Result<(), MediaError> {
+    pub(crate) async fn previous(handle: &PlayerHandle) -> Result<(), MediaError> {
         handle
             .proxy
             .previous()
@@ -65,7 +65,7 @@ impl Control {
     /// # Errors
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails
-    pub async fn seek(handle: &PlayerHandle, offset: Duration) -> Result<(), MediaError> {
+    pub(crate) async fn seek(handle: &PlayerHandle, offset: Duration) -> Result<(), MediaError> {
         let offset_micros = offset.as_micros() as i64;
         handle
             .proxy
@@ -80,7 +80,10 @@ impl Control {
     /// # Errors
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails
-    pub async fn set_position(handle: &PlayerHandle, position: Duration) -> Result<(), MediaError> {
+    pub(crate) async fn set_position(
+        handle: &PlayerHandle,
+        position: Duration,
+    ) -> Result<(), MediaError> {
         let position_micros = position.as_micros() as i64;
         let track_id = handle.player.track_id.get();
         let track_path = track_id.as_deref().unwrap_or("/");
@@ -101,7 +104,10 @@ impl Control {
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails,
     /// or if the loop mode is unsupported
-    pub async fn set_loop_mode(handle: &PlayerHandle, mode: LoopMode) -> Result<(), MediaError> {
+    pub(crate) async fn set_loop_mode(
+        handle: &PlayerHandle,
+        mode: LoopMode,
+    ) -> Result<(), MediaError> {
         let status = match mode {
             LoopMode::None => "None",
             LoopMode::Track => "Track",
@@ -127,7 +133,7 @@ impl Control {
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails,
     /// or if shuffle is unsupported
-    pub async fn set_shuffle_mode(
+    pub(crate) async fn set_shuffle_mode(
         handle: &PlayerHandle,
         mode: ShuffleMode,
     ) -> Result<(), MediaError> {
@@ -154,7 +160,10 @@ impl Control {
     /// # Errors
     ///
     /// Returns `MediaError::ControlFailed` if the D-Bus operation fails
-    pub async fn set_volume(handle: &PlayerHandle, volume: Volume) -> Result<(), MediaError> {
+    pub(crate) async fn set_volume(
+        handle: &PlayerHandle,
+        volume: Volume,
+    ) -> Result<(), MediaError> {
         handle
             .proxy
             .set_volume(*volume)
@@ -167,7 +176,10 @@ impl Control {
     ///
     /// Position is polled on-demand rather than streamed.
     /// Creates a fresh properties proxy to avoid caching.
-    pub async fn position(handle: &PlayerHandle, connection: &Connection) -> Option<Duration> {
+    pub(crate) async fn position(
+        handle: &PlayerHandle,
+        connection: &Connection,
+    ) -> Option<Duration> {
         let destination = handle.proxy.inner().destination().to_owned();
         let path = handle.proxy.inner().path().to_owned();
 
