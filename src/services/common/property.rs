@@ -32,10 +32,10 @@ impl<T: Clone + Send + Sync + 'static> Property<T> {
         let _ = self.tx.send_if_modified(|current| {
             if *current != new_value {
                 *current = new_value;
-                true
-            } else {
-                false
+                return true;
             }
+
+            false
         });
     }
 

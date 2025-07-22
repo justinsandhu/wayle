@@ -42,7 +42,7 @@ impl Command for ShuffleCommand {
                     details: e.to_string(),
                 })?;
         let player_id = get_player_id_or_active(&media_service, args.first()).await?;
-        let player_name = get_player_display_name(&media_service, &player_id).await;
+        let player_name = get_player_display_name(&media_service, &player_id);
 
         media_service
             .toggle_shuffle(&player_id)

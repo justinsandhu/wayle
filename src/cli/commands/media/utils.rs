@@ -18,11 +18,11 @@ use crate::{
 /// # Errors
 ///
 /// Returns CliError if no matching player is found or multiple matches exist
-pub async fn find_player_by_identifier(
+pub fn find_player_by_identifier(
     service: &MediaService,
     identifier: &str,
 ) -> Result<PlayerId, CliError> {
-    let players = service.players().await;
+    let players = service.players();
 
     if players.is_empty() {
         return Err(CliError::InvalidArgument {
@@ -93,7 +93,7 @@ pub async fn get_player_id_or_active(
     identifier: Option<&String>,
 ) -> Result<PlayerId, CliError> {
     if let Some(id) = identifier {
-        let player_id = find_player_by_identifier(service, id).await?;
+        let player_id = find_player_by_identifier(service, id)?;
 
         service
             .set_active_player(Some(player_id.clone()))
@@ -117,8 +117,8 @@ pub async fn get_player_id_or_active(
 /// Formats a player's display name for output
 ///
 /// Returns the player's identity if available, otherwise returns the bus name
-pub async fn get_player_display_name(service: &MediaService, player_id: &PlayerId) -> String {
-    if let Some(player) = service.player(player_id).await {
+pub fn get_player_display_name(service: &MediaService, player_id: &PlayerId) -> String {
+    if let Some(player) = service.player(player_id) {
         player.identity.get()
     } else {
         player_id.bus_name().to_string()

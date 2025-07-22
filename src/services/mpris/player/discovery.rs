@@ -7,6 +7,7 @@ use zbus::Connection;
 use zbus::fdo::DBusProxy;
 
 use super::handle::PlayerHandle;
+use super::model::Player;
 use crate::services::common::Property;
 use crate::services::mpris::{MediaError, PlayerId};
 
@@ -33,7 +34,7 @@ impl PlayerDiscovery {
     pub(crate) async fn start(
         connection: &Connection,
         players: &Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
-        player_list: &Property<Vec<PlayerId>>,
+        player_list: &Property<Vec<Arc<Player>>>,
         active_player: &Property<Option<PlayerId>>,
         ignored_patterns: &[String],
     ) -> Result<(), MediaError> {
@@ -80,7 +81,7 @@ impl PlayerDiscovery {
     fn spawn_name_monitoring(
         connection: Connection,
         players: Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
-        player_list: Property<Vec<PlayerId>>,
+        player_list: Property<Vec<Arc<Player>>>,
         active_player: Property<Option<PlayerId>>,
         ignored_patterns: Vec<String>,
     ) {

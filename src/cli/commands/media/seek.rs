@@ -157,11 +157,11 @@ impl Command for SeekCommand {
                     details: e.to_string(),
                 })?;
         let player_id = get_player_id_or_active(&media_service, player_arg).await?;
-        let player_name = get_player_display_name(&media_service, &player_id).await;
+        let player_name = get_player_display_name(&media_service, &player_id);
 
         let current_position = media_service.position(&player_id).await;
 
-        let track_length = if let Some(player) = media_service.player(&player_id).await {
+        let track_length = if let Some(player) = media_service.player(&player_id) {
             player.length.get()
         } else {
             None

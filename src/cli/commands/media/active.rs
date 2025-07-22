@@ -44,8 +44,8 @@ impl Command for ActiveCommand {
                 })?;
 
         if let Some(identifier) = args.first() {
-            let player_id = find_player_by_identifier(&media_service, identifier).await?;
-            let player_name = get_player_display_name(&media_service, &player_id).await;
+            let player_id = find_player_by_identifier(&media_service, identifier)?;
+            let player_name = get_player_display_name(&media_service, &player_id);
 
             media_service
                 .set_active_player(Some(player_id))
@@ -59,7 +59,7 @@ impl Command for ActiveCommand {
         } else {
             match media_service.active_player() {
                 Some(player_id) => {
-                    let player_name = get_player_display_name(&media_service, &player_id).await;
+                    let player_name = get_player_display_name(&media_service, &player_id);
                     Ok(format!("Active player: {player_name}"))
                 }
                 None => Ok("No active player set".to_string()),

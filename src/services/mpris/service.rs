@@ -26,7 +26,7 @@ pub struct Config {
 pub struct MprisService {
     connection: Connection,
     players: Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
-    player_list: Property<Vec<PlayerId>>,
+    player_list: Property<Vec<Arc<Player>>>,
     active_player: Property<Option<PlayerId>>,
     ignored_patterns: Vec<String>,
 }
@@ -77,28 +77,22 @@ impl MprisService {
     }
 
     /// Get a reactive player by ID.
-    pub async fn player(&self, player_id: &PlayerId) -> Option<Arc<Player>> {
-        self.players
-            .read()
-            .await
-            .get(player_id)
-            .map(|handle| Arc::clone(&handle.player))
+    pub fn player(&self, player_id: &PlayerId) -> Option<Arc<Player>> {
+        self.player_list
+            .get()
+            .into_iter()
+            .find(|p| &p.id == player_id)
     }
 
     /// Get all players.
-    pub async fn players(&self) -> Vec<Arc<Player>> {
-        self.players
-            .read()
-            .await
-            .values()
-            .map(|handle| Arc::clone(&handle.player))
-            .collect()
+    pub fn players(&self) -> Vec<Arc<Player>> {
+        self.player_list.get()
     }
 
     /// Watch for changes to the player list.
     ///
     /// Emits whenever players are added or removed from the system.
-    pub fn watch_players(&self) -> impl Stream<Item = Vec<PlayerId>> + Send {
+    pub fn watch_players(&self) -> impl Stream<Item = Vec<Arc<Player>>> + Send {
         self.player_list.watch()
     }
 

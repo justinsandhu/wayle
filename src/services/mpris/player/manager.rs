@@ -30,7 +30,7 @@ impl PlayerManager {
     pub(crate) async fn add_player(
         connection: &Connection,
         players: &Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
-        player_list: &Property<Vec<PlayerId>>,
+        player_list: &Property<Vec<Arc<Player>>>,
         active_player: &Property<Option<PlayerId>>,
         player_id: PlayerId,
     ) -> Result<(), MediaError> {
@@ -72,6 +72,7 @@ impl PlayerManager {
         };
 
         let mut players_map = players.write().await;
+        let player_clone = Arc::clone(&handle.player);
         players_map.insert(player_id.clone(), handle);
 
         if active_player.get().is_none() {
@@ -79,7 +80,7 @@ impl PlayerManager {
         }
 
         let mut current_list = player_list.get();
-        current_list.push(player_id);
+        current_list.push(player_clone);
         player_list.set(current_list);
 
         Ok(())
@@ -90,7 +91,7 @@ impl PlayerManager {
     /// Also updates active player if the removed player was active.
     pub(crate) async fn remove_player(
         players: &Arc<RwLock<HashMap<PlayerId, PlayerHandle>>>,
-        player_list: &Property<Vec<PlayerId>>,
+        player_list: &Property<Vec<Arc<Player>>>,
         active_player: &Property<Option<PlayerId>>,
         player_id: PlayerId,
     ) {
@@ -103,9 +104,9 @@ impl PlayerManager {
         }
 
         let current_list = player_list.get();
-        let updated_list: Vec<PlayerId> = current_list
+        let updated_list: Vec<Arc<Player>> = current_list
             .into_iter()
-            .filter(|id| id != &player_id)
+            .filter(|player| player.id != player_id)
             .collect();
         player_list.set(updated_list);
     }

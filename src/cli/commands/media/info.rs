@@ -96,7 +96,7 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        if let Some(player) = service.player(player_id).await {
+        if let Some(player) = service.player(player_id) {
             output.push_str(&format!("Player: {}\n", player.identity.get()));
             output.push_str(&format!("Bus Name: {}\n", player_id.bus_name()));
             output.push_str(&format!("Can Control: {}\n\n", player.can_control.get()));
@@ -120,7 +120,7 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        if let Some(player) = service.player(player_id).await {
+        if let Some(player) = service.player(player_id) {
             let state = player.playback_state.get();
             let state_str = match state {
                 PlaybackState::Playing => "▶ Playing",
@@ -132,7 +132,7 @@ impl InfoCommand {
     }
 
     async fn add_modes(&self, service: &MediaService, player_id: &PlayerId, output: &mut String) {
-        if let Some(player) = service.player(player_id).await {
+        if let Some(player) = service.player(player_id) {
             let loop_mode = player.loop_mode.get();
             let loop_str = match loop_mode {
                 LoopMode::None => "Off",
@@ -158,7 +158,7 @@ impl InfoCommand {
         player_id: &PlayerId,
         output: &mut String,
     ) {
-        if let Some(player) = service.player(player_id).await {
+        if let Some(player) = service.player(player_id) {
             output.push_str("Current Track:\n");
             let title = player.title.get();
             if !title.is_empty() && title != UNKNOWN_METADATA {

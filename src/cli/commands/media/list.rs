@@ -36,7 +36,7 @@ impl Command for ListCommand {
                     service: "Media".to_string(),
                     details: e.to_string(),
                 })?;
-        let players = media_service.players().await;
+        let players = media_service.players();
 
         if players.is_empty() {
             return Ok("No media players found".to_string());

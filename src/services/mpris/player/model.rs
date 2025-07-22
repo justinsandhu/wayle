@@ -61,6 +61,12 @@ pub struct Player {
     pub can_shuffle: Property<bool>,
 }
 
+impl PartialEq for Player {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
 impl Player {
     /// Create a new player with default values.
     pub fn new(id: PlayerId, identity: String) -> Self {
