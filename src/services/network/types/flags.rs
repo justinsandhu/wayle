@@ -247,4 +247,3 @@ bitflags! {
         const EXTERNAL = 0x00000080;
     }
 }
-

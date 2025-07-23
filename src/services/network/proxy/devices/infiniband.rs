@@ -16,4 +16,3 @@ pub trait DeviceInfiniband {
     #[zbus(property)]
     fn carrier(&self) -> zbus::Result<bool>;
 }
-

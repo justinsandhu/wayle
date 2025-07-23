@@ -28,4 +28,3 @@ pub trait DeviceMacvlan {
     #[zbus(property)]
     fn tap(&self) -> zbus::Result<bool>;
 }
-

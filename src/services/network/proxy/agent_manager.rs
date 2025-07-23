@@ -28,4 +28,3 @@ pub trait AgentManager {
     /// Called by secret Agents to notify NetworkManager that they will no longer handle requests for network secrets.
     fn unregister(&self) -> zbus::Result<()>;
 }
-

@@ -36,4 +36,3 @@ pub trait DeviceTun {
     #[zbus(property)]
     fn multi_queue(&self) -> zbus::Result<bool>;
 }
-

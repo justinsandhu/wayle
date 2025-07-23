@@ -12,4 +12,3 @@ pub trait DeviceWpan {
     #[zbus(property)]
     fn hw_address(&self) -> zbus::Result<String>;
 }
-

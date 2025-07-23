@@ -24,4 +24,3 @@ pub trait DeviceStatistics {
     #[zbus(property)]
     fn rx_bytes(&self) -> zbus::Result<u64>;
 }
-

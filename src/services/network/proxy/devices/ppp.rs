@@ -10,4 +10,3 @@ use zbus::proxy;
 pub trait DevicePpp {
     // No properties
 }
-

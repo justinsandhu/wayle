@@ -16,4 +16,3 @@ pub trait DeviceGeneric {
     #[zbus(property)]
     fn type_description(&self) -> zbus::Result<String>;
 }
-

@@ -30,4 +30,3 @@ pub trait DeviceWired {
     #[zbus(property)]
     fn carrier(&self) -> zbus::Result<bool>;
 }
-

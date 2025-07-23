@@ -22,4 +22,3 @@ pub trait Checkpoint {
     #[zbus(property)]
     fn rollback_timeout(&self) -> zbus::Result<u32>;
 }
-

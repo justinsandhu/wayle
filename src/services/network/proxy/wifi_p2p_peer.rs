@@ -32,4 +32,3 @@ pub trait WifiP2PPeer {
     #[zbus(property)]
     fn last_seen(&self) -> zbus::Result<i32>;
 }
-

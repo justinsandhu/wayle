@@ -76,4 +76,3 @@ pub trait DeviceVxlan {
     #[zbus(property)]
     fn learning(&self) -> zbus::Result<bool>;
 }
-

@@ -16,4 +16,3 @@ pub trait DeviceLowpan {
     #[zbus(property)]
     fn parent(&self) -> zbus::Result<OwnedObjectPath>;
 }
-

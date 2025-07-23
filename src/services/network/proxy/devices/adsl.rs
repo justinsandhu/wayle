@@ -12,4 +12,3 @@ pub trait DeviceAdsl {
     #[zbus(property)]
     fn carrier(&self) -> zbus::Result<bool>;
 }
-

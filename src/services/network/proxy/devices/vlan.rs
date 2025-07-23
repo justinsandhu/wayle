@@ -24,4 +24,3 @@ pub trait DeviceVlan {
     #[zbus(property)]
     fn vlan_id(&self) -> zbus::Result<u32>;
 }
-

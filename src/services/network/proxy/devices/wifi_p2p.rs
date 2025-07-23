@@ -41,4 +41,3 @@ pub trait DeviceWifiP2P {
     #[zbus(signal)]
     fn peer_removed(&self, peer: OwnedObjectPath) -> zbus::Result<()>;
 }
-

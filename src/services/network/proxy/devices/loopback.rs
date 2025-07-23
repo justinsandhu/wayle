@@ -10,4 +10,3 @@ use zbus::proxy;
 pub trait DeviceLoopback {
     // No properties
 }
-

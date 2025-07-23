@@ -32,4 +32,3 @@ pub trait DeviceHsr {
     #[zbus(property)]
     fn protocol(&self) -> zbus::Result<String>;
 }
-

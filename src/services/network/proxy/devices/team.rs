@@ -24,4 +24,3 @@ pub trait DeviceTeam {
     #[zbus(property)]
     fn config(&self) -> zbus::Result<String>;
 }
-

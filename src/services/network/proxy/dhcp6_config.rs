@@ -15,4 +15,3 @@ pub trait DHCP6Config {
     #[zbus(property)]
     fn options(&self) -> zbus::Result<HashMap<String, Variant>>;
 }
-

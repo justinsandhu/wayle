@@ -5,28 +5,29 @@ edition = "2024"
 license = "GPL-3.0-only"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-toml = "0"
-thiserror = "2"
-schemars = { version = "1", features = ["derive"] }
-serde_json = "1"
-clap = { version = "4.0", features = ["derive"] }
-notify = "8"
-tokio = { version = "1", features = ["full"] }
-tokio-stream = { version = "0", features = ["sync"] }
-regex = "1"
-futures = "0"
-relm4 = { version = "0" }
-async-trait = "0.1"
-zbus = "5"
 async-stream = "0.3"
+async-trait = "0.1"
+bitflags = "2"
+chrono = { version = "0.4", features = ["clock"] }
+clap = { version = "4.0", features = ["derive"] }
+futures = "0"
 libpulse-binding = "2.28"
 libc = "0.2"
-chrono = { version = "0.4", features = ["clock"] }
+notify = "8"
+regex = "1"
+relm4 = { version = "0" }
+schemars = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+toml = "0"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0", features = ["sync"] }
 tracing = "0.1"
 tracing-attributes = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
+zbus = "5"
 
 [dev-dependencies]
 tempfile = "3"

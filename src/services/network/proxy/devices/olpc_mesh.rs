@@ -20,4 +20,3 @@ pub trait DeviceOlpcMesh {
     #[zbus(property)]
     fn active_channel(&self) -> zbus::Result<u32>;
 }
-

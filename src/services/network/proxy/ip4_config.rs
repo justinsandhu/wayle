@@ -59,4 +59,3 @@ pub trait IP4Config {
     #[zbus(property)]
     fn wins_server_data(&self) -> zbus::Result<Vec<String>>;
 }
-

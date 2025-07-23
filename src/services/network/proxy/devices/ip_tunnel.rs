@@ -56,4 +56,3 @@ pub trait DeviceIPTunnel {
     #[zbus(property)]
     fn encapsulation_limit(&self) -> zbus::Result<u8>;
 }
-

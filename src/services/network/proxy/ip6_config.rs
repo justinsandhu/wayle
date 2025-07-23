@@ -51,4 +51,3 @@ pub trait IP6Config {
     #[zbus(property)]
     fn dns_priority(&self) -> zbus::Result<i32>;
 }
-

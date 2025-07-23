@@ -20,4 +20,3 @@ pub trait DeviceBond {
     #[zbus(property)]
     fn slaves(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 }
-

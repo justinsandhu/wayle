@@ -28,4 +28,3 @@ pub trait DeviceModem {
     #[zbus(property)]
     fn apn(&self) -> zbus::Result<String>;
 }
-

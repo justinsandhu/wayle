@@ -10,4 +10,3 @@ use zbus::proxy;
 pub trait DeviceOvsInterface {
     // No properties
 }
-

@@ -24,4 +24,3 @@ pub trait DnsManager {
     #[zbus(property)]
     fn configuration(&self) -> zbus::Result<Vec<HashMap<String, Variant>>>;
 }
-

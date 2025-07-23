@@ -12,4 +12,3 @@ pub trait DeviceVeth {
     #[zbus(property)]
     fn peer(&self) -> zbus::Result<OwnedObjectPath>;
 }
-

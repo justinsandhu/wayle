@@ -12,4 +12,3 @@ pub trait DeviceVrf {
     #[zbus(property)]
     fn table(&self) -> zbus::Result<u32>;
 }
-

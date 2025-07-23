@@ -64,4 +64,3 @@ pub trait DeviceMacsec {
     #[zbus(property)]
     fn replay_protect(&self) -> zbus::Result<bool>;
 }
-

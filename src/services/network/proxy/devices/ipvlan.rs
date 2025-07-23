@@ -28,4 +28,3 @@ pub trait DeviceIpvlan {
     #[zbus(property)]
     fn vepa(&self) -> zbus::Result<bool>;
 }
-

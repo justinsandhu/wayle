@@ -50,4 +50,3 @@ pub trait AccessPoint {
     #[zbus(property)]
     fn last_seen(&self) -> zbus::Result<i32>;
 }
-

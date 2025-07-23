@@ -20,4 +20,3 @@ pub trait DeviceBluetooth {
     #[zbus(property)]
     fn bt_capabilities(&self) -> zbus::Result<u32>;
 }
-
