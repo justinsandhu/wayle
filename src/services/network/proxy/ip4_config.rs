@@ -1,7 +1,7 @@
 //! NetworkManager IPv4 Configuration interface.
 
 use std::collections::HashMap;
-use zbus::{proxy, zvariant::Value as Variant};
+use zbus::{proxy, zvariant::OwnedValue};
 
 /// IPv4 Configuration Set.
 ///
@@ -17,7 +17,7 @@ pub trait IP4Config {
 
     /// Array of IP address data objects.
     #[zbus(property)]
-    fn address_data(&self) -> zbus::Result<Vec<HashMap<String, Variant>>>;
+    fn address_data(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 
     /// The gateway in use.
     #[zbus(property)]
@@ -29,15 +29,11 @@ pub trait IP4Config {
 
     /// Array of IP route data objects.
     #[zbus(property)]
-    fn route_data(&self) -> zbus::Result<Vec<HashMap<String, Variant>>>;
+    fn route_data(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 
     /// Array of nameserver data objects.
     #[zbus(property)]
-    fn nameserver_data(&self) -> zbus::Result<Vec<HashMap<String, Variant>>>;
-
-    /// The nameservers in use.
-    #[zbus(property)]
-    fn nameservers(&self) -> zbus::Result<Vec<u32>>;
+    fn nameserver_data(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 
     /// A list of domains this address belongs to.
     #[zbus(property)]

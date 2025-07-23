@@ -1,7 +1,10 @@
 //! NetworkManager IPv6 Configuration interface.
 
 use std::collections::HashMap;
-use zbus::{proxy, zvariant::Value as Variant};
+use zbus::{proxy, zvariant::OwnedValue};
+
+/// (Address, Prefix, Gateway)
+type AddressInfo = (Vec<u8>, u32, Vec<u8>);
 
 /// IPv6 Configuration Set.
 ///
@@ -13,11 +16,11 @@ use zbus::{proxy, zvariant::Value as Variant};
 pub trait IP6Config {
     /// Array of tuples of IPv6 address/prefix/gateway.
     #[zbus(property)]
-    fn addresses(&self) -> zbus::Result<Vec<(Vec<u8>, u32, Vec<u8>)>>;
+    fn addresses(&self) -> zbus::Result<AddressInfo>;
 
     /// Array of IP address data objects.
     #[zbus(property)]
-    fn address_data(&self) -> zbus::Result<Vec<HashMap<String, Variant>>>;
+    fn address_data(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 
     /// The gateway in use.
     #[zbus(property)]
@@ -25,15 +28,15 @@ pub trait IP6Config {
 
     /// Array of tuples of IPv6 route/prefix/next-hop/metric.
     #[zbus(property)]
-    fn routes(&self) -> zbus::Result<Vec<(Vec<u8>, u32, Vec<u8>, u32)>>;
+    fn routes(&self) -> zbus::Result<AddressInfo>;
 
     /// Array of IP route data objects.
     #[zbus(property)]
-    fn route_data(&self) -> zbus::Result<Vec<HashMap<String, Variant>>>;
+    fn route_data(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 
     /// Array of nameserver data objects.
     #[zbus(property)]
-    fn nameserver_data(&self) -> zbus::Result<Vec<HashMap<String, Variant>>>;
+    fn nameserver_data(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 
     /// A list of domains this address belongs to.
     #[zbus(property)]

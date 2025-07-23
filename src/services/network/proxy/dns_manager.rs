@@ -1,7 +1,7 @@
 //! NetworkManager DNS Manager interface.
 
 use std::collections::HashMap;
-use zbus::{proxy, zvariant::Value as Variant};
+use zbus::{proxy, zvariant::OwnedValue};
 
 /// DNS Configuration State.
 ///
@@ -22,5 +22,5 @@ pub trait DnsManager {
 
     /// The current DNS configuration.
     #[zbus(property)]
-    fn configuration(&self) -> zbus::Result<Vec<HashMap<String, Variant>>>;
+    fn configuration(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 }

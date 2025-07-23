@@ -255,6 +255,12 @@ pub trait NetworkManager {
     #[zbus(property)]
     fn wwan_hardware_enabled(&self) -> zbus::Result<bool>;
 
+    /// Flags related to radio devices.
+    ///
+    /// See NMRadioFlags for the list of flags supported.
+    #[zbus(property)]
+    fn radio_flags(&self) -> zbus::Result<u32>;
+
     /// List of active connection object paths.
     #[zbus(property)]
     fn active_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
@@ -282,6 +288,19 @@ pub trait NetworkManager {
     /// NetworkManager version.
     #[zbus(property)]
     fn version(&self) -> zbus::Result<String>;
+
+    /// NetworkManager version and capabilities.
+    ///
+    /// The first element is the NM_VERSION (major << 16 | minor << 8 | micro).
+    /// Following elements are a bitfield of static capabilities.
+    #[zbus(property)]
+    fn version_info(&self) -> zbus::Result<Vec<u32>>;
+
+    /// The current set of capabilities.
+    ///
+    /// Array is guaranteed to be sorted in ascending order without duplicates.
+    #[zbus(property)]
+    fn capabilities(&self) -> zbus::Result<Vec<u32>>;
 
     /// The overall state of the NetworkManager daemon.
     #[zbus(property, name = "State")]
