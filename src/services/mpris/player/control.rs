@@ -183,7 +183,6 @@ impl Control {
         let destination = handle.proxy.inner().destination().to_owned();
         let path = handle.proxy.inner().path().to_owned();
 
-        // Create fresh properties proxy to avoid cached values
         let proxy = PropertiesProxy::builder(connection)
             .destination(destination)
             .ok()?
