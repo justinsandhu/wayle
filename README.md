@@ -20,7 +20,7 @@ A fast, configurable desktop environment framework for Wayland compositors. Buil
 - [ ] **Bluetooth**
 - [ ] **Cava**
 - [ ] **Hyprland**
-- [ ] **Network**
+- [ ] **Network** (WIP)
 - [ ] **Notification Daemon**
 - [ ] **Power Profiles**
 - [ ] **System Tray**
