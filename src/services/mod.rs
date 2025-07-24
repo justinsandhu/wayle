@@ -3,7 +3,7 @@ pub mod common;
 /// MPRIS media player control service
 pub mod mpris;
 /// Network Manager control service
-pub mod network;
+pub mod network_manager;
 /// PulseAudio control service
 pub mod pulse;
 
