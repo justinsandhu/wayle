@@ -83,6 +83,7 @@ impl NetworkIdentifier {
 /// Access points are identified by their BSSID (hardware address) and provide
 /// information about available wireless networks including signal strength,
 /// security capabilities, and network properties.
+#[derive(Debug, Clone)]
 pub struct AccessPoint {
     /// The Service Set Identifier identifying the access point.
     /// The SSID is a binary array to support non-UTF-8 SSIDs.

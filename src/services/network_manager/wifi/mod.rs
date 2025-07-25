@@ -1,7 +1,6 @@
 mod access_points;
-mod connections;
 mod control;
-mod device;
 mod manager;
+mod saved_connections;
 
 pub struct Wifi {}

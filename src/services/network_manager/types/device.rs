@@ -100,3 +100,18 @@ pub enum NMIPTunnelMode {
     /// IPv6 GRETAP tunnel
     Ip6gretap = 11,
 }
+
+/// LLDP (Link Layer Discovery Protocol) neighbor information.
+///
+/// Contains information advertised by directly connected network devices
+/// using the LLDP protocol. Used for network topology discovery.
+#[derive(Debug, Clone)]
+pub struct LldpNeighbor {
+    pub chassis_id: Option<String>,
+    pub port_id: Option<String>,
+    pub port_description: Option<String>,
+    pub system_name: Option<String>,
+    pub system_description: Option<String>,
+    pub system_capabilities: Option<u32>,
+    pub management_addresses: Option<Vec<String>>,
+}
