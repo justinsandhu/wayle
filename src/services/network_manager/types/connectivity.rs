@@ -34,6 +34,20 @@ pub enum NMConnectivityState {
     Full = 4,
 }
 
+impl NMConnectivityState {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::None,
+            2 => Self::Portal,
+            3 => Self::Limited,
+            4 => Self::Full,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// The NMMetered enum has two different purposes: one is to configure
 /// "connection.metered" setting of a connection profile in NMSettingConnection,
 /// and the other is to express the actual metered state of the NMDevice at a
@@ -76,4 +90,25 @@ pub enum NMMetered {
     GuessYes = 3,
     /// Not metered, the value was guessed
     GuessNo = 4,
+}
+
+impl NMMetered {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::Yes,
+            2 => Self::No,
+            3 => Self::GuessYes,
+            4 => Self::GuessNo,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionType {
+    Unknown,
+    Wired,
+    Wifi,
 }

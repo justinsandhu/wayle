@@ -70,6 +70,47 @@ pub enum NMDeviceType {
     Vrf = 31,
 }
 
+impl NMDeviceType {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::Ethernet,
+            2 => Self::Wifi,
+            3 => Self::Unused1,
+            4 => Self::Unused2,
+            5 => Self::Bt,
+            6 => Self::OlpcMesh,
+            7 => Self::Wimax,
+            8 => Self::Modem,
+            9 => Self::Infiniband,
+            10 => Self::Bond,
+            11 => Self::Vlan,
+            12 => Self::Adsl,
+            13 => Self::Bridge,
+            14 => Self::Generic,
+            15 => Self::Team,
+            16 => Self::Tun,
+            17 => Self::IpTunnel,
+            18 => Self::Macvlan,
+            19 => Self::Vxlan,
+            20 => Self::Veth,
+            21 => Self::Macsec,
+            22 => Self::Dummy,
+            23 => Self::Ppp,
+            24 => Self::OvsInterface,
+            25 => Self::OvsPort,
+            26 => Self::OvsBridge,
+            27 => Self::Wpan,
+            28 => Self::SixLowpan,
+            29 => Self::Wireguard,
+            30 => Self::WifiP2p,
+            31 => Self::Vrf,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// The tunneling mode.
 ///
 /// Since: 1.2

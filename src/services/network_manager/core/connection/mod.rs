@@ -1,6 +1,7 @@
-use crate::services::common::Property;
-
-use super::{NMActivationStateFlags, NMActiveConnectionState};
+use crate::services::{
+    common::Property,
+    network_manager::{NMActivationStateFlags, NMActiveConnectionState},
+};
 
 #[derive(Debug, Clone)]
 pub struct ActiveConnection {

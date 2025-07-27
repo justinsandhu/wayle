@@ -28,7 +28,7 @@ pub use devices::{
     StateChangedStream as DeviceStateChangedStream, adsl, bluetooth, bond, bridge, dummy, generic,
     hsr, infiniband, ip_tunnel, ipvlan, loopback, lowpan, macsec, macvlan, modem, olpc_mesh,
     ovs_bridge, ovs_interface, ovs_port, ppp as devices_ppp, statistics, team, tun, veth, vlan,
-    vrf, vxlan, wifi_p2p, wired, wireguard, wireless, wpan,
+    vrf, vxlan, wifi_p2p, wired as wired_proxy, wireguard, wireless, wpan,
 };
 pub use dhcp4_config::*;
 pub use dhcp6_config::*;

@@ -18,3 +18,17 @@ pub enum NM80211Mode {
     /// the device is a 802.11s mesh point. Since: 1.20.
     Mesh = 4,
 }
+
+impl NM80211Mode {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::Adhoc,
+            2 => Self::Infra,
+            3 => Self::Ap,
+            4 => Self::Mesh,
+            _ => Self::Unknown,
+        }
+    }
+}

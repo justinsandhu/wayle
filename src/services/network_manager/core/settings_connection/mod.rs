@@ -1,6 +1,4 @@
-use crate::services::common::Property;
-
-use super::NMSettingsConnectionFlags;
+use crate::services::{common::Property, network_manager::NMSettingsConnectionFlags};
 
 /// Connection Settings Profile.
 ///

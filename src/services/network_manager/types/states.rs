@@ -80,6 +80,28 @@ pub enum NMDeviceState {
     Failed = 120,
 }
 
+impl NMDeviceState {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            10 => Self::Unmanaged,
+            20 => Self::Unavailable,
+            30 => Self::Disconnected,
+            40 => Self::Prepare,
+            50 => Self::Config,
+            60 => Self::NeedAuth,
+            70 => Self::IpConfig,
+            80 => Self::IpCheck,
+            90 => Self::Secondaries,
+            100 => Self::Activated,
+            110 => Self::Deactivating,
+            120 => Self::Failed,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// NMActiveConnectionState values indicate the state of a connection to a specific
 /// network while it is starting, connected, or disconnecting from that network.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -258,6 +280,70 @@ pub enum NMDeviceStateReason {
     PeerNotFound = 67,
 }
 
+impl NMDeviceStateReason {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::None,
+            1 => Self::Unknown,
+            2 => Self::NowManaged,
+            3 => Self::NowUnmanaged,
+            4 => Self::ConfigFailed,
+            5 => Self::IpConfigUnavailable,
+            6 => Self::IpConfigExpired,
+            7 => Self::NoSecrets,
+            8 => Self::SupplicantDisconnect,
+            9 => Self::SupplicantConfigFailed,
+            10 => Self::SupplicantFailed,
+            11 => Self::SupplicantTimeout,
+            12 => Self::PppStartFailed,
+            13 => Self::PppDisconnect,
+            14 => Self::PppFailed,
+            15 => Self::DhcpStartFailed,
+            16 => Self::DhcpError,
+            17 => Self::DhcpFailed,
+            18 => Self::SharedStartFailed,
+            19 => Self::SharedFailed,
+            20 => Self::AutoIpStartFailed,
+            21 => Self::AutoIpError,
+            22 => Self::AutoIpFailed,
+            23 => Self::ModemBusy,
+            24 => Self::ModemNoDialTone,
+            25 => Self::ModemNoCarrier,
+            26 => Self::ModemDialTimeout,
+            27 => Self::ModemDialFailed,
+            28 => Self::ModemInitFailed,
+            29 => Self::GsmApnFailed,
+            30 => Self::GsmRegistrationNotSearching,
+            31 => Self::GsmRegistrationDenied,
+            32 => Self::GsmRegistrationTimeout,
+            33 => Self::GsmRegistrationFailed,
+            34 => Self::GsmPinCheckFailed,
+            35 => Self::FirmwareMissing,
+            36 => Self::Removed,
+            37 => Self::Sleeping,
+            38 => Self::ConnectionRemoved,
+            39 => Self::UserRequested,
+            40 => Self::Carrier,
+            41 => Self::ConnectionAssumed,
+            42 => Self::SupplicantAvailable,
+            43 => Self::ModemAvailable,
+            44 => Self::ModemFailed,
+            45 => Self::ModemAvailable,
+            46 => Self::SimPinIncorrect,
+            47 => Self::NewActivation,
+            48 => Self::ParentChanged,
+            49 => Self::ParentManagedChanged,
+            50 => Self::OvsdbFailed,
+            51 => Self::IpAddressDuplicate,
+            52 => Self::IpMethodUnsupported,
+            53 => Self::SriovConfigurationFailed,
+            54 => Self::PeerNotFound,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// Active connection state reasons.
 ///
 /// Since: 1.8
@@ -338,4 +424,17 @@ pub enum NMRollbackResult {
     ErrDeviceUnmanaged = 2,
     /// other errors during rollback.
     ErrFailed = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NetworkStatus {
+    /// Full network connectivity with internet access
+    Connected,
+
+    /// Establishing network connection
+    /// (obtaining IP, authenticating, etc.)
+    Connecting,
+
+    /// No network connection
+    Disconnected,
 }

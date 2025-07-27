@@ -1,24 +1,23 @@
-mod active_connection;
-mod device;
-mod dhcp4_config;
-mod dhcp6_config;
-/// Ethernet specific functionality
-mod ethernet;
-mod ip4_config;
-mod ip6_config;
-/// Core network functionality
-mod network;
+/// Core domain models for NetworkManager objects
+pub mod core;
+/// Core domain models for NetworkManager objects
+mod discovery;
+/// Network service errors
+mod error;
 /// D-Bus proxy implementations for NetworkManager interfaces.
 mod proxy;
 /// High-level service API for network operations.
 mod service;
-mod settings_connection;
 /// Type definitions for NetworkManager enums, flags, and states.
 mod types;
-/// Wi-Fi specific functionality
+/// Wi-Fi service API
 mod wifi;
+/// Wired service API
+mod wired;
 
+pub use error::NetworkError;
 pub use proxy::*;
-pub use service::*;
+pub use service::NetworkService;
 pub use types::*;
-pub use wifi::*;
+pub use wifi::Wifi;
+pub use wired::Wired;
