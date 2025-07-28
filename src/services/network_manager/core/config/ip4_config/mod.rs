@@ -42,15 +42,21 @@ pub struct Ip4Config {
 /// IPv4 address with prefix length
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ipv4Address {
+    /// The IPv4 address.
     pub address: Ipv4Addr,
+    /// Network prefix length in bits (0-32).
     pub prefix: u8,
 }
 
 /// IPv4 route entry
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ipv4Route {
+    /// Destination network address.
     pub destination: Ipv4Addr,
+    /// Network prefix length in bits (0-32).
     pub prefix: u8,
+    /// Gateway address for this route, if any.
     pub next_hop: Option<Ipv4Addr>,
+    /// Route metric for priority ordering (lower is higher priority).
     pub metric: Option<u32>,
 }

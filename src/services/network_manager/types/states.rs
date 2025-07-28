@@ -3,7 +3,7 @@
 /// NMState values indicate the current overall networking state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NMState {
-    /// Networking state is unknown. This indicates a daemon error that makes it unable to
+    /// Networking state is unknown. Indicates a daemon error that makes it unable to
     /// reasonably assess the state. In such event the applications are expected to assume
     /// Internet connectivity might be present and not disable controls that require network
     /// access. The graphical shells may hide the network accessibility indicator altogether
@@ -11,7 +11,7 @@ pub enum NMState {
     Unknown = 0,
     /// Networking is not enabled, the system is being suspended or resumed from suspend.
     Asleep = 10,
-    /// There is no active network connection. The graphical shell should indicate no
+    /// No active network connection. The graphical shell should indicate no
     /// network connectivity and the applications should not attempt to access the network.
     Disconnected = 20,
     /// Network connections are being cleaned up. The applications should tear down their
@@ -21,14 +21,14 @@ pub enum NMState {
     /// network is being connected while the applications should still make no attempts to
     /// connect the network.
     Connecting = 40,
-    /// There is only local IPv4 and/or IPv6 connectivity, but no default route to access
+    /// Only local IPv4 and/or IPv6 connectivity, but no default route to access
     /// the Internet. The graphical shell should indicate no network connectivity.
     ConnectedLocal = 50,
-    /// There is only site-wide IPv4 and/or IPv6 connectivity. This means a default route
+    /// Site-wide IPv4 and/or IPv6 connectivity only. Default route
     /// is available, but the Internet connectivity check (see "Connectivity" property) did
     /// not succeed. The graphical shell should indicate limited network connectivity.
     ConnectedSite = 60,
-    /// There is global IPv4 and/or IPv6 Internet connectivity This means the Internet
+    /// Global IPv4 and/or IPv6 Internet connectivity. Internet
     /// connectivity check succeeded, the graphical shell should indicate full network
     /// connectivity.
     ConnectedGlobal = 70,
@@ -47,23 +47,23 @@ pub enum NMDeviceState {
     Unavailable = 20,
     /// the device can be activated, but is currently idle and not connected to a network.
     Disconnected = 30,
-    /// the device is preparing the connection to the network. This may include operations
+    /// Device is preparing the connection to the network. May include operations
     /// like changing the MAC address, setting physical link properties, and anything else
     /// required to connect to the requested network.
     Prepare = 40,
-    /// the device is connecting to the requested network. This may include operations like
+    /// Device is connecting to the requested network. May include operations like
     /// associating with the Wi-Fi AP, dialing the modem, connecting to the remote
     /// Bluetooth device, etc.
     Config = 50,
-    /// the device requires more information to continue connecting to the requested
-    /// network. This includes secrets like WiFi passphrases, login passwords, PIN codes,
+    /// Device requires more information to continue connecting to the requested
+    /// network. Includes secrets like WiFi passphrases, login passwords, PIN codes,
     /// etc.
     NeedAuth = 60,
     /// the device is requesting IPv4 and/or IPv6 addresses and routing information from
     /// the network.
     IpConfig = 70,
-    /// the device is checking whether further action is required for the requested network
-    /// connection. This may include checking whether only local network access is
+    /// Device is checking whether further action is required for the requested network
+    /// connection. May include checking whether only local network access is
     /// available, whether a captive portal is blocking access to the Internet, etc.
     IpCheck = 80,
     /// the device is waiting for a secondary connection (like a VPN) which must activated
@@ -426,6 +426,10 @@ pub enum NMRollbackResult {
     ErrFailed = 3,
 }
 
+/// Current network connectivity status.
+///
+/// Simplified view of network state that combines multiple NetworkManager
+/// states into broader categories.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NetworkStatus {
     /// Full network connectivity with internet access

@@ -41,7 +41,7 @@ impl<T: Clone + Send + Sync + 'static> Property<T> {
 
     /// Get the current value.
     ///
-    /// This is a synchronous operation that clones the current value.
+    /// Synchronous operation that clones the current value.
     pub fn get(&self) -> T {
         self.rx.borrow().clone()
     }

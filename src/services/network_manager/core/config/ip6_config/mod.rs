@@ -39,15 +39,21 @@ pub struct Ip6Config {
 /// IPv6 address with prefix length
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ipv6Address {
+    /// The IPv6 address.
     pub address: Ipv6Addr,
+    /// Network prefix length in bits (0-128).
     pub prefix: u8,
 }
 
 /// IPv6 route entry
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ipv6Route {
+    /// Destination network address.
     pub destination: Ipv6Addr,
+    /// Network prefix length in bits (0-128).
     pub prefix: u8,
+    /// Gateway address for this route, if any.
     pub next_hop: Option<Ipv6Addr>,
+    /// Route metric for priority ordering (lower is higher priority).
     pub metric: Option<u32>,
 }

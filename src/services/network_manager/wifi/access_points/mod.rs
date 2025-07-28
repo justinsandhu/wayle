@@ -56,15 +56,15 @@ impl NetworkIdentifier {
     /// Returns the SSID as a UTF-8 string, replacing invalid sequences with �.
     ///
     /// Most SSIDs are valid UTF-8, but some routers may use non-standard encodings.
-    /// This method ensures a displayable string is always returned.
+    /// Ensures a displayable string is always returned.
     pub fn as_str(&self) -> String {
         String::from_utf8_lossy(&self.0).to_string()
     }
 
     /// Returns the raw bytes of the SSID.
     ///
-    /// Use this when you need the exact byte sequence, such as when connecting
-    /// to a network or comparing SSIDs byte-for-byte.
+    /// Provides the exact byte sequence for network operations
+    /// or byte-for-byte comparisons.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }

@@ -11,13 +11,24 @@ mod control;
 mod manager;
 mod saved_connections;
 
+/// Manages WiFi network connectivity and device state.
+///
+/// Provides high-level interface for WiFi operations including connection
+/// management, access point scanning, and saved network handling. Wraps
+/// the lower-level DeviceWifi D-Bus proxy with reactive properties for
+/// state monitoring.
+#[derive(Clone, Debug)]
 pub struct Wifi {
     connection: Connection,
     device: DeviceWifi,
 
+    /// Whether WiFi is enabled on the system.
     pub enabled: Property<bool>,
+    /// Current WiFi connectivity status.
     pub connectivity: Property<NetworkStatus>,
+    /// SSID of the currently connected network, if any.
     pub ssid: Property<Option<String>>,
+    /// Signal strength of current connection (0-100).
     pub strength: Property<u8>,
 }
 
@@ -30,7 +41,7 @@ impl Deref for Wifi {
 }
 
 impl Wifi {
-    pub fn from_device(connection: Connection, device: DeviceWifi) -> Self {
+    pub(crate) fn from_device_and_connection(connection: Connection, device: DeviceWifi) -> Self {
         Self {
             connection,
             device,

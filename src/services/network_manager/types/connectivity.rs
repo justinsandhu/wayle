@@ -69,7 +69,7 @@ impl NMConnectivityState {
 /// like NM_METERED_YES, and all other states as not metered.
 ///
 /// Note that the per-device metered states are then combined to a global metered
-/// state. This is basically the metered state of the device with the best default
+/// state. Basically the metered state of the device with the best default
 /// route. However, that generalization of a global metered state may not be
 /// correct if the default routes for IPv4 and IPv6 are on different devices, or
 /// if policy routing is configured. In general, the global metered state tries to
@@ -106,9 +106,16 @@ impl NMMetered {
     }
 }
 
+/// Type of network connection currently active.
+///
+/// Tracks which interface type is providing the primary
+/// network connectivity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionType {
+    /// Connection type cannot be determined or no connection is active.
     Unknown,
+    /// Primary connectivity is through an ethernet/wired interface.
     Wired,
+    /// Primary connectivity is through a WiFi interface.
     Wifi,
 }

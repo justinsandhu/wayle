@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use tracing::warn;
-use zbus::Connection;
+use zbus::{Connection, zvariant::OwnedObjectPath};
 
 use crate::services::{
     common::{Property, types::ObjectPath},
@@ -64,14 +64,14 @@ impl Deref for DeviceWifi {
 
 impl DeviceWifi {
     /// Create a new wireless device from a D-Bus path.
-    pub async fn from_path(path: ObjectPath) -> Option<Self> {
+    pub async fn from_path(path: OwnedObjectPath) -> Option<Self> {
         let connection = Connection::session().await.ok()?;
         Self::from_path_and_connection(connection, path).await
     }
 
-    pub async fn from_path_and_connection(
+    pub(crate) async fn from_path_and_connection(
         connection: Connection,
-        path: ObjectPath,
+        path: OwnedObjectPath,
     ) -> Option<Self> {
         let device_proxy = DeviceProxy::builder(&connection)
             .path(path.clone())

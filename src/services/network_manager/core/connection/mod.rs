@@ -3,13 +3,18 @@ use crate::services::{
     network_manager::{NMActivationStateFlags, NMActiveConnectionState},
 };
 
+/// Active network connection in NetworkManager.
+///
+/// Tracks state and configuration of currently active connections,
+/// including devices, IP configuration, and connection properties.
+/// Properties update reactively as connection state changes.
 #[derive(Debug, Clone)]
 pub struct ActiveConnection {
     /// The path of the connection object that this ActiveConnection is using.
     pub connection: Property<String>,
 
-    /// A specific object associated with the active connection. This property reflects the
-    /// specific object used during connection activation, and will not change over the
+    /// Specific object associated with the active connection. Reflects the
+    /// object used during connection activation, and will not change over the
     /// lifetime of the ActiveConnection once set.
     pub specific_object: Property<String>,
 

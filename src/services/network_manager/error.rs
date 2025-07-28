@@ -13,7 +13,10 @@ pub enum NetworkError {
 
     /// Access point not found
     #[error("Access point {ssid} not found")]
-    AccessPointNotFound { ssid: String },
+    AccessPointNotFound {
+        /// SSID of the access point that was not found.
+        ssid: String,
+    },
 
     /// Connection activation failed
     #[error("Failed to activate connection: {0}")]

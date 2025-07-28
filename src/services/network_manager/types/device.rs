@@ -148,11 +148,18 @@ pub enum NMIPTunnelMode {
 /// using the LLDP protocol. Used for network topology discovery.
 #[derive(Debug, Clone)]
 pub struct LldpNeighbor {
+    /// Unique identifier for the chassis (device) sending LLDP packets.
     pub chassis_id: Option<String>,
+    /// Identifier for the specific port sending LLDP packets.
     pub port_id: Option<String>,
+    /// Human-readable description of the port.
     pub port_description: Option<String>,
+    /// Hostname or system name of the LLDP neighbor.
     pub system_name: Option<String>,
+    /// Full system description including OS and version info.
     pub system_description: Option<String>,
+    /// Bitmask of system capabilities (router, bridge, WLAN AP, etc).
     pub system_capabilities: Option<u32>,
+    /// Management IP addresses for the neighbor device.
     pub management_addresses: Option<Vec<String>>,
 }

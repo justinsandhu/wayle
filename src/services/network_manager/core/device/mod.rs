@@ -1,4 +1,6 @@
+/// WiFi device functionality and management.
 pub mod wifi;
+/// Wired (ethernet) device functionality and management.
 pub mod wired;
 
 use std::collections::HashMap;
@@ -13,9 +15,13 @@ use crate::services::{
     },
 };
 
+/// Network device managed by NetworkManager.
+///
+/// Common functionality for all network interfaces (WiFi, ethernet, etc).
+/// Contains hardware information, state, configuration, and statistics.
 #[derive(Debug, Clone)]
 pub struct Device {
-    /// Operating-system specific transient device hardware identifier. This is an opaque
+    /// Operating-system specific transient device hardware identifier. Opaque
     /// string representing the underlying hardware for the device, and shouldn't be used to
     /// keep track of individual devices. For some device types (Bluetooth, Modems) it is an
     /// identifier used by the hardware service (eg bluez or ModemManager) to refer to that
@@ -32,7 +38,7 @@ pub struct Device {
     /// characters. Use g_strcompress() to revert the escaping.
     pub interface: Property<String>,
 
-    /// The name of the device's data interface when available. This property may not refer
+    /// The name of the device's data interface when available. May not refer
     /// to the actual data interface until the device has successfully established a data
     /// connection, indicated by the device's State becoming ACTIVATED. Note that non UTF-8
     /// characters are backslash escaped, so the resulting name may be longer then 15
@@ -107,7 +113,7 @@ pub struct Device {
     pub available_connections: Property<Vec<ObjectPath>>,
 
     /// If non-empty, an (opaque) indicator of the physical network port associated with the
-    /// device. This can be used to recognize when two seemingly-separate hardware devices
+    /// device. Can be used to recognize when two seemingly-separate hardware devices
     /// are actually just different virtual interfaces to the same physical port.
     pub physical_port_id: Property<String>,
 

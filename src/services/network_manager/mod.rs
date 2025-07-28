@@ -1,9 +1,11 @@
 /// Core domain models for NetworkManager objects
 pub mod core;
-/// Core domain models for NetworkManager objects
+/// Base-line discovery for the network service
 mod discovery;
 /// Network service errors
 mod error;
+/// Base-line monitoring for the network service
+mod monitoring;
 /// D-Bus proxy implementations for NetworkManager interfaces.
 mod proxy;
 /// High-level service API for network operations.
