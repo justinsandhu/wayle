@@ -3,9 +3,7 @@ pub mod wifi;
 /// Wired (ethernet) device functionality and management.
 pub mod wired;
 
-use std::collections::HashMap;
-
-use zbus::zvariant::OwnedValue;
+use zbus::Connection;
 
 use crate::services::{
     common::{Property, types::ObjectPath},
@@ -15,12 +13,36 @@ use crate::services::{
     },
 };
 
+/// Wrapper around zbus::Connection that implements Debug.
+#[derive(Clone)]
+pub(crate) struct DbusConnection(pub Connection);
+
+impl std::fmt::Debug for DbusConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Connection").finish()
+    }
+}
+
+impl std::ops::Deref for DbusConnection {
+    type Target = Connection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Network device managed by NetworkManager.
 ///
 /// Common functionality for all network interfaces (WiFi, ethernet, etc).
 /// Contains hardware information, state, configuration, and statistics.
 #[derive(Debug, Clone)]
 pub struct Device {
+    /// D-Bus connection for this device.
+    pub(crate) connection: DbusConnection,
+
+    /// D-Bus object path for this device.
+    pub object_path: ObjectPath,
+
     /// Operating-system specific transient device hardware identifier. Opaque
     /// string representing the underlying hardware for the device, and shouldn't be used to
     /// keep track of individual devices. For some device types (Bluetooth, Modems) it is an
@@ -186,10 +208,16 @@ struct DeviceProperties {
 }
 
 impl Device {
-    /// Create a Device from a D-Bus proxy.
-    pub async fn from_proxy(proxy: &DeviceProxy<'_>) -> Option<Self> {
-        let props = Self::fetch_properties(proxy).await?;
-        Some(Self::from_properties(props))
+    /// Create a Device from a D-Bus connection and path.
+    pub async fn from_connection_and_path(
+        connection: Connection,
+        object_path: ObjectPath,
+    ) -> Option<Self> {
+        let proxy = DeviceProxy::new(&connection, object_path.clone())
+            .await
+            .ok()?;
+        let props = Self::fetch_properties(&proxy).await?;
+        Some(Self::from_properties(props, connection, object_path))
     }
 
     /// Fetch all properties from the proxy
@@ -253,7 +281,7 @@ impl Device {
             interface_flags,
             hw_address,
             ports,
-            lldp_neighbors,
+            _lldp_neighbors,
         ) = tokio::join!(
             proxy.metered(),
             proxy.real(),
@@ -304,8 +332,14 @@ impl Device {
     }
 
     /// Convert fetched properties to Device
-    fn from_properties(props: DeviceProperties) -> Self {
+    fn from_properties(
+        props: DeviceProperties,
+        connection: Connection,
+        object_path: ObjectPath,
+    ) -> Self {
         Self {
+            connection: DbusConnection(connection),
+            object_path,
             udi: Property::new(props.udi),
             path: Property::new(props.path),
             interface: Property::new(props.interface),

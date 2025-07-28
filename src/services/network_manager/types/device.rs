@@ -142,10 +142,34 @@ pub enum NMIPTunnelMode {
     Ip6gretap = 11,
 }
 
+impl NMIPTunnelMode {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::Ipip,
+            2 => Self::Gre,
+            3 => Self::Sit,
+            4 => Self::Isatap,
+            5 => Self::Vti,
+            6 => Self::Ip6ip6,
+            7 => Self::Ipip6,
+            8 => Self::Ip6gre,
+            9 => Self::Vti6,
+            10 => Self::Gretap,
+            11 => Self::Ip6gretap,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// LLDP (Link Layer Discovery Protocol) neighbor information.
 ///
 /// Contains information advertised by directly connected network devices
 /// using the LLDP protocol. Used for network topology discovery.
+///
+/// NOTE: Not sure how accurate these are. LLDP is not currently populated by
+/// this service. Feel free to open a PR if you're familiar
 #[derive(Debug, Clone)]
 pub struct LldpNeighbor {
     /// Unique identifier for the chassis (device) sending LLDP packets.

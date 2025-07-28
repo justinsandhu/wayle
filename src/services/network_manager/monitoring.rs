@@ -1,5 +1,3 @@
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
 use tracing::{debug, warn};
 use zbus::{Connection, zvariant::OwnedObjectPath};
@@ -20,23 +18,20 @@ impl NetworkMonitoring {
     /// Start all network monitoring tasks.
     pub(crate) async fn start(
         connection: Connection,
-        wifi: Arc<RwLock<Option<Wifi>>>,
-        wired: Arc<RwLock<Option<Wired>>>,
+        wifi: Property<Option<Wifi>>,
+        wired: Property<Option<Wired>>,
         primary: Property<ConnectionType>,
     ) -> Result<(), NetworkError> {
-        // TODO: Get NetworkManager proxy
-
-        // TODO: Spawn device monitoring
-
-        // TODO: Spawn primary connection monitoring
+        Self::spawn_device_monitoring(connection.clone(), wifi.clone(), wired.clone()).await?;
+        Self::spawn_primary_monitoring(connection, wifi, wired, primary).await?;
 
         Ok(())
     }
 
     async fn spawn_device_monitoring(
         connection: Connection,
-        wifi: Arc<RwLock<Option<Wifi>>>,
-        wired: Arc<RwLock<Option<Wired>>>,
+        wifi: Property<Option<Wifi>>,
+        wired: Property<Option<Wired>>,
     ) -> Result<(), NetworkError> {
         let nm_proxy = NetworkManagerProxy::new(&connection)
             .await
@@ -86,14 +81,14 @@ impl NetworkMonitoring {
             }
         });
 
-        todo!()
+        Ok(())
     }
 
     async fn handle_device_added(
         connection: &Connection,
         path: OwnedObjectPath,
-        wifi: &Arc<RwLock<Option<Wifi>>>,
-        wired: &Arc<RwLock<Option<Wired>>>,
+        wifi: &Property<Option<Wifi>>,
+        wired: &Property<Option<Wired>>,
     ) {
         let device_proxy = match DeviceProxy::new(connection, path.clone()).await {
             Ok(proxy) => proxy,
@@ -111,14 +106,17 @@ impl NetworkMonitoring {
             }
         };
 
+        debug!(
+            "Device added: {} with type {:?}",
+            path,
+            NMDeviceType::from_u32(device_type)
+        );
+
         match NMDeviceType::from_u32(device_type) {
             NMDeviceType::Wifi => {
-                {
-                    let wifi_guard = wifi.read().await;
-                    if wifi_guard.is_some() {
-                        debug!("A WiFi device already exists, ignoring...");
-                        return;
-                    }
+                if wifi.get().is_some() {
+                    debug!("A WiFi device already exists, ignoring...");
+                    return;
                 }
 
                 let maybe_device =
@@ -126,23 +124,20 @@ impl NetworkMonitoring {
 
                 if let Some(wifi_device) = maybe_device {
                     let wifi_service =
-                        Wifi::from_device_and_connection(connection.clone(), wifi_device);
+                        Wifi::from_device_and_connection(connection.clone(), wifi_device)
+                            .await
+                            .ok();
 
-                    // if let Err(e) = wifi_service.start_monitoring().await {
-                    //     warn!("Failed to start WiFi monitoring: {e}");
-                    // }
-
-                    *wifi.write().await = Some(wifi_service);
-                    debug!("WiFi device added and monitoring started");
+                    if let Some(wifi_service) = wifi_service {
+                        wifi.set(Some(wifi_service));
+                        debug!("WiFi device added and monitoring started");
+                    }
                 }
             }
             NMDeviceType::Ethernet => {
-                {
-                    let wired_guard = wired.read().await;
-                    if wired_guard.is_some() {
-                        debug!("An Ethernet device already exists, ignoring...");
-                        return;
-                    }
+                if wired.get().is_some() {
+                    debug!("An Ethernet device already exists, ignoring...");
+                    return;
                 }
 
                 let maybe_device =
@@ -152,28 +147,105 @@ impl NetworkMonitoring {
                     let wired_service =
                         Wired::from_device_and_connection(connection.clone(), wired_device);
 
-                    // if let Err(e) = wired_service.start_monitoring().await {
-                    //     warn!("Failed to start Ethernet monitoring: {e}");
-                    // }
-
-                    *wired.write().await = Some(wired_service);
+                    wired.set(Some(wired_service));
                     debug!("Ethernet device added and monitoring started");
                 }
             }
             _ => {
-                debug!("Ignoring device of type {device_type:#?}");
+                debug!(
+                    "Ignoring device of type {:?}",
+                    NMDeviceType::from_u32(device_type)
+                );
             }
         }
-
-        todo!()
     }
 
     async fn handle_device_removed(
-        connection: &Connection,
+        _connection: &Connection,
         path: OwnedObjectPath,
-        wifi: &Arc<RwLock<Option<Wifi>>>,
-        wired: &Arc<RwLock<Option<Wired>>>,
+        wifi: &Property<Option<Wifi>>,
+        wired: &Property<Option<Wired>>,
     ) {
-        todo!()
+        if let Some(ref wifi_service) = wifi.get()
+            && wifi_service.device.path.get() == path.to_string()
+        {
+            wifi.set(None);
+            debug!("WiFi device removed");
+            return;
+        }
+
+        if let Some(ref wired_service) = wired.get()
+            && wired_service.device.path.get() == path.to_string()
+        {
+            wired.set(None);
+            debug!("Ethernet device removed");
+            return;
+        }
+
+        debug!("Unknown device removed: {}", path);
+    }
+
+    async fn spawn_primary_monitoring(
+        connection: Connection,
+        wifi: Property<Option<Wifi>>,
+        wired: Property<Option<Wired>>,
+        primary: Property<ConnectionType>,
+    ) -> Result<(), NetworkError> {
+        let nm_proxy = NetworkManagerProxy::new(&connection)
+            .await
+            .map_err(NetworkError::DbusError)?;
+
+        Self::update_primary_connection(&connection, &wifi, &wired, &primary).await;
+
+        let mut primary_changes = nm_proxy.receive_primary_connection_changed().await;
+
+        tokio::spawn(async move {
+            while primary_changes.next().await.is_some() {
+                Self::update_primary_connection(&connection, &wifi, &wired, &primary).await;
+            }
+        });
+
+        Ok(())
+    }
+
+    async fn update_primary_connection(
+        connection: &Connection,
+        wifi: &Property<Option<Wifi>>,
+        wired: &Property<Option<Wired>>,
+        primary: &Property<ConnectionType>,
+    ) {
+        let Ok(nm_proxy) = NetworkManagerProxy::new(connection).await else {
+            primary.set(ConnectionType::Unknown);
+            return;
+        };
+        let Ok(primary_path) = nm_proxy.primary_connection().await else {
+            primary.set(ConnectionType::Unknown);
+            return;
+        };
+
+        if primary_path.is_empty() || primary_path.as_str() == "/" {
+            primary.set(ConnectionType::Unknown);
+            return;
+        }
+
+        if let Some(ref wifi_service) = wifi.get() {
+            // TODO: Check if primary connection belongs to WiFi device
+            // For now, simplified check based on active connection
+            if wifi_service.connectivity.get() == super::NetworkStatus::Connected {
+                primary.set(ConnectionType::Wifi);
+                return;
+            }
+        }
+
+        if let Some(ref wired_service) = wired.get() {
+            // TODO: Check if primary connection belongs to Wired device
+            // For now, simplified check based on active connection
+            if wired_service.connectivity.get() == super::NetworkStatus::Connected {
+                primary.set(ConnectionType::Wired);
+                return;
+            }
+        }
+
+        primary.set(ConnectionType::Unknown);
     }
 }

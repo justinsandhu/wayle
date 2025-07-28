@@ -40,12 +40,6 @@ impl Deref for DeviceWired {
 }
 
 impl DeviceWired {
-    /// Create a new wired device from a D-Bus path.
-    pub async fn from_path(path: OwnedObjectPath) -> Option<Self> {
-        let connection = Connection::session().await.ok()?;
-        Self::from_path_and_connection(connection, path).await
-    }
-
     pub(crate) async fn from_path_and_connection(
         connection: Connection,
         path: OwnedObjectPath,
@@ -61,7 +55,7 @@ impl DeviceWired {
         let wired_proxy = DeviceWiredProxy::new(&connection, path.clone())
             .await
             .ok()?;
-        let base = Device::from_proxy(&device_proxy).await?;
+        let base = Device::from_connection_and_path(connection.clone(), path.to_string()).await?;
 
         let (perm_hw_address, speed, s390_subchannels) = tokio::join!(
             wired_proxy.perm_hw_address(),

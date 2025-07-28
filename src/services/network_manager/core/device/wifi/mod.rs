@@ -63,12 +63,6 @@ impl Deref for DeviceWifi {
 }
 
 impl DeviceWifi {
-    /// Create a new wireless device from a D-Bus path.
-    pub async fn from_path(path: OwnedObjectPath) -> Option<Self> {
-        let connection = Connection::session().await.ok()?;
-        Self::from_path_and_connection(connection, path).await
-    }
-
     pub(crate) async fn from_path_and_connection(
         connection: Connection,
         path: OwnedObjectPath,
@@ -82,18 +76,26 @@ impl DeviceWifi {
 
         let device_type = device_proxy.device_type().await.ok()?;
         if device_type != NMDeviceType::Wifi as u32 {
-            warn!("Device at {path} is not a wifi device");
+            warn!(
+                "Device at {path} is not a wifi device, got type: {} ({:?})",
+                device_type,
+                NMDeviceType::from_u32(device_type)
+            );
             return None;
         }
 
-        let wifi_proxy = DeviceWirelessProxy::builder(&connection)
-            .path(path.clone())
-            .ok()?
-            .build()
+        let wifi_proxy = DeviceWirelessProxy::new(&connection, path.clone())
             .await
             .ok()?;
 
-        let base = Device::from_proxy(&device_proxy).await?;
+        let base =
+            match Device::from_connection_and_path(connection.clone(), path.to_string()).await {
+                Some(base) => base,
+                None => {
+                    warn!("Failed to create base Device for {}", path);
+                    return None;
+                }
+            };
 
         let (
             perm_hw_address,
@@ -113,7 +115,7 @@ impl DeviceWifi {
             wifi_proxy.last_scan(),
         );
 
-        Some(Self {
+        let device = Self {
             base,
             perm_hw_address: Property::new(perm_hw_address.ok().unwrap_or_default()),
             mode: Property::new(NM80211Mode::from_u32(mode.ok().unwrap_or(0))),
@@ -134,6 +136,8 @@ impl DeviceWifi {
             ),
             wireless_capabilities: Property::new(wireless_capabilities.ok().unwrap_or(0)),
             last_scan: Property::new(last_scan.ok().unwrap_or(-1)),
-        })
+        };
+
+        Some(device)
     }
 }

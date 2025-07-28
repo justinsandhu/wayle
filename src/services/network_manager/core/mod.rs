@@ -1,3 +1,5 @@
+/// WiFi access point discovery, properties, and security management.
+pub mod access_point;
 /// Network configuration management for IPv4, IPv6, and DHCP settings.
 pub mod config;
 /// Active network connection management and monitoring.

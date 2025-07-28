@@ -13,8 +13,9 @@ use super::{NetworkStatus, core::device::wired::DeviceWired};
 /// require manual connection management or authentication.
 #[derive(Clone, Debug)]
 pub struct Wired {
-    connection: Connection,
-    device: DeviceWired,
+    pub(crate) connection: Connection,
+    /// The underlying wired device.
+    pub device: DeviceWired,
 
     /// Current wired network connectivity status.
     pub connectivity: Property<NetworkStatus>,
@@ -25,6 +26,12 @@ impl Deref for Wired {
 
     fn deref(&self) -> &Self::Target {
         &self.device
+    }
+}
+
+impl PartialEq for Wired {
+    fn eq(&self, other: &Self) -> bool {
+        self.device.path.get() == other.device.path.get()
     }
 }
 

@@ -17,6 +17,7 @@ mod wifi;
 /// Wired service API
 mod wired;
 
+pub use core::access_point::{AccessPoint, BSSID, NetworkIdentifier, SSID, SecurityType};
 pub use error::NetworkError;
 pub use proxy::*;
 pub use service::NetworkService;

@@ -34,6 +34,23 @@ pub enum NMState {
     ConnectedGlobal = 70,
 }
 
+impl NMState {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            10 => Self::Asleep,
+            20 => Self::Disconnected,
+            30 => Self::Disconnecting,
+            40 => Self::Connecting,
+            50 => Self::ConnectedLocal,
+            60 => Self::ConnectedSite,
+            70 => Self::ConnectedGlobal,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// Device-specific states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NMDeviceState {
@@ -118,6 +135,20 @@ pub enum NMActiveConnectionState {
     Deactivated = 4,
 }
 
+impl NMActiveConnectionState {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::Activating,
+            2 => Self::Activated,
+            3 => Self::Deactivating,
+            4 => Self::Deactivated,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// VPN connection states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NMVpnConnectionState {
@@ -137,6 +168,23 @@ pub enum NMVpnConnectionState {
     Failed = 6,
     /// The VPN connection is disconnected.
     Disconnected = 7,
+}
+
+impl NMVpnConnectionState {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::Prepare,
+            2 => Self::NeedAuth,
+            3 => Self::Connect,
+            4 => Self::IpConfigGet,
+            5 => Self::Activated,
+            6 => Self::Failed,
+            7 => Self::Disconnected,
+            _ => Self::Unknown,
+        }
+    }
 }
 
 /// Device state change reason codes
@@ -382,6 +430,30 @@ pub enum NMActiveConnectionStateReason {
     DeviceRemoved = 14,
 }
 
+impl NMActiveConnectionStateReason {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::None,
+            2 => Self::UserDisconnected,
+            3 => Self::DeviceDisconnected,
+            4 => Self::ServiceStopped,
+            5 => Self::IpConfigInvalid,
+            6 => Self::ConnectTimeout,
+            7 => Self::ServiceStartTimeout,
+            8 => Self::ServiceStartFailed,
+            9 => Self::NoSecrets,
+            10 => Self::LoginFailed,
+            11 => Self::ConnectionRemoved,
+            12 => Self::DependencyFailed,
+            13 => Self::DeviceRealizeFailed,
+            14 => Self::DeviceRemoved,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// VPN state change reasons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NMVpnConnectionStateReason {
@@ -411,6 +483,27 @@ pub enum NMVpnConnectionStateReason {
     ConnectionRemoved = 11,
 }
 
+impl NMVpnConnectionStateReason {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Unknown,
+            1 => Self::None,
+            2 => Self::UserDisconnected,
+            3 => Self::DeviceDisconnected,
+            4 => Self::ServiceStopped,
+            5 => Self::IpConfigInvalid,
+            6 => Self::ConnectTimeout,
+            7 => Self::ServiceStartTimeout,
+            8 => Self::ServiceStartFailed,
+            9 => Self::NoSecrets,
+            10 => Self::LoginFailed,
+            11 => Self::ConnectionRemoved,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// The result of a checkpoint Rollback() operation for a specific device.
 ///
 /// Since: 1.4
@@ -424,6 +517,19 @@ pub enum NMRollbackResult {
     ErrDeviceUnmanaged = 2,
     /// other errors during rollback.
     ErrFailed = 3,
+}
+
+impl NMRollbackResult {
+    /// Convert from D-Bus u32 representation
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Ok,
+            1 => Self::ErrNoDevice,
+            2 => Self::ErrDeviceUnmanaged,
+            3 => Self::ErrFailed,
+            _ => Self::ErrFailed,
+        }
+    }
 }
 
 /// Current network connectivity status.
@@ -441,4 +547,23 @@ pub enum NetworkStatus {
 
     /// No network connection
     Disconnected,
+}
+
+impl NetworkStatus {
+    /// Derive network status from device state.
+    ///
+    /// Maps the detailed NetworkManager device states to simplified
+    /// connectivity status for UI display.
+    pub fn from_device_state(state: NMDeviceState) -> Self {
+        match state {
+            NMDeviceState::Activated => Self::Connected,
+            NMDeviceState::Prepare
+            | NMDeviceState::Config
+            | NMDeviceState::NeedAuth
+            | NMDeviceState::IpConfig
+            | NMDeviceState::IpCheck
+            | NMDeviceState::Secondaries => Self::Connecting,
+            _ => Self::Disconnected,
+        }
+    }
 }

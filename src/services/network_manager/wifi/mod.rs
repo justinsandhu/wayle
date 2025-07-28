@@ -1,15 +1,18 @@
 use std::ops::Deref;
+use std::sync::Arc;
 
+use monitoring::WifiMonitoring;
 use zbus::Connection;
 
 use crate::services::common::Property;
 
-use super::{NetworkStatus, core::device::wifi::DeviceWifi};
-
-mod access_points;
+use super::{
+    NetworkError, NetworkStatus,
+    core::{access_point::AccessPoint, device::wifi::DeviceWifi},
+};
 mod control;
 mod manager;
-mod saved_connections;
+mod monitoring;
 
 /// Manages WiFi network connectivity and device state.
 ///
@@ -19,8 +22,9 @@ mod saved_connections;
 /// state monitoring.
 #[derive(Clone, Debug)]
 pub struct Wifi {
-    connection: Connection,
-    device: DeviceWifi,
+    pub(crate) connection: Connection,
+    /// The underlying WiFi device.
+    pub device: DeviceWifi,
 
     /// Whether WiFi is enabled on the system.
     pub enabled: Property<bool>,
@@ -30,6 +34,8 @@ pub struct Wifi {
     pub ssid: Property<Option<String>>,
     /// Signal strength of current connection (0-100).
     pub strength: Property<u8>,
+    /// List of available access points.
+    pub access_points: Property<Vec<Arc<AccessPoint>>>,
 }
 
 impl Deref for Wifi {
@@ -40,15 +46,28 @@ impl Deref for Wifi {
     }
 }
 
+impl PartialEq for Wifi {
+    fn eq(&self, other: &Self) -> bool {
+        self.device.path.get() == other.device.path.get()
+    }
+}
+
 impl Wifi {
-    pub(crate) fn from_device_and_connection(connection: Connection, device: DeviceWifi) -> Self {
-        Self {
+    pub(crate) async fn from_device_and_connection(
+        connection: Connection,
+        device: DeviceWifi,
+    ) -> Result<Self, NetworkError> {
+        let access_points: Property<Vec<Arc<AccessPoint>>> = Property::new(vec![]);
+        WifiMonitoring::start(connection.clone(), &device, &access_points).await?;
+
+        Ok(Self {
             connection,
-            device,
+            device: device.clone(),
             enabled: Property::new(false),
             connectivity: Property::new(NetworkStatus::Disconnected),
             ssid: Property::new(None),
             strength: Property::new(0),
-        }
+            access_points: access_points.clone(),
+        })
     }
 }

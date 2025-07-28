@@ -1,4 +1,4 @@
-use tracing::instrument;
+use tracing::{instrument, warn};
 use zbus::Connection;
 
 use crate::services::{
@@ -6,6 +6,7 @@ use crate::services::{
     network_manager::{
         core::device::{wifi::DeviceWifi, wired::DeviceWired},
         discovery::NetworkServiceDiscovery,
+        monitoring::NetworkMonitoring,
     },
 };
 
@@ -19,9 +20,12 @@ use super::{ConnectionType, NetworkError, Wifi, Wired};
 /// network status changes.
 pub struct NetworkService {
     zbus_connection: Connection,
-    wifi: Property<Option<Wifi>>,
-    wired: Property<Option<Wired>>,
-    primary: Property<ConnectionType>,
+    /// Current WiFi device state, if available.
+    pub wifi: Property<Option<Wifi>>,
+    /// Current wired device state, if available.
+    pub wired: Property<Option<Wired>>,
+    /// Type of the primary network connection.
+    pub primary: Property<ConnectionType>,
 }
 
 impl NetworkService {
@@ -52,7 +56,7 @@ impl NetworkService {
     /// - Device proxy creation fails
     #[instrument]
     pub async fn start() -> Result<Self, NetworkError> {
-        let connection = Connection::session().await.map_err(|err| {
+        let connection = Connection::system().await.map_err(|err| {
             NetworkError::InitializationFailed(format!("D-Bus connection failed: {err}"))
         })?;
 
@@ -60,7 +64,12 @@ impl NetworkService {
         let wired_device_path = NetworkServiceDiscovery::wired_device_path(&connection).await?;
 
         let wifi_device = if let Some(path) = wifi_device_path {
-            DeviceWifi::from_path_and_connection(connection.clone(), path).await
+            let device =
+                DeviceWifi::from_path_and_connection(connection.clone(), path.clone()).await;
+            if device.is_none() {
+                warn!("Failed to create WiFi device from path: {}", path);
+            }
+            device
         } else {
             None
         };
@@ -71,17 +80,39 @@ impl NetworkService {
             None
         };
 
-        let wifi =
-            wifi_device.map(|device| Wifi::from_device_and_connection(connection.clone(), device));
+        let wifi = match wifi_device {
+            Some(device) => {
+                match Wifi::from_device_and_connection(connection.clone(), device).await {
+                    Ok(wifi) => Some(wifi),
+                    Err(e) => {
+                        warn!("Failed to create WiFi service: {}", e);
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
 
         let wired = wired_device
             .map(|device| Wired::from_device_and_connection(connection.clone(), device));
 
+        let wifi_property = Property::new(wifi);
+        let wired_property = Property::new(wired);
+        let primary = Property::new(ConnectionType::Unknown);
+
+        NetworkMonitoring::start(
+            connection.clone(),
+            wifi_property.clone(),
+            wired_property.clone(),
+            primary.clone(),
+        )
+        .await?;
+
         let service = Self {
             zbus_connection: connection.clone(),
-            wifi: Property::new(wifi),
-            wired: Property::new(wired),
-            primary: Property::new(ConnectionType::Unknown),
+            wifi: wifi_property,
+            wired: wired_property,
+            primary,
         };
 
         Ok(service)
