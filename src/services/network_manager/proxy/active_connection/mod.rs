@@ -17,6 +17,8 @@ pub trait ConnectionActive {
     fn connection(&self) -> zbus::Result<OwnedObjectPath>;
 
     /// A specific object associated with the active connection.
+    /// This property reflects the specific object used during connection activation,
+    /// and will not change over the lifetime of the ActiveConnection once set.
     #[zbus(property)]
     fn specific_object(&self) -> zbus::Result<OwnedObjectPath>;
 
@@ -75,6 +77,10 @@ pub trait ConnectionActive {
     /// The path to the master device if the connection is a slave.
     #[zbus(property)]
     fn master(&self) -> zbus::Result<OwnedObjectPath>;
+
+    /// The path to the controller device if the connection is a port.
+    #[zbus(property)]
+    fn controller(&self) -> zbus::Result<OwnedObjectPath>;
 
     /// Emitted when the active connection changes state.
     #[zbus(signal, name = "StateChanged")]

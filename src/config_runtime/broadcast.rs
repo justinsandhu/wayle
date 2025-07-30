@@ -60,7 +60,7 @@ impl BroadcastService {
         let (command_tx, mut command_rx) = mpsc::channel(100);
 
         let handle = tokio::spawn(async move {
-            broadcast_actor_loop(&mut command_rx).await;
+            Self::broadcast_actor_loop(&mut command_rx).await;
         });
 
         Self {
@@ -123,6 +123,44 @@ impl BroadcastService {
                 details: "Broadcast service is not running".to_string(),
             })
     }
+
+    /// The main actor loop that processes broadcast commands.
+    ///
+    /// This function runs in a dedicated task and owns all subscriber state.
+    /// It processes commands sequentially, ensuring no race conditions or lock contention.
+    async fn broadcast_actor_loop(command_rx: &mut Receiver<BroadcastCommand>) {
+        let mut subscriptions = Vec::new();
+
+        while let Some(command) = command_rx.recv().await {
+            match command {
+                BroadcastCommand::Subscribe {
+                    id,
+                    pattern,
+                    sender,
+                } => {
+                    subscriptions.push(ActorSubscription {
+                        id,
+                        pattern,
+                        sender,
+                    });
+                }
+
+                BroadcastCommand::Unsubscribe { id } => {
+                    subscriptions.retain(|sub| sub.id != id);
+                }
+
+                BroadcastCommand::Broadcast(change) => {
+                    subscriptions.retain(|sub| {
+                        if path_matches(&change.path, &sub.pattern) {
+                            sub.sender.try_send(change.clone()).is_ok()
+                        } else {
+                            true
+                        }
+                    });
+                }
+            }
+        }
+    }
 }
 
 impl Subscription {
@@ -147,43 +185,5 @@ impl Drop for Subscription {
             .service
             .command_tx
             .try_send(BroadcastCommand::Unsubscribe { id: self.id });
-    }
-}
-
-/// The main actor loop that processes broadcast commands.
-///
-/// This function runs in a dedicated task and owns all subscriber state.
-/// It processes commands sequentially, ensuring no race conditions or lock contention.
-async fn broadcast_actor_loop(command_rx: &mut Receiver<BroadcastCommand>) {
-    let mut subscriptions = Vec::new();
-
-    while let Some(command) = command_rx.recv().await {
-        match command {
-            BroadcastCommand::Subscribe {
-                id,
-                pattern,
-                sender,
-            } => {
-                subscriptions.push(ActorSubscription {
-                    id,
-                    pattern,
-                    sender,
-                });
-            }
-
-            BroadcastCommand::Unsubscribe { id } => {
-                subscriptions.retain(|sub| sub.id != id);
-            }
-
-            BroadcastCommand::Broadcast(change) => {
-                subscriptions.retain(|sub| {
-                    if path_matches(&change.path, &sub.pattern) {
-                        sub.sender.try_send(change.clone()).is_ok()
-                    } else {
-                        true
-                    }
-                });
-            }
-        }
     }
 }

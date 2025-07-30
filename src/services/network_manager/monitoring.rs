@@ -195,13 +195,23 @@ impl NetworkMonitoring {
             .await
             .map_err(NetworkError::DbusError)?;
 
-        Self::update_primary_connection(&connection, &wifi, &wired, &primary).await;
+        let primary_connection = nm_proxy.primary_connection().await?;
+        Self::update_primary_connection(primary_connection, &wifi, &wired, &primary).await;
 
-        let mut primary_changes = nm_proxy.receive_primary_connection_changed().await;
+        let mut primary_changed = nm_proxy.receive_primary_connection_changed().await;
 
         tokio::spawn(async move {
-            while primary_changes.next().await.is_some() {
-                Self::update_primary_connection(&connection, &wifi, &wired, &primary).await;
+            while let Some(change) = primary_changed.next().await {
+                if let Ok(new_primary_connection) = change.get().await {
+                    println!("Primary Connection: {new_primary_connection}");
+                    Self::update_primary_connection(
+                        new_primary_connection,
+                        &wifi,
+                        &wired,
+                        &primary,
+                    )
+                    .await;
+                }
             }
         });
 
@@ -209,38 +219,20 @@ impl NetworkMonitoring {
     }
 
     async fn update_primary_connection(
-        connection: &Connection,
+        connection: OwnedObjectPath,
         wifi: &Property<Option<Wifi>>,
         wired: &Property<Option<Wired>>,
         primary: &Property<ConnectionType>,
     ) {
-        let Ok(nm_proxy) = NetworkManagerProxy::new(connection).await else {
-            primary.set(ConnectionType::Unknown);
-            return;
-        };
-        let Ok(primary_path) = nm_proxy.primary_connection().await else {
-            primary.set(ConnectionType::Unknown);
-            return;
-        };
-
-        if primary_path.is_empty() || primary_path.as_str() == "/" {
-            primary.set(ConnectionType::Unknown);
-            return;
-        }
-
         if let Some(ref wifi_service) = wifi.get() {
-            // TODO: Check if primary connection belongs to WiFi device
-            // For now, simplified check based on active connection
-            if wifi_service.connectivity.get() == super::NetworkStatus::Connected {
+            if wifi_service.active_connection.get().as_str() == connection.as_str() {
                 primary.set(ConnectionType::Wifi);
                 return;
             }
         }
 
         if let Some(ref wired_service) = wired.get() {
-            // TODO: Check if primary connection belongs to Wired device
-            // For now, simplified check based on active connection
-            if wired_service.connectivity.get() == super::NetworkStatus::Connected {
+            if wired_service.active_connection.get().as_str() == connection.as_str() {
                 primary.set(ConnectionType::Wired);
                 return;
             }
