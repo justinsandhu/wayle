@@ -67,12 +67,7 @@ impl DeviceWifi {
         connection: Connection,
         path: OwnedObjectPath,
     ) -> Option<Self> {
-        let device_proxy = DeviceProxy::builder(&connection)
-            .path(path.clone())
-            .ok()?
-            .build()
-            .await
-            .ok()?;
+        let device_proxy = DeviceProxy::new(&connection, path.clone()).await.ok()?;
 
         let device_type = device_proxy.device_type().await.ok()?;
         if device_type != NMDeviceType::Wifi as u32 {

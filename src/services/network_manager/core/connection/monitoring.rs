@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use futures::StreamExt;
-use tokio::task::JoinHandle;
 use tracing::debug;
+use zbus::{Connection, zvariant::OwnedObjectPath};
 
 use crate::services::network_manager::{
     ConnectionActiveProxy, NMActivationStateFlags, NMActiveConnectionState,
@@ -11,33 +11,32 @@ use crate::services::network_manager::{
 use super::ActiveConnection;
 
 /// Monitors D-Bus properties and updates the reactive ActiveConnection model.
-pub(crate) struct ActiveConnectionMonitor {
-    handle: JoinHandle<()>,
-}
+pub(crate) struct ActiveConnectionMonitor;
 
 impl ActiveConnectionMonitor {
-    /// Start monitoring an active connection's D-Bus properties.
+    /// Start monitoring for property changes.
     ///
-    /// Returns a handle that will abort the monitoring task when dropped.
-    pub fn start(
+    /// Monitoring stops automatically when the ActiveConnection is dropped.
+    pub async fn start(
         active_connection: Arc<ActiveConnection>,
-        proxy: ConnectionActiveProxy<'static>,
-    ) -> Self {
-        debug!("Starting property monitoring for active connection");
+        zbus_connection: Connection,
+        path: OwnedObjectPath,
+    ) {
+        let weak = Arc::downgrade(&active_connection);
 
-        let handle = tokio::spawn(async move {
-            Self::monitor_properties(active_connection, proxy).await;
+        let Ok(proxy) = ConnectionActiveProxy::new(&zbus_connection, path).await else {
+            debug!("Failed to create proxy for active connection monitoring");
+            return;
+        };
+
+        tokio::spawn(async move {
+            Self::monitor(weak, proxy).await;
         });
-
-        Self { handle }
     }
 
     #[allow(clippy::cognitive_complexity)]
     #[allow(clippy::too_many_lines)]
-    async fn monitor_properties(
-        active_connection: Arc<ActiveConnection>,
-        proxy: ConnectionActiveProxy<'static>,
-    ) {
+    async fn monitor(weak: Weak<ActiveConnection>, proxy: ConnectionActiveProxy<'static>) {
         let mut connection_changes = proxy.receive_connection_changed().await;
         let mut specific_object_changes = proxy.receive_specific_object_changed().await;
         let mut id_changes = proxy.receive_id_changed().await;
@@ -56,6 +55,11 @@ impl ActiveConnectionMonitor {
         let mut controller_changed = proxy.receive_controller_changed().await;
 
         loop {
+            let Some(active_connection) = weak.upgrade() else {
+                debug!("ActiveConnection dropped, stopping monitor");
+                return;
+            };
+
             tokio::select! {
                 Some(change) = connection_changes.next() => {
                     if let Ok(new_connection) = change.get().await {
@@ -144,14 +148,10 @@ impl ActiveConnectionMonitor {
                     break;
                 }
             }
+
+            drop(active_connection);
         }
 
         debug!("Property monitoring ended for active connection");
-    }
-}
-
-impl Drop for ActiveConnectionMonitor {
-    fn drop(&mut self) {
-        self.handle.abort();
     }
 }

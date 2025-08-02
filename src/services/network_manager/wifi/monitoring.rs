@@ -55,8 +55,7 @@ impl WifiMonitoring {
                 continue;
             };
 
-            if let Some(ap) = AccessPoint::from_path_and_connection(connection.clone(), path).await
-            {
+            if let Some(ap) = AccessPoint::get_live(connection.clone(), path).await {
                 initial_aps.push(ap);
             }
         }
@@ -78,9 +77,7 @@ impl WifiMonitoring {
                     Some(added) = ap_added.next() => {
                         let Ok(args) = added.args() else { continue };
 
-                        let Some(new_ap) =
-                            AccessPoint::from_path_and_connection(connection.clone(), args.access_point).await
-                        else {
+                        let Some(new_ap) = AccessPoint::get_live(connection.clone(), args.access_point).await else {
                             continue;
                         };
 

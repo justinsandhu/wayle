@@ -1,10 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use futures::StreamExt;
-use tokio::task::JoinHandle;
 use tracing::{debug, instrument};
 
-use super::metadata::TrackMetadata;
 use crate::services::mpris::{
     proxy::MediaPlayer2PlayerProxy,
     types::{LoopMode, PlaybackState, PlayerId, ShuffleMode, Volume},
@@ -13,37 +11,33 @@ use crate::services::mpris::{
 use super::Player;
 
 /// Monitors D-Bus properties and updates the reactive Player model.
-pub(crate) struct PlayerMonitor {
-    handle: JoinHandle<()>,
-}
+pub(crate) struct PlayerMonitor;
 
 impl PlayerMonitor {
     /// Start monitoring a player's D-Bus properties.
     ///
-    /// Returns a handle that will abort the monitoring task when dropped.
+    /// Monitoring stops automatically when the Player is dropped.
     #[instrument(skip(player, proxy))]
     pub fn start(
         player_id: PlayerId,
         player: Arc<Player>,
         proxy: MediaPlayer2PlayerProxy<'static>,
-    ) -> Self {
+    ) {
         debug!("Starting property monitoring for player: {}", player_id);
 
-        let handle = tokio::spawn(async move {
-            Self::monitor_properties(player_id, player, proxy).await;
+        let weak = Arc::downgrade(&player);
+        tokio::spawn(async move {
+            Self::monitor_properties(player_id, weak, proxy).await;
         });
-
-        Self { handle }
     }
 
     #[instrument(skip(player, proxy))]
     async fn monitor_properties(
         player_id: PlayerId,
-        player: Arc<Player>,
+        player: Weak<Player>,
         proxy: MediaPlayer2PlayerProxy<'static>,
     ) {
         let mut playback_status_changes = proxy.receive_playback_status_changed().await;
-        let mut metadata_changes = proxy.receive_metadata_changed().await;
         let mut loop_status_changes = proxy.receive_loop_status_changed().await;
         let mut shuffle_changes = proxy.receive_shuffle_changed().await;
         let mut volume_changes = proxy.receive_volume_changed().await;
@@ -53,18 +47,16 @@ impl PlayerMonitor {
         let mut can_seek_changes = proxy.receive_can_seek_changed().await;
 
         loop {
+            let Some(player) = player.upgrade() else {
+                debug!("Player dropped, stopping monitor");
+                return;
+            };
+
             tokio::select! {
                 Some(change) = playback_status_changes.next() => {
                     if let Ok(status) = change.get().await {
                         let state = PlaybackState::from(status.as_str());
                         player.playback_state.set(state);
-                    }
-                }
-
-                Some(change) = metadata_changes.next() => {
-                    if let Ok(metadata_map) = change.get().await {
-                        let metadata = TrackMetadata::from(metadata_map);
-                        player.update_metadata(metadata);
                     }
                 }
 
@@ -117,14 +109,10 @@ impl PlayerMonitor {
                     break;
                 }
             }
+
+            drop(player);
         }
 
         debug!("Property monitoring ended for player {}", player_id);
-    }
-}
-
-impl Drop for PlayerMonitor {
-    fn drop(&mut self) {
-        self.handle.abort();
     }
 }

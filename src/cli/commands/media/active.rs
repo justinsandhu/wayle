@@ -5,10 +5,11 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::MediaService,
+    runtime_state::RuntimeState,
+    services::mpris::{Config, MediaService},
 };
 
-use super::utils::{find_player_by_identifier, get_player_display_name};
+use super::utils::find_player_by_identifier;
 
 /// Command to get or set the active media player
 ///
@@ -35,31 +36,46 @@ impl Command for ActiveCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let media_service =
-            MediaService::new(Vec::new())
+        let media_service = MediaService::start(Config {
+            ignored_players: vec![],
+        })
+        .await
+        .map_err(|e| CliError::ServiceError {
+            service: "Media".to_string(),
+            details: e.to_string(),
+        })?;
+
+        if let Some(identifier) = args.first() {
+            let player_id = find_player_by_identifier(&media_service, identifier)?;
+            let player =
+                media_service
+                    .player(&player_id)
+                    .ok_or_else(|| CliError::ServiceError {
+                        service: "Media".to_string(),
+                        details: format!("Player not found: {player_id:?}"),
+                    })?;
+            let player_name = player.identity.get();
+
+            media_service
+                .set_active_player(Some(player_id.clone()))
                 .await
                 .map_err(|e| CliError::ServiceError {
                     service: "Media".to_string(),
                     details: e.to_string(),
                 })?;
 
-        if let Some(identifier) = args.first() {
-            let player_id = find_player_by_identifier(&media_service, identifier)?;
-            let player_name = get_player_display_name(&media_service, &player_id);
-
-            media_service
-                .set_active_player(Some(player_id))
+            RuntimeState::set_active_player(Some(player_id.bus_name().to_string()))
                 .await
                 .map_err(|e| CliError::ServiceError {
                     service: "Media".to_string(),
-                    details: e.to_string(),
+                    details: format!("Failed to save active player: {e}"),
                 })?;
 
             Ok(format!("Set active player to: {player_name}"))
         } else {
             match media_service.active_player() {
-                Some(player_id) => {
-                    let player_name = get_player_display_name(&media_service, &player_id);
+                Some(player) => {
+                    let player_name = player.identity.get();
                     Ok(format!("Active player: {player_name}"))
                 }
                 None => Ok("No active player set".to_string()),

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 
@@ -8,8 +8,7 @@ use crate::{
         types::{ArgType, CommandArg, CommandMetadata},
     },
     services::mpris::{
-        LoopMode, MediaService, PlaybackState, PlayerId, ShuffleMode, TrackMetadata,
-        UNKNOWN_METADATA,
+        Config, LoopMode, MediaService, PlaybackState, ShuffleMode, UNKNOWN_METADATA, core::Player,
     },
 };
 
@@ -47,24 +46,21 @@ impl Command for InfoCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let media_service =
-            MediaService::new(Vec::new())
-                .await
-                .map_err(|e| CliError::ServiceError {
-                    service: "Media".to_string(),
-                    details: e.to_string(),
-                })?;
-        let player_id = get_player_id_or_active(&media_service, args.first()).await?;
+        let media_service = MediaService::start(Config {
+            ignored_players: vec![],
+        })
+        .await
+        .map_err(|e| CliError::ServiceError {
+            service: "Media".to_string(),
+            details: e.to_string(),
+        })?;
+        let player = get_player_id_or_active(&media_service, args.first()).await?;
         let mut output = String::new();
 
-        self.add_player_info(&media_service, &player_id, &mut output)
-            .await;
-        self.add_playback_state(&media_service, &player_id, &mut output)
-            .await;
-        self.add_modes(&media_service, &player_id, &mut output)
-            .await;
-        self.add_track_info(&media_service, &player_id, &mut output)
-            .await;
+        self.add_player_info(&player, &mut output).await;
+        self.add_playback_state(&player, &mut output).await;
+        self.add_modes(&player, &mut output).await;
+        self.add_track_info(&player, &mut output).await;
 
         Ok(output)
     }
@@ -90,119 +86,78 @@ impl Command for InfoCommand {
 }
 
 impl InfoCommand {
-    async fn add_player_info(
-        &self,
-        service: &MediaService,
-        player_id: &PlayerId,
-        output: &mut String,
-    ) {
-        if let Some(player) = service.player(player_id) {
-            output.push_str(&format!("Player: {}\n", player.identity.get()));
-            output.push_str(&format!("Bus Name: {}\n", player_id.bus_name()));
-            output.push_str(&format!("Can Control: {}\n\n", player.can_control.get()));
+    async fn add_player_info(&self, player: &Arc<Player>, output: &mut String) {
+        output.push_str(&format!("Player: {}\n", player.identity.get()));
+        output.push_str(&format!("Bus Name: {}\n", player.id.bus_name()));
+        output.push_str(&format!("Can Control: {}\n\n", player.can_control.get()));
 
-            output.push_str("Capabilities:\n");
-            output.push_str(&format!("  Play/Pause: {}\n", player.can_play.get()));
-            output.push_str(&format!("  Next Track: {}\n", player.can_go_next.get()));
-            output.push_str(&format!(
-                "  Previous Track: {}\n",
-                player.can_go_previous.get()
-            ));
-            output.push_str(&format!("  Seek: {}\n", player.can_seek.get()));
-            output.push_str(&format!("  Loop: {}\n", player.can_loop.get()));
-            output.push_str(&format!("  Shuffle: {}\n\n", player.can_shuffle.get()));
+        output.push_str("Capabilities:\n");
+        output.push_str(&format!("  Play/Pause: {}\n", player.can_play.get()));
+        output.push_str(&format!("  Next Track: {}\n", player.can_go_next.get()));
+        output.push_str(&format!(
+            "  Previous Track: {}\n",
+            player.can_go_previous.get()
+        ));
+        output.push_str(&format!("  Seek: {}\n", player.can_seek.get()));
+        output.push_str(&format!("  Loop: {}\n", player.can_loop.get()));
+        output.push_str(&format!("  Shuffle: {}\n\n", player.can_shuffle.get()));
+    }
+
+    async fn add_playback_state(&self, player: &Arc<Player>, output: &mut String) {
+        let state = player.playback_state.get();
+        let state_str = match state {
+            PlaybackState::Playing => "▶ Playing",
+            PlaybackState::Paused => "⏸ Paused",
+            PlaybackState::Stopped => "⏹ Stopped",
+        };
+        output.push_str(&format!("Playback State: {state_str}\n"));
+    }
+
+    async fn add_modes(&self, player: &Arc<Player>, output: &mut String) {
+        let loop_mode = player.loop_mode.get();
+        let loop_str = match loop_mode {
+            LoopMode::None => "Off",
+            LoopMode::Track => "Track",
+            LoopMode::Playlist => "Playlist",
+            LoopMode::Unsupported => "Unsupported",
+        };
+        output.push_str(&format!("Loop Mode: {loop_str}\n"));
+
+        let shuffle_mode = player.shuffle_mode.get();
+        let shuffle_str = match shuffle_mode {
+            ShuffleMode::On => "On",
+            ShuffleMode::Off => "Off",
+            ShuffleMode::Unsupported => "Unsupported",
+        };
+        output.push_str(&format!("Shuffle: {shuffle_str}\n\n"));
+    }
+
+    async fn add_track_info(&self, player: &Arc<Player>, output: &mut String) {
+        output.push_str("Current Track:\n");
+        let title = player.metadata.title.get();
+        if !title.is_empty() && title != UNKNOWN_METADATA {
+            output.push_str(&format!("  Title: {title}\n"));
+        }
+        let artist = player.metadata.artist.get();
+        if !artist.is_empty() && artist != UNKNOWN_METADATA {
+            output.push_str(&format!("  Artist: {artist}\n"));
+        }
+        let album = player.metadata.album.get();
+        if !album.is_empty() && album != UNKNOWN_METADATA {
+            output.push_str(&format!("  Album: {album}\n"));
+        }
+
+        self.add_position_info(player, output).await;
+
+        if let Some(url) = player.metadata.art_url.get() {
+            output.push_str(&format!("  Artwork URL: {url}\n"));
         }
     }
 
-    async fn add_playback_state(
-        &self,
-        service: &MediaService,
-        player_id: &PlayerId,
-        output: &mut String,
-    ) {
-        if let Some(player) = service.player(player_id) {
-            let state = player.playback_state.get();
-            let state_str = match state {
-                PlaybackState::Playing => "▶ Playing",
-                PlaybackState::Paused => "⏸ Paused",
-                PlaybackState::Stopped => "⏹ Stopped",
-            };
-            output.push_str(&format!("Playback State: {state_str}\n"));
-        }
-    }
+    async fn add_position_info(&self, player: &Player, output: &mut String) {
+        let position = player.position().await.unwrap_or(Duration::ZERO);
 
-    async fn add_modes(&self, service: &MediaService, player_id: &PlayerId, output: &mut String) {
-        if let Some(player) = service.player(player_id) {
-            let loop_mode = player.loop_mode.get();
-            let loop_str = match loop_mode {
-                LoopMode::None => "Off",
-                LoopMode::Track => "Track",
-                LoopMode::Playlist => "Playlist",
-                LoopMode::Unsupported => "Unsupported",
-            };
-            output.push_str(&format!("Loop Mode: {loop_str}\n"));
-
-            let shuffle_mode = player.shuffle_mode.get();
-            let shuffle_str = match shuffle_mode {
-                ShuffleMode::On => "On",
-                ShuffleMode::Off => "Off",
-                ShuffleMode::Unsupported => "Unsupported",
-            };
-            output.push_str(&format!("Shuffle: {shuffle_str}\n\n"));
-        }
-    }
-
-    async fn add_track_info(
-        &self,
-        service: &MediaService,
-        player_id: &PlayerId,
-        output: &mut String,
-    ) {
-        if let Some(player) = service.player(player_id) {
-            output.push_str("Current Track:\n");
-            let title = player.title.get();
-            if !title.is_empty() && title != UNKNOWN_METADATA {
-                output.push_str(&format!("  Title: {title}\n"));
-            }
-            let artist = player.artist.get();
-            if !artist.is_empty() && artist != UNKNOWN_METADATA {
-                output.push_str(&format!("  Artist: {artist}\n"));
-            }
-            let album = player.album.get();
-            if !album.is_empty() && album != UNKNOWN_METADATA {
-                output.push_str(&format!("  Album: {album}\n"));
-            }
-
-            let metadata = TrackMetadata {
-                title,
-                artist,
-                album,
-                album_artist: player.album_artist.get(),
-                length: player.length.get(),
-                art_url: player.art_url.get(),
-                track_id: player.track_id.get(),
-            };
-            self.add_position_info(service, player_id, &metadata, output)
-                .await;
-
-            if let Some(url) = player.art_url.get() {
-                output.push_str(&format!("  Artwork URL: {url}\n"));
-            }
-        } else {
-            output.push_str("No track currently loaded\n");
-        }
-    }
-
-    async fn add_position_info(
-        &self,
-        service: &MediaService,
-        player_id: &PlayerId,
-        metadata: &TrackMetadata,
-        output: &mut String,
-    ) {
-        let position = service.position(player_id).await.unwrap_or(Duration::ZERO);
-
-        if let Some(length) = metadata.length {
+        if let Some(length) = player.metadata.length.get() {
             let percentage = (position.as_secs_f64() / length.as_secs_f64() * 100.0) as u32;
             output.push_str(&format!(
                 "  Position: {} / {} ({percentage}%)\n",

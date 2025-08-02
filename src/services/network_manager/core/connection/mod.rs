@@ -85,10 +85,21 @@ pub struct ActiveConnection {
 }
 
 impl ActiveConnection {
-    pub async fn from_path_and_connection(
-        connection: Connection,
-        path: OwnedObjectPath,
-    ) -> Option<Arc<Self>> {
+    /// Get a snapshot of the current connection state (no monitoring).
+    pub async fn get(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
+        Self::create_from_path(connection, path).await
+    }
+
+    /// Get a live-updating connection instance (with monitoring).
+    pub async fn get_live(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
+        let active_connection = Self::create_from_path(connection.clone(), path.clone()).await?;
+
+        ActiveConnectionMonitor::start(active_connection.clone(), connection, path).await;
+
+        Some(active_connection)
+    }
+
+    async fn create_from_path(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
         let connection_proxy = ConnectionActiveProxy::new(&connection, path.clone())
             .await
             .ok()?;
@@ -155,7 +166,7 @@ impl ActiveConnection {
         let vpn = vpn.unwrap_or_default();
         let controller = controller.unwrap_or_default();
 
-        let active_connection = Arc::new(Self {
+        Some(Arc::new(Self {
             connection,
             connection_path: Property::new(connection_path),
             path: Property::new(path),
@@ -174,10 +185,6 @@ impl ActiveConnection {
             dhcp6_config: Property::new(dhcp6_config),
             vpn: Property::new(vpn),
             controller: Property::new(controller),
-        });
-
-        ActiveConnectionMonitor::start(active_connection.clone(), connection_proxy);
-
-        Some(active_connection)
+        }))
     }
 }

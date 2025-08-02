@@ -1,10 +1,17 @@
 use tracing::{instrument, warn};
 use zbus::Connection;
 
+use std::sync::Arc;
+use zbus::zvariant::OwnedObjectPath;
+
 use crate::services::{
     common::Property,
     network_manager::{
-        core::device::{wifi::DeviceWifi, wired::DeviceWired},
+        core::{
+            access_point::AccessPoint,
+            connection::ActiveConnection,
+            device::{wifi::DeviceWifi, wired::DeviceWired},
+        },
         discovery::NetworkServiceDiscovery,
         monitoring::NetworkMonitoring,
     },
@@ -21,9 +28,9 @@ use super::{ConnectionType, NetworkError, Wifi, Wired};
 pub struct NetworkService {
     zbus_connection: Connection,
     /// Current WiFi device state, if available.
-    pub wifi: Property<Option<Wifi>>,
+    pub wifi: Option<Arc<Wifi>>,
     /// Current wired device state, if available.
-    pub wired: Property<Option<Wired>>,
+    pub wired: Option<Arc<Wired>>,
     /// Type of the primary network connection.
     pub primary: Property<ConnectionType>,
 }
@@ -83,7 +90,7 @@ impl NetworkService {
         let wifi = match wifi_device {
             Some(device) => {
                 match Wifi::from_device_and_connection(connection.clone(), device).await {
-                    Ok(wifi) => Some(wifi),
+                    Ok(wifi) => Some(Arc::new(wifi)),
                     Err(e) => {
                         warn!("Failed to create WiFi service: {}", e);
                         None
@@ -93,28 +100,92 @@ impl NetworkService {
             None => None,
         };
 
-        let wired = wired_device
-            .map(|device| Wired::from_device_and_connection(connection.clone(), device));
+        let wired = wired_device.map(|device| {
+            Arc::new(Wired::from_device_and_connection(
+                connection.clone(),
+                device,
+            ))
+        });
 
-        let wifi_property = Property::new(wifi);
-        let wired_property = Property::new(wired);
         let primary = Property::new(ConnectionType::Unknown);
 
         NetworkMonitoring::start(
             connection.clone(),
-            wifi_property.clone(),
-            wired_property.clone(),
+            wifi.clone(),
+            wired.clone(),
             primary.clone(),
         )
         .await?;
 
         let service = Self {
             zbus_connection: connection.clone(),
-            wifi: wifi_property,
-            wired: wired_property,
+            wifi,
+            wired,
             primary,
         };
 
         Ok(service)
+    }
+
+    /// Get a connection snapshot (no monitoring).
+    ///
+    /// Use this for one-time queries or when you don't need live updates.
+    ///
+    /// # Errors
+    /// Returns `NetworkError::ObjectNotFound` if the connection doesn't exist.
+    pub async fn connection(
+        &self,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<ActiveConnection>, NetworkError> {
+        ActiveConnection::get(self.zbus_connection.clone(), path.clone())
+            .await
+            .ok_or_else(|| NetworkError::ObjectNotFound(path.to_string()))
+    }
+
+    /// Get a monitored connection that updates automatically.
+    ///
+    /// Use this for UI components that need to react to connection state changes.
+    /// The connection will automatically stop monitoring when dropped.
+    ///
+    /// # Errors
+    /// Returns `NetworkError::ObjectNotFound` if the connection doesn't exist.
+    pub async fn monitored_connection(
+        &self,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<ActiveConnection>, NetworkError> {
+        ActiveConnection::get_live(self.zbus_connection.clone(), path.clone())
+            .await
+            .ok_or_else(|| NetworkError::ObjectNotFound(path.to_string()))
+    }
+
+    /// Get an access point snapshot (no monitoring).
+    ///
+    /// Use this for one-time queries or when listing access points.
+    ///
+    /// # Errors
+    /// Returns `NetworkError::ObjectNotFound` if the access point doesn't exist.
+    pub async fn access_point(
+        &self,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<AccessPoint>, NetworkError> {
+        AccessPoint::get(self.zbus_connection.clone(), path.clone())
+            .await
+            .ok_or_else(|| NetworkError::ObjectNotFound(path.to_string()))
+    }
+
+    /// Get a monitored access point that updates automatically.
+    ///
+    /// Use this for UI components showing access point signal strength or properties.
+    /// The access point will automatically stop monitoring when dropped.
+    ///
+    /// # Errors
+    /// Returns `NetworkError::ObjectNotFound` if the access point doesn't exist.
+    pub async fn monitored_access_point(
+        &self,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<AccessPoint>, NetworkError> {
+        AccessPoint::get_live(self.zbus_connection.clone(), path.clone())
+            .await
+            .ok_or_else(|| NetworkError::ObjectNotFound(path.to_string()))
     }
 }

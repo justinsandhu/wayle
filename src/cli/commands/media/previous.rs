@@ -5,10 +5,10 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::MediaService,
+    services::mpris::{Config, MediaService},
 };
 
-use super::utils::{get_player_display_name, get_player_id_or_active};
+use super::utils::get_player_id_or_active;
 
 /// Command to skip to the previous track
 ///
@@ -34,18 +34,19 @@ impl Command for PreviousCommand {
     ///
     /// Returns CliError if media service fails or player not found
     async fn execute(&self, args: &[String]) -> CommandResult {
-        let media_service =
-            MediaService::new(Vec::new())
-                .await
-                .map_err(|e| CliError::ServiceError {
-                    service: "Media".to_string(),
-                    details: e.to_string(),
-                })?;
-        let player_id = get_player_id_or_active(&media_service, args.first()).await?;
-        let player_name = get_player_display_name(&media_service, &player_id);
+        let media_service = MediaService::start(Config {
+            ignored_players: vec![],
+        })
+        .await
+        .map_err(|e| CliError::ServiceError {
+            service: "Media".to_string(),
+            details: e.to_string(),
+        })?;
+        let player = get_player_id_or_active(&media_service, args.first()).await?;
+        let player_name = player.identity.get();
 
-        media_service
-            .previous(&player_id)
+        player
+            .previous()
             .await
             .map_err(|e| CliError::ServiceError {
                 service: "Media".to_string(),

@@ -1,6 +1,10 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
+use futures::{
+    StreamExt,
+    stream::{Stream, select_all},
+};
 use monitoring::WifiMonitoring;
 use zbus::Connection;
 
@@ -69,5 +73,20 @@ impl Wifi {
             strength: Property::new(0),
             access_points: access_points.clone(),
         })
+    }
+
+    /// Watch for any WiFi property changes.
+    ///
+    /// Emits whenever any WiFi property changes (enabled, connectivity, ssid, strength, or access points).
+    pub fn watch(&self) -> impl Stream<Item = Wifi> + Send {
+        let streams: Vec<_> = vec![
+            self.enabled.watch().map(|_| ()).boxed(),
+            self.connectivity.watch().map(|_| ()).boxed(),
+            self.ssid.watch().map(|_| ()).boxed(),
+            self.strength.watch().map(|_| ()).boxed(),
+            self.access_points.watch().map(|_| ()).boxed(),
+        ];
+
+        select_all(streams).map(move |_| self.clone())
     }
 }

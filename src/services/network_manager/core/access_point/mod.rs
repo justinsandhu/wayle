@@ -74,19 +74,26 @@ impl PartialEq for AccessPoint {
 }
 
 impl AccessPoint {
+    /// Get a snapshot of the current access point state (no monitoring).
+    pub async fn get(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
+        Self::create_from_path(connection, path).await
+    }
+
+    /// Get a live-updating access point instance (with monitoring).
+    pub async fn get_live(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
+        let access_point = Self::create_from_path(connection.clone(), path.clone()).await?;
+
+        AccessPointMonitor::start(access_point.clone(), connection, path).await;
+
+        Some(access_point)
+    }
+
     /// Creates an access point instance from a D-Bus path and connection.
     ///
     /// Retrieves all access point properties from NetworkManager via D-Bus
     /// and initializes reactive properties for each value. Returns None if
     /// the access point doesn't exist at the given path.
-    ///
-    /// # Arguments
-    /// * `connection` - The zbus connection to use for D-Bus communication
-    /// * `path` - The D-Bus object path of the access point
-    pub async fn from_path_and_connection(
-        connection: Connection,
-        path: OwnedObjectPath,
-    ) -> Option<Arc<Self>> {
+    async fn create_from_path(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
         let ap_proxy = AccessPointProxy::new(&connection, path.clone())
             .await
             .ok()?;
@@ -134,7 +141,7 @@ impl AccessPoint {
         let security = SecurityType::from_flags(flags, wpa_flags, rsn_flags);
         let is_hidden = ssid.is_empty();
 
-        let access_point = Arc::new(Self {
+        Some(Arc::new(Self {
             path,
             flags: Property::new(flags),
             wpa_flags: Property::new(wpa_flags),
@@ -148,10 +155,6 @@ impl AccessPoint {
             last_seen: Property::new(last_seen),
             security: Property::new(security),
             is_hidden: Property::new(is_hidden),
-        });
-
-        AccessPointMonitor::start(access_point.clone(), ap_proxy);
-
-        Some(access_point)
+        }))
     }
 }

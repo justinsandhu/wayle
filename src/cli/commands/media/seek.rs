@@ -7,10 +7,10 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::MediaService,
+    services::mpris::{Config, MediaService},
 };
 
-use super::utils::{get_player_display_name, get_player_id_or_active};
+use super::utils::get_player_id_or_active;
 
 /// Command to seek to a specific position in the current track
 ///
@@ -149,23 +149,20 @@ impl Command for SeekCommand {
         let position_str = &args[0];
         let player_arg = args.get(1);
 
-        let media_service =
-            MediaService::new(Vec::new())
-                .await
-                .map_err(|e| CliError::ServiceError {
-                    service: "Media".to_string(),
-                    details: e.to_string(),
-                })?;
-        let player_id = get_player_id_or_active(&media_service, player_arg).await?;
-        let player_name = get_player_display_name(&media_service, &player_id);
+        let media_service = MediaService::start(Config {
+            ignored_players: vec![],
+        })
+        .await
+        .map_err(|e| CliError::ServiceError {
+            service: "Media".to_string(),
+            details: e.to_string(),
+        })?;
+        let player = get_player_id_or_active(&media_service, player_arg).await?;
+        let player_name = player.identity.get();
 
-        let current_position = media_service.position(&player_id).await;
+        let current_position = player.position().await.ok();
 
-        let track_length = if let Some(player) = media_service.player(&player_id) {
-            player.length.get()
-        } else {
-            None
-        };
+        let track_length = player.metadata.length.get();
 
         let target_position = Self::parse_position(position_str, current_position, track_length)?;
 
@@ -178,8 +175,8 @@ impl Command for SeekCommand {
             }
         }
 
-        media_service
-            .seek(&player_id, target_position)
+        player
+            .seek(target_position)
             .await
             .map_err(|e| CliError::ServiceError {
                 service: "Media".to_string(),

@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use futures::StreamExt;
-use tokio::task::JoinHandle;
 use tracing::debug;
+use zbus::{Connection, zvariant::OwnedObjectPath};
 
 use crate::services::network_manager::{
     AccessPointProxy, NM80211ApFlags, NM80211ApSecurityFlags, NM80211Mode,
@@ -11,26 +11,31 @@ use crate::services::network_manager::{
 use super::{AccessPoint, BSSID, SSID, SecurityType};
 
 /// Monitors D-Bus properties and updates the reactive AccessPoint model.
-pub(crate) struct AccessPointMonitor {
-    handle: JoinHandle<()>,
-}
+pub(crate) struct AccessPointMonitor;
 
 impl AccessPointMonitor {
-    /// Start monitoring an access point's D-Bus properties.
+    /// Start monitoring for property changes.
     ///
-    /// Returns a handle that will abort the monitoring task when dropped.
-    pub fn start(access_point: Arc<AccessPoint>, proxy: AccessPointProxy<'static>) -> Self {
-        debug!("Starting property monitoring for access point");
+    /// Monitoring stops automatically when the AccessPoint is dropped.
+    pub async fn start(
+        access_point: Arc<AccessPoint>,
+        zbus_connection: Connection,
+        path: OwnedObjectPath,
+    ) {
+        let weak = Arc::downgrade(&access_point);
 
-        let handle = tokio::spawn(async move {
-            Self::monitor_properties(access_point, proxy).await;
+        let Ok(proxy) = AccessPointProxy::new(&zbus_connection, path).await else {
+            debug!("Failed to create proxy for access point monitoring");
+            return;
+        };
+
+        tokio::spawn(async move {
+            Self::monitor(weak, proxy).await;
         });
-
-        Self { handle }
     }
 
     #[allow(clippy::cognitive_complexity)]
-    async fn monitor_properties(access_point: Arc<AccessPoint>, proxy: AccessPointProxy<'static>) {
+    async fn monitor(weak: Weak<AccessPoint>, proxy: AccessPointProxy<'static>) {
         let mut flag_changes = proxy.receive_flags_changed().await;
         let mut wpa_flags_changes = proxy.receive_wpa_flags_changed().await;
         let mut rsn_flags_changes = proxy.receive_rsn_flags_changed().await;
@@ -43,6 +48,11 @@ impl AccessPointMonitor {
         let mut last_seen_changes = proxy.receive_last_seen_changed().await;
 
         loop {
+            let Some(access_point) = weak.upgrade() else {
+                debug!("AccessPoint dropped, stopping monitor");
+                return;
+            };
+
             tokio::select! {
                 Some(change) = flag_changes.next() => {
                     if let Ok(new_flags) = change.get().await {
@@ -128,14 +138,10 @@ impl AccessPointMonitor {
                     break;
                 }
             }
+
+            drop(access_point);
         }
 
         debug!("Property monitoring ended for access point");
-    }
-}
-
-impl Drop for AccessPointMonitor {
-    fn drop(&mut self) {
-        self.handle.abort();
     }
 }

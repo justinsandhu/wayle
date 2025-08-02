@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::{
     cli::CliError,
-    services::mpris::{MediaService, PlayerId},
+    services::mpris::{MediaService, Player, PlayerId},
 };
 
 /// Finds a player by identifier (index or partial name match)
@@ -91,7 +93,7 @@ pub fn find_player_by_identifier(
 pub async fn get_player_id_or_active(
     service: &MediaService,
     identifier: Option<&String>,
-) -> Result<PlayerId, CliError> {
+) -> Result<Arc<Player>, CliError> {
     if let Some(id) = identifier {
         let player_id = find_player_by_identifier(service, id)?;
 
@@ -103,7 +105,12 @@ pub async fn get_player_id_or_active(
                 details: e.to_string(),
             })?;
 
-        Ok(player_id)
+        service
+            .player(&player_id)
+            .ok_or_else(|| CliError::ServiceError {
+                service: "Media".to_string(),
+                details: format!("Player {player_id} not found"),
+            })
     } else {
         service.active_player().ok_or_else(|| {
             CliError::InvalidArgument {
@@ -111,16 +118,5 @@ pub async fn get_player_id_or_active(
                 reason: "No active player set. Specify a player ID or set one first with 'wayle media active <player-id>'.".to_string(),
             }
         })
-    }
-}
-
-/// Formats a player's display name for output
-///
-/// Returns the player's identity if available, otherwise returns the bus name
-pub fn get_player_display_name(service: &MediaService, player_id: &PlayerId) -> String {
-    if let Some(player) = service.player(player_id) {
-        player.identity.get()
-    } else {
-        player_id.bus_name().to_string()
     }
 }

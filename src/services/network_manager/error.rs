@@ -29,4 +29,8 @@ pub enum NetworkError {
     /// Service initialization failed
     #[error("Failed to initialize network service: {0}")]
     InitializationFailed(String),
+
+    /// Object not found at the specified D-Bus path
+    #[error("Object not found at path: {0}")]
+    ObjectNotFound(String),
 }

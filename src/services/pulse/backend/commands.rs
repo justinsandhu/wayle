@@ -99,16 +99,12 @@ fn set_device_volume(
         }
     };
 
-    println!("Device info:");
-    println!("{device_info:#?}");
     if let Some(info) = device_info {
         match info.device_type {
             DeviceType::Output => {
-                println!("Setting output volume");
                 introspect.set_sink_volume_by_index(device_key.index, &volume, None);
             }
             DeviceType::Input => {
-                println!("Setting input volume");
                 introspect.set_source_volume_by_index(device_key.index, &volume, None);
             }
         }

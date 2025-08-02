@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     cli::{CliError, Command, CommandResult, types::CommandMetadata},
-    services::mpris::{MediaService, PlaybackState, UNKNOWN_METADATA},
+    services::mpris::{Config, MediaService, PlaybackState, UNKNOWN_METADATA},
 };
 
 /// Command to list all available media players
@@ -29,13 +29,14 @@ impl Command for ListCommand {
     ///
     /// Returns CliError if media service initialization fails
     async fn execute(&self, _args: &[String]) -> CommandResult {
-        let media_service =
-            MediaService::new(Vec::new())
-                .await
-                .map_err(|e| CliError::ServiceError {
-                    service: "Media".to_string(),
-                    details: e.to_string(),
-                })?;
+        let media_service = MediaService::start(Config {
+            ignored_players: vec![],
+        })
+        .await
+        .map_err(|e| CliError::ServiceError {
+            service: "Media".to_string(),
+            details: e.to_string(),
+        })?;
         let players = media_service.players();
 
         if players.is_empty() {
@@ -48,7 +49,7 @@ impl Command for ListCommand {
         for (index, player) in players.iter().enumerate() {
             let player_num = index + 1;
             let player_id = &player.id;
-            let is_active = active_player.as_ref() == Some(player_id);
+            let is_active = active_player.as_ref().map(|p| &p.id) == Some(player_id);
             let active_marker = if is_active { " (active)" } else { "" };
 
             let identity = player.identity.get();
@@ -59,8 +60,8 @@ impl Command for ListCommand {
                 PlaybackState::Stopped => "⏹ Stopped",
             };
 
-            let title = player.title.get();
-            let artist = player.artist.get();
+            let title = player.metadata.title.get();
+            let artist = player.metadata.artist.get();
             let track_info = if !title.is_empty() && title != UNKNOWN_METADATA {
                 format!(" - {title} by {artist}")
             } else {
