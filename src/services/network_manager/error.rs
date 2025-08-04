@@ -33,4 +33,13 @@ pub enum NetworkError {
     /// Object not found at the specified D-Bus path
     #[error("Object not found at path: {0}")]
     ObjectNotFound(String),
+
+    /// Network operation failed
+    #[error("Network operation failed: {operation} - {reason}")]
+    OperationFailed {
+        /// The operation that failed
+        operation: &'static str,
+        /// The reason the operation failed
+        reason: String,
+    },
 }

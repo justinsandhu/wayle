@@ -25,7 +25,6 @@ impl Default for RuntimeState {
 }
 
 impl RuntimeState {
-    /// Get the runtime state file path
     fn state_file_path() -> Result<PathBuf, Error> {
         let config_dir = ConfigPaths::config_dir().map_err(Error::other)?;
         Ok(config_dir.join("runtime-state.json"))

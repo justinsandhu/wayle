@@ -1,12 +1,16 @@
-use std::ops::Deref;
+mod monitoring;
 
+use std::sync::Arc;
+use std::{collections::HashMap, ops::Deref};
+
+use monitoring::DeviceWifiMonitor;
 use tracing::warn;
 use zbus::{Connection, zvariant::OwnedObjectPath};
 
 use crate::services::{
     common::{Property, types::ObjectPath},
     network_manager::{
-        NMDeviceType,
+        NMDeviceType, NetworkError,
         proxy::devices::{DeviceProxy, wireless::DeviceWirelessProxy},
         types::NM80211Mode,
     },
@@ -22,6 +26,17 @@ pub type BootTimeMs = i64;
 
 /// Wireless device capabilities.
 pub type WirelessCapabilities = u32;
+
+/// WiFi-specific properties fetched from D-Bus
+struct WifiProperties {
+    perm_hw_address: String,
+    mode: u32,
+    bitrate: u32,
+    access_points: Vec<OwnedObjectPath>,
+    active_access_point: OwnedObjectPath,
+    wireless_capabilities: u32,
+    last_scan: i64,
+}
 
 /// Wireless (Wi-Fi) network device.
 ///
@@ -63,10 +78,120 @@ impl Deref for DeviceWifi {
 }
 
 impl DeviceWifi {
-    pub(crate) async fn from_path_and_connection(
+    /// Get a snapshot of the current WiFi device state (no monitoring).
+    ///
+    /// Fetches current state from NetworkManager via D-Bus.
+    pub async fn get(connection: Connection, device_path: OwnedObjectPath) -> Option<Arc<Self>> {
+        let device = Self::from_path(connection, device_path).await?;
+        Some(Arc::new(device))
+    }
+
+    /// Get a live-updating WiFi device instance (with monitoring).
+    ///
+    /// Fetches current state and starts monitoring for updates.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::InitializationFailed` if:
+    /// - Device at path is not a WiFi device
+    /// - Failed to fetch WiFi properties from D-Bus
+    /// - Failed to start monitoring
+    pub async fn get_live(
         connection: Connection,
-        path: OwnedObjectPath,
-    ) -> Option<Self> {
+        device_path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        Self::verify_is_wifi_device(&connection, &device_path).await?;
+
+        let base_arc = Device::get_live(connection.clone(), device_path.clone()).await?;
+        let base = Device::clone(&base_arc);
+
+        let wifi_props = Self::fetch_wifi_properties(&connection, &device_path).await?;
+        let device = Arc::new(Self::from_props(base, wifi_props));
+
+        DeviceWifiMonitor::start(device.clone(), connection, device_path).await?;
+
+        Ok(device)
+    }
+
+    async fn verify_is_wifi_device(
+        connection: &Connection,
+        device_path: &OwnedObjectPath,
+    ) -> Result<(), NetworkError> {
+        let device_proxy = DeviceProxy::new(connection, device_path.clone())
+            .await
+            .map_err(NetworkError::DbusError)?;
+
+        let device_type = device_proxy
+            .device_type()
+            .await
+            .map_err(NetworkError::DbusError)?;
+
+        if device_type != NMDeviceType::Wifi as u32 {
+            return Err(NetworkError::InitializationFailed(format!(
+                "Device at {device_path} is not a WiFi device"
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_wifi_properties(
+        connection: &Connection,
+        device_path: &OwnedObjectPath,
+    ) -> Result<WifiProperties, NetworkError> {
+        let wifi_proxy = DeviceWirelessProxy::new(connection, device_path.clone())
+            .await
+            .map_err(NetworkError::DbusError)?;
+
+        let (
+            perm_hw_address,
+            mode,
+            bitrate,
+            access_points,
+            active_access_point,
+            wireless_capabilities,
+            last_scan,
+        ) = tokio::join!(
+            wifi_proxy.perm_hw_address(),
+            wifi_proxy.mode(),
+            wifi_proxy.bitrate(),
+            wifi_proxy.access_points(),
+            wifi_proxy.active_access_point(),
+            wifi_proxy.wireless_capabilities(),
+            wifi_proxy.last_scan(),
+        );
+
+        Ok(WifiProperties {
+            perm_hw_address: perm_hw_address.map_err(NetworkError::DbusError)?,
+            mode: mode.map_err(NetworkError::DbusError)?,
+            bitrate: bitrate.map_err(NetworkError::DbusError)?,
+            access_points: access_points.map_err(NetworkError::DbusError)?,
+            active_access_point: active_access_point.map_err(NetworkError::DbusError)?,
+            wireless_capabilities: wireless_capabilities.map_err(NetworkError::DbusError)?,
+            last_scan: last_scan.map_err(NetworkError::DbusError)?,
+        })
+    }
+
+    fn from_props(base: Device, props: WifiProperties) -> Self {
+        Self {
+            base,
+            perm_hw_address: Property::new(props.perm_hw_address),
+            mode: Property::new(NM80211Mode::from_u32(props.mode)),
+            bitrate: Property::new(props.bitrate),
+            access_points: Property::new(
+                props
+                    .access_points
+                    .into_iter()
+                    .map(|p| p.to_string())
+                    .collect(),
+            ),
+            active_access_point: Property::new(props.active_access_point.to_string()),
+            wireless_capabilities: Property::new(props.wireless_capabilities),
+            last_scan: Property::new(props.last_scan),
+        }
+    }
+
+    pub(crate) async fn from_path(connection: Connection, path: OwnedObjectPath) -> Option<Self> {
         let device_proxy = DeviceProxy::new(&connection, path.clone()).await.ok()?;
 
         let device_type = device_proxy.device_type().await.ok()?;
@@ -83,14 +208,13 @@ impl DeviceWifi {
             .await
             .ok()?;
 
-        let base =
-            match Device::from_connection_and_path(connection.clone(), path.to_string()).await {
-                Some(base) => base,
-                None => {
-                    warn!("Failed to create base Device for {}", path);
-                    return None;
-                }
-            };
+        let base = match Device::from_path(connection.clone(), path.to_string()).await {
+            Some(base) => base,
+            None => {
+                warn!("Failed to create base Device for {}", path);
+                return None;
+            }
+        };
 
         let (
             perm_hw_address,
@@ -134,5 +258,28 @@ impl DeviceWifi {
         };
 
         Some(device)
+    }
+
+    // Request a scan for available access points.
+    ///
+    /// Triggers NetworkManager to scan for nearby WiFi networks. The scan runs
+    /// asynchronously and results will be reflected in the `access_points` property
+    /// when complete. The `last_scan` timestamp will update when the scan finishes.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::OperationFailed` if the scan request fails.
+    pub async fn request_scan(&self) -> Result<(), NetworkError> {
+        let proxy = DeviceWirelessProxy::new(&self.connection, self.path.get()).await?;
+
+        proxy
+            .request_scan(HashMap::new())
+            .await
+            .map_err(|e| NetworkError::OperationFailed {
+                operation: "request_scan",
+                reason: e.to_string(),
+            })?;
+
+        Ok(())
     }
 }

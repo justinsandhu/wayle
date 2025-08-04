@@ -21,10 +21,6 @@ impl<T: Clone + Send + Sync + 'static> Property<T> {
         Self { tx, rx }
     }
 
-    /// Set a new value and notify all watchers.
-    ///
-    /// Only updates if the value is different (requires PartialEq).
-    /// Only accessible within the crate to prevent external modification.
     pub(crate) fn set(&self, new_value: T)
     where
         T: PartialEq,

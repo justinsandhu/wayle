@@ -19,7 +19,6 @@ use crate::services::{
 pub struct ActiveConnection {
     /// The zbus connection
     connection: Connection,
-    /// The object path of the active connection
     pub(crate) path: Property<OwnedObjectPath>,
 
     /// The path of the connection object that this ActiveConnection is using.

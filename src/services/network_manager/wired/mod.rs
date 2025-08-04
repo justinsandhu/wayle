@@ -1,10 +1,11 @@
-use std::ops::Deref;
+mod monitoring;
 
-use zbus::Connection;
-
+use super::{NetworkError, NetworkStatus, core::device::wired::DeviceWired};
 use crate::services::common::Property;
-
-use super::{NetworkStatus, core::device::wired::DeviceWired};
+use monitoring::WiredMonitor;
+use std::ops::Deref;
+use std::sync::Arc;
+use zbus::{Connection, zvariant::OwnedObjectPath};
 
 /// Manages wired (ethernet) network connectivity and device state.
 ///
@@ -36,11 +37,62 @@ impl PartialEq for Wired {
 }
 
 impl Wired {
-    pub(crate) fn from_device_and_connection(connection: Connection, device: DeviceWired) -> Self {
-        Self {
+    /// Get a snapshot of the current wired state (no monitoring).
+    ///
+    /// Fetches the device and current state from NetworkManager via D-Bus.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::InitializationFailed` if the wired device cannot be created
+    pub async fn get(
+        connection: Connection,
+        device_path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        let device_arc = DeviceWired::get(connection.clone(), device_path)
+            .await
+            .ok_or_else(|| {
+                NetworkError::InitializationFailed("Failed to create wired device".into())
+            })?;
+        let device = DeviceWired::clone(&device_arc);
+
+        let wired = Self::create_from_device(connection, device).await?;
+        Ok(Arc::new(wired))
+    }
+
+    /// Get a live-updating wired instance (with monitoring).
+    ///
+    /// Fetches the device, current state and starts monitoring for updates.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::InitializationFailed` if:
+    /// - The wired device cannot be created
+    /// - Failed to start monitoring
+    pub async fn get_live(
+        connection: Connection,
+        device_path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        let device_arc = DeviceWired::get_live(connection.clone(), device_path).await?;
+        let device = DeviceWired::clone(&device_arc);
+
+        let wired = Self::create_from_device(connection.clone(), device.clone()).await?;
+
+        WiredMonitor::start(connection, &device).await?;
+
+        Ok(Arc::new(wired))
+    }
+
+    async fn create_from_device(
+        connection: Connection,
+        device: DeviceWired,
+    ) -> Result<Self, NetworkError> {
+        // TODO: Fetch actual current wired state
+        // - connectivity status from device state
+
+        Ok(Self {
             connection,
             device,
             connectivity: Property::new(NetworkStatus::Disconnected),
-        }
+        })
     }
 }

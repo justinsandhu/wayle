@@ -4,5 +4,8 @@
 pub mod property;
 /// Common type definitions and conversions used across services.
 pub mod types;
+// Service macros
+#[macro_use]
+mod macros;
 
 pub use property::{ComputedProperty, Property};

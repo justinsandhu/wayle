@@ -2,16 +2,6 @@ use toml::Value;
 
 use super::ConfigError;
 
-/// Checks if a configuration path matches a given pattern
-///
-/// # Arguments
-/// * `path` - The actual configuration path
-/// * `pattern` - The pattern to match against (supports "*" as wildcard)
-///
-/// # Examples
-/// * `"server.port"` matches `"server.port"`
-/// * `"server.port"` matches `"server.*"`
-/// * `"server.port"` matches `"*"`
 pub(super) fn path_matches(path: &str, pattern: &str) -> bool {
     const WILDCARD: &str = "*";
 
@@ -35,14 +25,6 @@ pub(super) fn path_matches(path: &str, pattern: &str) -> bool {
     true
 }
 
-/// Navigates through a TOML value structure following a dot-separated path
-///
-/// # Arguments
-/// * `value` - The root TOML value to navigate from
-/// * `path` - Dot-separated path (e.g., "server.port" or "array.0.field")
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If the path doesn't exist or is malformed
 pub(super) fn navigate_path(value: &Value, path: &str) -> Result<Value, ConfigError> {
     let parts: Vec<&str> = path.split(".").collect();
     let mut current = value;
@@ -88,15 +70,6 @@ pub(super) fn navigate_path(value: &Value, path: &str) -> Result<Value, ConfigEr
     Ok(current.clone())
 }
 
-/// Sets a value at the specified path within a mutable TOML value structure
-///
-/// # Arguments
-/// * `value` - The root TOML value to modify
-/// * `path` - Dot-separated path to the target location
-/// * `new_value` - The value to insert at the path
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If the path is empty or doesn't exist
 pub(super) fn set_value_at_path(
     value: &mut Value,
     path: &str,
@@ -113,17 +86,6 @@ pub(super) fn set_value_at_path(
     insert_value(parent, last_key, new_value)
 }
 
-/// Navigates to the parent container of the target element in a mutable TOML structure
-///
-/// # Arguments
-/// * `value` - The root TOML value to navigate
-/// * `parts` - Path components split by dots
-///
-/// # Returns
-/// A tuple of (parent container, last key) for insertion
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If navigation fails at any point
 pub(super) fn navigate_to_parent_mut<'a>(
     value: &'a mut Value,
     parts: &'a [&'a str],
@@ -137,15 +99,6 @@ pub(super) fn navigate_to_parent_mut<'a>(
     Ok((current, parts[parts.len() - 1]))
 }
 
-/// Performs a single navigation step in a mutable TOML structure
-///
-/// # Arguments
-/// * `current` - The current TOML value
-/// * `key` - The key or index to navigate to
-/// * `path_so_far` - The path traversed so far (for error messages)
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If the key doesn't exist or index is invalid
 pub(super) fn navigate_step_mut<'a>(
     current: &'a mut Value,
     key: &str,
@@ -190,15 +143,6 @@ pub(super) fn navigate_step_mut<'a>(
     }
 }
 
-/// Inserts a value into a TOML container (table or array)
-///
-/// # Arguments
-/// * `container` - The container to insert into
-/// * `key` - The key (for tables) or index (for arrays)
-/// * `new_value` - The value to insert
-///
-/// # Errors
-/// * `ConfigError::InvalidPath` - If the container type doesn't support insertion or index is invalid
 pub(super) fn insert_value(
     container: &mut Value,
     key: &str,

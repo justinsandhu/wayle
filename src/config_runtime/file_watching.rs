@@ -120,7 +120,6 @@ impl ConfigRuntime {
     }
 }
 
-/// Main file watching loop that processes events until cancelled.
 async fn file_watch_loop(event_rx: &mut Receiver<notify::Event>, store: ConfigRuntime) {
     let mut pending_changes = false;
     let mut last_change = Instant::now();
@@ -152,7 +151,6 @@ async fn file_watch_loop(event_rx: &mut Receiver<notify::Event>, store: ConfigRu
     }
 }
 
-/// Checks if a file system event is relevant for config reloading.
 fn is_relevant_event(event: &notify::Event) -> bool {
     let is_write_event = matches!(
         event.kind,

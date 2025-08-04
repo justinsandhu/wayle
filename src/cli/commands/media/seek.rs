@@ -23,13 +23,6 @@ impl SeekCommand {
         Self {}
     }
 
-    /// Parse position from various formats
-    ///
-    /// Supports:
-    /// - Seconds: "30", "90"
-    /// - Minutes:Seconds: "1:30", "2:45"
-    /// - Percentage: "50%", "75%"
-    /// - Relative: "+10", "-15" (seconds)
     fn parse_position(
         position_str: &str,
         current_position: Option<Duration>,

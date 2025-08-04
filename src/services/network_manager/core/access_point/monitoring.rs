@@ -35,6 +35,7 @@ impl AccessPointMonitor {
     }
 
     #[allow(clippy::cognitive_complexity)]
+    #[allow(clippy::too_many_lines)]
     async fn monitor(weak: Weak<AccessPoint>, proxy: AccessPointProxy<'static>) {
         let mut flag_changes = proxy.receive_flags_changed().await;
         let mut wpa_flags_changes = proxy.receive_wpa_flags_changed().await;

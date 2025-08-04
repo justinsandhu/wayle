@@ -11,7 +11,6 @@ use crate::services::common::Property;
 pub(crate) struct NetworkMonitoring;
 
 impl NetworkMonitoring {
-    /// Start all network monitoring tasks.
     pub(crate) async fn start(
         connection: Connection,
         wifi: Option<Arc<Wifi>>,

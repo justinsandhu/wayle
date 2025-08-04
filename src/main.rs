@@ -44,17 +44,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Executes CLI commands through the CliService.
-///
-/// Parses command line arguments and routes them to the appropriate command
-/// handler. Supports both category-based commands (config get, config set)
-/// and general help commands.
-///
-/// # Arguments
-/// * `args` - Command line arguments (excluding program name)
-///
-/// # Errors
-/// Returns error if command execution fails or config store initialization fails.
 async fn run_cli_command(args: &[String]) -> Result<(), Box<dyn Error>> {
     let config_runtime = ConfigRuntime::load()?;
     let cli_service = CliService::new(config_runtime);

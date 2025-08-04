@@ -4,14 +4,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::{
-    StreamExt,
-    stream::{Stream, select_all},
-};
+use futures::stream::Stream;
+use monitoring::TrackMetadataMonitor;
 use zbus::zvariant::OwnedValue;
 
 use crate::services::common::Property;
 use crate::services::mpris::proxy::MediaPlayer2PlayerProxy;
+use crate::watch_all;
 
 /// Default value for unknown metadata fields.
 pub const UNKNOWN_METADATA: &str = "Unknown";
@@ -53,7 +52,7 @@ impl TrackMetadata {
             Self::update_from_dbus(&metadata, metadata_map);
         }
 
-        monitoring::TrackMetadataMonitor::start(Arc::clone(&metadata), proxy);
+        TrackMetadataMonitor::start(Arc::clone(&metadata), proxy);
 
         metadata
     }
@@ -71,7 +70,6 @@ impl TrackMetadata {
         }
     }
 
-    /// Update metadata from D-Bus property map
     pub(crate) fn update_from_dbus(
         metadata: &Arc<Self>,
         dbus_metadata: HashMap<String, OwnedValue>,
@@ -91,17 +89,16 @@ impl TrackMetadata {
     ///
     /// Emits whenever any metadata field changes.
     pub fn watch(&self) -> impl Stream<Item = TrackMetadata> + Send {
-        let streams: Vec<_> = vec![
-            self.title.watch().map(|_| ()).boxed(),
-            self.artist.watch().map(|_| ()).boxed(),
-            self.album.watch().map(|_| ()).boxed(),
-            self.album_artist.watch().map(|_| ()).boxed(),
-            self.length.watch().map(|_| ()).boxed(),
-            self.art_url.watch().map(|_| ()).boxed(),
-            self.track_id.watch().map(|_| ()).boxed(),
-        ];
-
-        select_all(streams).map(move |_| self.clone())
+        watch_all!(
+            self,
+            title,
+            artist,
+            album,
+            album_artist,
+            length,
+            art_url,
+            track_id
+        )
     }
 
     fn extract_string(value: &OwnedValue) -> Option<String> {

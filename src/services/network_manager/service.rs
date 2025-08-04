@@ -7,11 +7,7 @@ use zbus::zvariant::OwnedObjectPath;
 use crate::services::{
     common::Property,
     network_manager::{
-        core::{
-            access_point::AccessPoint,
-            connection::ActiveConnection,
-            device::{wifi::DeviceWifi, wired::DeviceWired},
-        },
+        core::{access_point::AccessPoint, connection::ActiveConnection},
         discovery::NetworkServiceDiscovery,
         monitoring::NetworkMonitoring,
     },
@@ -70,42 +66,29 @@ impl NetworkService {
         let wifi_device_path = NetworkServiceDiscovery::wifi_device_path(&connection).await?;
         let wired_device_path = NetworkServiceDiscovery::wired_device_path(&connection).await?;
 
-        let wifi_device = if let Some(path) = wifi_device_path {
-            let device =
-                DeviceWifi::from_path_and_connection(connection.clone(), path.clone()).await;
-            if device.is_none() {
-                warn!("Failed to create WiFi device from path: {}", path);
-            }
-            device
-        } else {
-            None
-        };
-
-        let wired_device = if let Some(path) = wired_device_path {
-            DeviceWired::from_path_and_connection(connection.clone(), path).await
-        } else {
-            None
-        };
-
-        let wifi = match wifi_device {
-            Some(device) => {
-                match Wifi::from_device_and_connection(connection.clone(), device).await {
-                    Ok(wifi) => Some(Arc::new(wifi)),
-                    Err(e) => {
-                        warn!("Failed to create WiFi service: {}", e);
-                        None
-                    }
+        let wifi = if let Some(path) = wifi_device_path {
+            match Wifi::get_live(connection.clone(), path.clone()).await {
+                Ok(wifi) => Some(wifi),
+                Err(e) => {
+                    warn!("Failed to create WiFi service from path {}: {}", path, e);
+                    None
                 }
             }
-            None => None,
+        } else {
+            None
         };
 
-        let wired = wired_device.map(|device| {
-            Arc::new(Wired::from_device_and_connection(
-                connection.clone(),
-                device,
-            ))
-        });
+        let wired = if let Some(path) = wired_device_path {
+            match Wired::get_live(connection.clone(), path.clone()).await {
+                Ok(wired) => Some(wired),
+                Err(e) => {
+                    warn!("Failed to create Wired service from path {}: {}", path, e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         let primary = Property::new(ConnectionType::Unknown);
 

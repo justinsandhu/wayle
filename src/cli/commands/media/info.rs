@@ -25,7 +25,6 @@ impl InfoCommand {
         Self {}
     }
 
-    /// Format duration as MM:SS
     fn format_duration(duration: Duration) -> String {
         let total_seconds = duration.as_secs();
         let minutes = total_seconds / 60;

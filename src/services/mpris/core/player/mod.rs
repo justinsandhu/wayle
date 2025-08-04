@@ -3,8 +3,9 @@ pub(crate) mod monitoring;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::stream::select_all;
-use futures::{Stream, StreamExt};
+use crate::watch_all;
+use futures::Stream;
+use monitoring::PlayerMonitor;
 use zbus::fdo::PropertiesProxy;
 use zbus::names::{InterfaceName, MemberName};
 use zbus::{Connection, names::OwnedBusName, zvariant::ObjectPath};
@@ -97,14 +98,6 @@ impl Player {
         }
     }
 
-    /// Get a snapshot of the current player state (no monitoring).
-    ///
-    /// Creates a player instance without property monitoring.
-    /// Properties will reflect the state at creation time only.
-    ///
-    /// # Errors
-    ///
-    /// Returns error if D-Bus proxy creation fails or player initialization fails
     pub(crate) async fn get(
         connection: &Connection,
         player_id: PlayerId,
@@ -141,14 +134,6 @@ impl Player {
         Ok(Arc::new(player))
     }
 
-    /// Get a live-updating player instance (with monitoring).
-    ///
-    /// Creates player with automatic property monitoring that updates
-    /// the reactive model when D-Bus properties change.
-    ///
-    /// # Errors
-    ///
-    /// Returns error if D-Bus proxy creation fails or player initialization fails
     pub(crate) async fn get_live(
         connection: &Connection,
         player_id: PlayerId,
@@ -183,14 +168,11 @@ impl Player {
         Self::refresh_properties(&player, &player_proxy).await;
 
         let player = Arc::new(player);
-        monitoring::PlayerMonitor::start(player_id, Arc::clone(&player), player_proxy);
+        PlayerMonitor::start(player_id, Arc::clone(&player), player_proxy);
 
         Ok(player)
     }
 
-    /// Refresh all player properties from D-Bus.
-    ///
-    /// Updates playback state, metadata, capabilities, etc.
     async fn refresh_properties(player: &Player, proxy: &MediaPlayer2PlayerProxy<'_>) {
         if let Ok(status) = proxy.playback_status().await {
             player
@@ -479,7 +461,6 @@ impl Player {
         self.set_shuffle_mode(next).await
     }
 
-    /// Update capabilities from D-Bus properties.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn update_capabilities(
         &self,
@@ -500,24 +481,27 @@ impl Player {
         self.can_shuffle.set(can_shuffle);
     }
 
+    /// Watch for any player property changes.
+    ///
+    /// Returns a stream that emits a clone of the player whenever any property changes,
+    /// including metadata, playback state, capabilities, or any other tracked field.
     pub fn watch(&self) -> impl Stream<Item = Player> + Send {
-        let streams: Vec<_> = vec![
-            self.identity.watch().map(|_| ()).boxed(),
-            self.desktop_entry.watch().map(|_| ()).boxed(),
-            self.playback_state.watch().map(|_| ()).boxed(),
-            self.loop_mode.watch().map(|_| ()).boxed(),
-            self.shuffle_mode.watch().map(|_| ()).boxed(),
-            self.volume.watch().map(|_| ()).boxed(),
-            self.metadata.watch().map(|_| ()).boxed(),
-            self.can_control.watch().map(|_| ()).boxed(),
-            self.can_play.watch().map(|_| ()).boxed(),
-            self.can_go_next.watch().map(|_| ()).boxed(),
-            self.can_go_previous.watch().map(|_| ()).boxed(),
-            self.can_seek.watch().map(|_| ()).boxed(),
-            self.can_loop.watch().map(|_| ()).boxed(),
-            self.can_shuffle.watch().map(|_| ()).boxed(),
-        ];
-
-        select_all(streams).map(move |_| self.clone())
+        watch_all!(
+            self,
+            identity,
+            desktop_entry,
+            playback_state,
+            loop_mode,
+            shuffle_mode,
+            volume,
+            metadata,
+            can_control,
+            can_play,
+            can_go_next,
+            can_go_previous,
+            can_seek,
+            can_loop,
+            can_shuffle
+        )
     }
 }

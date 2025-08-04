@@ -63,7 +63,6 @@ pub fn init_cli_mode() -> Result<(), Box<dyn Error>> {
     init_with_file_and_console_option(false)
 }
 
-/// Initialize tracing with file output and optional console output
 fn init_with_file_and_console_option(enable_console: bool) -> Result<(), Box<dyn Error>> {
     const DAYS_TO_KEEP: usize = 7;
 

@@ -124,10 +124,6 @@ impl BroadcastService {
             })
     }
 
-    /// The main actor loop that processes broadcast commands.
-    ///
-    /// This function runs in a dedicated task and owns all subscriber state.
-    /// It processes commands sequentially, ensuring no race conditions or lock contention.
     async fn broadcast_actor_loop(command_rx: &mut Receiver<BroadcastCommand>) {
         let mut subscriptions = Vec::new();
 

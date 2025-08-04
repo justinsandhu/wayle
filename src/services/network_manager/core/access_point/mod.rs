@@ -21,7 +21,6 @@ pub use types::{BSSID, NetworkIdentifier, SSID, SecurityType};
 /// Access points are discovered and monitored through the WiFi device interface.
 #[derive(Debug, Clone)]
 pub struct AccessPoint {
-    /// D-Bus object path for this access point.
     pub(crate) path: OwnedObjectPath,
     /// Flags describing the capabilities of the access point. See NM80211ApFlags.
     pub flags: Property<NM80211ApFlags>,
@@ -88,11 +87,6 @@ impl AccessPoint {
         Some(access_point)
     }
 
-    /// Creates an access point instance from a D-Bus path and connection.
-    ///
-    /// Retrieves all access point properties from NetworkManager via D-Bus
-    /// and initializes reactive properties for each value. Returns None if
-    /// the access point doesn't exist at the given path.
     async fn create_from_path(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
         let ap_proxy = AccessPointProxy::new(&connection, path.clone())
             .await

@@ -1,15 +1,20 @@
+/// Device monitoring implementation
+mod monitoring;
 /// WiFi device functionality and management.
 pub mod wifi;
 /// Wired (ethernet) device functionality and management.
 pub mod wired;
 
-use zbus::Connection;
+use monitoring::DeviceMonitor;
+use std::sync::Arc;
+use zbus::{Connection, zvariant::OwnedObjectPath};
 
 use crate::services::{
     common::{Property, types::ObjectPath},
     network_manager::{
         LldpNeighbor, NMConnectivityState, NMDeviceCapabilities, NMDeviceInterfaceFlags,
-        NMDeviceState, NMDeviceStateReason, NMDeviceType, NMMetered, proxy::devices::DeviceProxy,
+        NMDeviceState, NMDeviceStateReason, NMDeviceType, NMMetered, NetworkError,
+        proxy::devices::DeviceProxy,
     },
 };
 
@@ -37,7 +42,6 @@ impl std::ops::Deref for DbusConnection {
 /// Contains hardware information, state, configuration, and statistics.
 #[derive(Debug, Clone)]
 pub struct Device {
-    /// D-Bus connection for this device.
     pub(crate) connection: DbusConnection,
 
     /// D-Bus object path for this device.
@@ -208,11 +212,29 @@ struct DeviceProperties {
 }
 
 impl Device {
-    /// Create a Device from a D-Bus connection and path.
-    pub async fn from_connection_and_path(
+    pub(crate) async fn get(
         connection: Connection,
-        object_path: ObjectPath,
-    ) -> Option<Self> {
+        device_path: OwnedObjectPath,
+    ) -> Option<Arc<Self>> {
+        let device = Self::from_path(connection, device_path.to_string()).await?;
+        Some(Arc::new(device))
+    }
+
+    pub(crate) async fn get_live(
+        connection: Connection,
+        device_path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        let device = Self::from_path(connection.clone(), device_path.to_string())
+            .await
+            .ok_or_else(|| NetworkError::InitializationFailed("Failed to create device".into()))?;
+
+        let device = Arc::new(device);
+        DeviceMonitor::start(device.clone(), connection, device_path).await?;
+
+        Ok(device)
+    }
+
+    pub(crate) async fn from_path(connection: Connection, object_path: ObjectPath) -> Option<Self> {
         let proxy = DeviceProxy::new(&connection, object_path.clone())
             .await
             .ok()?;
@@ -220,7 +242,6 @@ impl Device {
         Some(Self::from_properties(props, connection, object_path))
     }
 
-    /// Fetch all properties from the proxy
     #[allow(clippy::too_many_lines)]
     async fn fetch_properties(proxy: &DeviceProxy<'_>) -> Option<DeviceProperties> {
         let (udi, path, interface, ip_interface, driver, driver_version, firmware_version) = tokio::join!(
@@ -331,7 +352,6 @@ impl Device {
         })
     }
 
-    /// Convert fetched properties to Device
     fn from_properties(
         props: DeviceProperties,
         connection: Connection,
@@ -378,6 +398,7 @@ impl Device {
             hw_address: Property::new(props.hw_address),
             ports: Property::new(props.ports),
             // No idea what the properties for LLDP are - feel free to open a PR if you need this
+            // In the meantime, lldp_neighbors will always return an empty vec
             lldp_neighbors: Property::new(vec![]),
         }
     }

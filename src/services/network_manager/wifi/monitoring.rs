@@ -2,42 +2,35 @@ use std::sync::Arc;
 
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
-use zbus::{Connection, zvariant::OwnedObjectPath};
+use zbus::{Connection, proxy::PropertyStream, zvariant::OwnedObjectPath};
 
 use crate::services::{
     common::Property,
     network_manager::{
-        AccessPoint, NetworkError,
-        core::device::wifi::DeviceWifi,
-        wireless::{AccessPointAddedStream, AccessPointRemovedStream, DeviceWirelessProxy},
+        AccessPoint, AccessPointProxy, DeviceProxy, NMDeviceState, NetworkError,
+        NetworkManagerProxy, NetworkStatus, SSID, core::device::wifi::DeviceWifi,
+        wireless::DeviceWirelessProxy,
     },
 };
 
-pub(crate) struct WifiMonitoring;
+use super::Wifi;
 
-impl WifiMonitoring {
+type SsidStream = PropertyStream<'static, Vec<u8>>;
+type StrengthStream = PropertyStream<'static, u8>;
+
+pub(crate) struct WifiMonitor;
+
+impl WifiMonitor {
     pub async fn start(
         connection: Connection,
-        device: &DeviceWifi,
-        access_points: &Property<Vec<Arc<AccessPoint>>>,
+        wifi: &Wifi,
     ) -> Result<JoinHandle<()>, NetworkError> {
-        let wireless_proxy = DeviceWirelessProxy::new(&connection, device.object_path.clone())
-            .await
-            .map_err(NetworkError::DbusError)?;
-
-        let ap_added = wireless_proxy
-            .receive_access_point_added()
-            .await
-            .map_err(NetworkError::DbusError)?;
-        let ap_removed = wireless_proxy
-            .receive_access_point_removed()
-            .await
-            .map_err(NetworkError::DbusError)?;
+        let access_points = &wifi.access_points;
+        let device = &wifi.device;
 
         Self::populate_existing_access_points(&connection, device, access_points).await;
 
-        let handle =
-            Self::spawn_monitoring_task(connection, access_points.clone(), ap_added, ap_removed);
+        let handle = Self::spawn_monitoring_task(connection, wifi).await?;
 
         Ok(handle)
     }
@@ -65,33 +58,102 @@ impl WifiMonitoring {
         }
     }
 
-    fn spawn_monitoring_task(
+    async fn spawn_monitoring_task(
         connection: Connection,
-        access_points: Property<Vec<Arc<AccessPoint>>>,
-        mut ap_added: AccessPointAddedStream,
-        mut ap_removed: AccessPointRemovedStream,
-    ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        wifi: &Wifi,
+    ) -> Result<JoinHandle<()>, NetworkError> {
+        let access_points_prop = wifi.access_points.clone();
+        let device_prop = wifi.device.clone();
+        let enabled_state_prop = wifi.enabled.clone();
+        let ssid_prop = wifi.ssid.clone();
+        let strength_prop = wifi.strength.clone();
+        let connectivity_prop = wifi.connectivity.clone();
+
+        let wireless_proxy = DeviceWirelessProxy::new(&connection, device_prop.object_path.clone())
+            .await
+            .map_err(NetworkError::DbusError)?;
+        let device_proxy = DeviceProxy::new(&connection, device_prop.object_path.clone())
+            .await
+            .map_err(NetworkError::DbusError)?;
+        let nm_proxy = NetworkManagerProxy::new(&connection)
+            .await
+            .map_err(NetworkError::DbusError)?;
+
+        let mut ap_added = wireless_proxy
+            .receive_access_point_added()
+            .await
+            .map_err(NetworkError::DbusError)?;
+        let mut ap_removed = wireless_proxy
+            .receive_access_point_removed()
+            .await
+            .map_err(NetworkError::DbusError)?;
+        let mut enabled_changed = nm_proxy.receive_wireless_enabled_changed().await;
+        let mut access_point_changed = wireless_proxy.receive_active_access_point_changed().await;
+        let mut connectivity_changed = device_proxy.receive_state_changed().await;
+
+        let (mut ap_ssid_stream, mut ap_strength_stream) = Self::handle_access_point_changed(
+            &connection,
+            device_prop.active_access_point.get(),
+            &ssid_prop,
+            &strength_prop,
+        )
+        .await;
+
+        let handle = tokio::spawn(async move {
             loop {
                 tokio::select! {
                     Some(added) = ap_added.next() => {
-                        let Ok(args) = added.args() else { continue };
-
-                        let Some(new_ap) = AccessPoint::get_live(connection.clone(), args.access_point).await else {
-                            continue;
-                        };
-
-                        let mut aps = access_points.get();
-                        aps.push(new_ap);
-                        access_points.set(aps);
+                        if let Ok(args) = added.args() {
+                            Self::handle_ap_added(&connection, args.access_point, &access_points_prop).await;
+                        }
                     }
 
                     Some(removed) = ap_removed.next() => {
-                        let Ok(args) = removed.args() else { continue };
+                        if let Ok(args) = removed.args() {
+                            Self::handle_ap_removed(&args.access_point, &access_points_prop);
+                        }
+                    }
 
-                        let mut aps = access_points.get();
-                        aps.retain(|ap| ap.path != args.access_point);
-                        access_points.set(aps);
+                    Some(change) = enabled_changed.next() => {
+                        if let Ok(new_state) = change.get().await {
+                            enabled_state_prop.set(new_state);
+                        }
+                    }
+
+                    Some(change) = access_point_changed.next() => {
+                        let Ok(new_ap_path) = change.get().await else {
+                            continue;
+                        };
+
+                        let (new_ssid_stream, new_strength_stream) =
+                            Self::handle_access_point_changed(
+                                &connection,
+                                new_ap_path.to_string(),
+                                &ssid_prop,
+                                &strength_prop
+                            ).await;
+
+                        ap_ssid_stream = new_ssid_stream;
+                        ap_strength_stream = new_strength_stream;
+                    }
+
+                    Some(change) = async { ap_ssid_stream.as_mut()?.next().await } => {
+                        if let Ok(new_ssid) = change.get().await {
+                            ssid_prop.set(Some(SSID::new(new_ssid).to_string()));
+                        }
+                    }
+
+                    Some(change) = async { ap_strength_stream.as_mut()?.next().await } => {
+                        if let Ok(new_strength) = change.get().await {
+                            strength_prop.set(Some(new_strength));
+                        }
+                    }
+
+                    Some(change) = connectivity_changed.next() => {
+                        if let Ok(new_connectivity) = change.get().await {
+                            let device_state = NMDeviceState::from_u32(new_connectivity);
+                            connectivity_prop.set(NetworkStatus::from_device_state(device_state));
+                        }
                     }
 
                     else => {
@@ -99,6 +161,64 @@ impl WifiMonitoring {
                     }
                 }
             }
-        })
+        });
+
+        Ok(handle)
+    }
+
+    async fn handle_ap_added(
+        connection: &Connection,
+        ap_path: OwnedObjectPath,
+        access_points: &Property<Vec<Arc<AccessPoint>>>,
+    ) {
+        if let Some(new_ap) = AccessPoint::get_live(connection.clone(), ap_path).await {
+            let mut aps = access_points.get();
+            aps.push(new_ap);
+            access_points.set(aps);
+        }
+    }
+
+    fn handle_ap_removed(
+        ap_path: &OwnedObjectPath,
+        access_points: &Property<Vec<Arc<AccessPoint>>>,
+    ) {
+        let mut aps = access_points.get();
+        aps.retain(|ap| &ap.path != ap_path);
+        access_points.set(aps);
+    }
+
+    async fn handle_access_point_changed(
+        connection: &Connection,
+        new_ap_path: String,
+        ssid_prop: &Property<Option<String>>,
+        strength_prop: &Property<Option<u8>>,
+    ) -> (Option<SsidStream>, Option<StrengthStream>) {
+        if new_ap_path.is_empty() || new_ap_path == "/" {
+            ssid_prop.set(None);
+            strength_prop.set(None);
+            return (None, None);
+        }
+
+        match AccessPointProxy::new(connection, new_ap_path).await {
+            Ok(ap_proxy) => {
+                if let Ok(raw_ssid) = ap_proxy.ssid().await {
+                    ssid_prop.set(Some(SSID::new(raw_ssid).to_string()));
+                }
+
+                if let Ok(strength) = ap_proxy.strength().await {
+                    strength_prop.set(Some(strength));
+                }
+
+                (
+                    Some(ap_proxy.receive_ssid_changed().await),
+                    Some(ap_proxy.receive_strength_changed().await),
+                )
+            }
+            Err(_) => {
+                ssid_prop.set(None);
+                strength_prop.set(None);
+                (None, None)
+            }
+        }
     }
 }
