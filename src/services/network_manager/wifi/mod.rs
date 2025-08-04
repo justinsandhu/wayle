@@ -134,13 +134,24 @@ impl Wifi {
     /// # Errors
     ///
     /// Returns `NetworkError::OperationFailed` if the connection fails
-    pub async fn connect_to_ap(
+    pub async fn connect(
         &self,
         ap_path: OwnedObjectPath,
         password: Option<String>,
     ) -> Result<(), NetworkError> {
-        WifiControls::connect_to_ap(&self.connection, &self.device.path.get(), ap_path, password)
-            .await
+        WifiControls::connect(&self.connection, &self.device.path.get(), ap_path, password).await
+    }
+
+    /// Disconnect from the current WiFi network.
+    ///
+    /// Deactivates the current WiFi connection if there is one active.
+    /// If no connection is active, this is a no-op.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::OperationFailed` if the disconnection fails
+    pub async fn disconnect(&self) -> Result<(), NetworkError> {
+        WifiControls::disconnect(&self.connection, &self.device.path.get()).await
     }
 
     async fn from_device(connection: Connection, device: DeviceWifi) -> Result<Self, NetworkError> {

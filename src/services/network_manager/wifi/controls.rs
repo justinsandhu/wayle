@@ -4,7 +4,9 @@ use zbus::{
     zvariant::{OwnedObjectPath, OwnedValue, Value},
 };
 
-use crate::services::network_manager::{AccessPointProxy, NetworkError, NetworkManagerProxy, SSID};
+use crate::services::network_manager::{
+    AccessPointProxy, DeviceProxy, NetworkError, NetworkManagerProxy, SSID,
+};
 
 type ConnectionSettings = HashMap<String, HashMap<String, OwnedValue>>;
 
@@ -43,7 +45,44 @@ impl WifiControls {
         Ok(())
     }
 
-    pub(super) async fn connect_to_ap(
+    pub(super) async fn disconnect(
+        connection: &Connection,
+        device_path: &str,
+    ) -> Result<(), NetworkError> {
+        let proxy = NetworkManagerProxy::new(connection).await?;
+
+        let device_proxy = DeviceProxy::new(connection, device_path)
+            .await
+            .map_err(|e| NetworkError::OperationFailed {
+                operation: "device_proxy",
+                reason: e.to_string(),
+            })?;
+
+        let active_connection_path =
+            device_proxy
+                .active_connection()
+                .await
+                .map_err(|e| NetworkError::OperationFailed {
+                    operation: "active_connection",
+                    reason: e.to_string(),
+                })?;
+
+        if active_connection_path.as_str() == "/" || active_connection_path.as_str().is_empty() {
+            return Ok(());
+        }
+
+        proxy
+            .deactivate_connection(&active_connection_path)
+            .await
+            .map_err(|e| NetworkError::OperationFailed {
+                operation: "deactivate_connection",
+                reason: e.to_string(),
+            })?;
+
+        Ok(())
+    }
+
+    pub(super) async fn connect(
         connection: &Connection,
         device_path: &str,
         ap_path: OwnedObjectPath,
