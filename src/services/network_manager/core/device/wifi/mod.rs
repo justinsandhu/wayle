@@ -79,8 +79,6 @@ impl Deref for DeviceWifi {
 
 impl DeviceWifi {
     /// Get a snapshot of the current WiFi device state (no monitoring).
-    ///
-    /// Fetches current state from NetworkManager via D-Bus.
     pub async fn get(connection: Connection, device_path: OwnedObjectPath) -> Option<Arc<Self>> {
         let device = Self::from_path(connection, device_path).await?;
         Some(Arc::new(device))

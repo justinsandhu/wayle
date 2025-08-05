@@ -58,8 +58,6 @@ impl PartialEq for Wifi {
 impl Wifi {
     /// Get a snapshot of the current WiFi state (no monitoring).
     ///
-    /// Fetches the device and current state from NetworkManager via D-Bus.
-    ///
     /// # Errors
     ///
     /// Returns `NetworkError::InitializationFailed` if the WiFi device cannot be created

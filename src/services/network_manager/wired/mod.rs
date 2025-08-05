@@ -39,8 +39,6 @@ impl PartialEq for Wired {
 impl Wired {
     /// Get a snapshot of the current wired state (no monitoring).
     ///
-    /// Fetches the device and current state from NetworkManager via D-Bus.
-    ///
     /// # Errors
     ///
     /// Returns `NetworkError::InitializationFailed` if the wired device cannot be created
@@ -76,23 +74,24 @@ impl Wired {
         let device = DeviceWired::clone(&device_arc);
 
         let wired = Self::create_from_device(connection.clone(), device.clone()).await?;
+        let wired_arc = Arc::new(wired);
 
-        WiredMonitor::start(connection, &device).await?;
+        let _monitoring_handle = WiredMonitor::start(connection, &wired_arc).await?;
 
-        Ok(Arc::new(wired))
+        Ok(wired_arc)
     }
 
     async fn create_from_device(
         connection: Connection,
         device: DeviceWired,
     ) -> Result<Self, NetworkError> {
-        // TODO: Fetch actual current wired state
-        // - connectivity status from device state
+        let device_state = &device.state.get();
+        let connectivity = NetworkStatus::from_device_state(*device_state);
 
         Ok(Self {
             connection,
             device,
-            connectivity: Property::new(NetworkStatus::Disconnected),
+            connectivity: Property::new(connectivity),
         })
     }
 }

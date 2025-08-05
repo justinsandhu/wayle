@@ -14,10 +14,7 @@ use super::{AccessPoint, BSSID, SSID, SecurityType};
 pub(crate) struct AccessPointMonitor;
 
 impl AccessPointMonitor {
-    /// Start monitoring for property changes.
-    ///
-    /// Monitoring stops automatically when the AccessPoint is dropped.
-    pub async fn start(
+    pub(super) async fn start(
         access_point: Arc<AccessPoint>,
         zbus_connection: Connection,
         path: OwnedObjectPath,

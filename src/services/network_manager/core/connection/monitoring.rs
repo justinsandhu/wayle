@@ -14,10 +14,7 @@ use super::ActiveConnection;
 pub(crate) struct ActiveConnectionMonitor;
 
 impl ActiveConnectionMonitor {
-    /// Start monitoring for property changes.
-    ///
-    /// Monitoring stops automatically when the ActiveConnection is dropped.
-    pub async fn start(
+    pub(super) async fn start(
         active_connection: Arc<ActiveConnection>,
         zbus_connection: Connection,
         path: OwnedObjectPath,

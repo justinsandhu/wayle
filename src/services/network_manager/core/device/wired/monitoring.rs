@@ -12,10 +12,7 @@ use super::DeviceWired;
 pub(crate) struct DeviceWiredMonitor;
 
 impl DeviceWiredMonitor {
-    /// Start monitoring for property changes.
-    ///
-    /// Monitoring stops automatically when the DeviceWired is dropped.
-    pub async fn start(
+    pub(super) async fn start(
         device: Arc<DeviceWired>,
         connection: Connection,
         path: OwnedObjectPath,

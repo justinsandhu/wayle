@@ -51,8 +51,6 @@ impl Deref for DeviceWired {
 
 impl DeviceWired {
     /// Get a snapshot of the current wired device state (no monitoring).
-    ///
-    /// Fetches current state from NetworkManager via D-Bus.
     pub async fn get(connection: Connection, device_path: OwnedObjectPath) -> Option<Arc<Self>> {
         let device = Self::from_path(connection, device_path).await?;
         Some(Arc::new(device))
@@ -136,7 +134,7 @@ impl DeviceWired {
         }
     }
 
-    pub(crate) async fn from_path(connection: Connection, path: OwnedObjectPath) -> Option<Self> {
+    async fn from_path(connection: Connection, path: OwnedObjectPath) -> Option<Self> {
         Self::verify_is_ethernet_device(&connection, &path)
             .await
             .ok()?;

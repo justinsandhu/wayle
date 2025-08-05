@@ -14,10 +14,7 @@ use crate::services::network_manager::{
 pub(crate) struct DeviceMonitor;
 
 impl DeviceMonitor {
-    /// Start monitoring for property changes.
-    ///
-    /// Monitoring stops automatically when the Device is dropped.
-    pub async fn start(
+    pub(super) async fn start(
         device: Arc<Device>,
         connection: Connection,
         path: OwnedObjectPath,

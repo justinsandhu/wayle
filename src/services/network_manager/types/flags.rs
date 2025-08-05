@@ -271,7 +271,7 @@ bitflags! {
     ///
     /// Since: 1.12
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct NMSettingsConnectionFlags: u32 {
+    pub struct NMConnectionSettingsFlags: u32 {
         /// an alias for numeric zero, no flags set.
         const NONE = 0x00000000;
         /// the connection is not saved to disk. That either means, that the connection

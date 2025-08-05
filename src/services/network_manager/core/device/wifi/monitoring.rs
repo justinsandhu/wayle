@@ -14,10 +14,7 @@ use super::DeviceWifi;
 pub(crate) struct DeviceWifiMonitor;
 
 impl DeviceWifiMonitor {
-    /// Start monitoring for property changes.
-    ///
-    /// Monitoring stops automatically when the DeviceWifi is dropped.
-    pub async fn start(
+    pub(super) async fn start(
         device: Arc<DeviceWifi>,
         connection: Connection,
         path: OwnedObjectPath,
