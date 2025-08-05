@@ -77,47 +77,6 @@ impl ConnectionSettings {
         Ok(settings)
     }
 
-    async fn from_path(
-        connection: &Connection,
-        path: OwnedObjectPath,
-        conn: Connection,
-    ) -> Option<Self> {
-        let properties = Self::fetch_properties(connection, &path).await.ok()?;
-        Some(Self::from_props(path, properties, conn))
-    }
-
-    async fn fetch_properties(
-        connection: &Connection,
-        path: &OwnedObjectPath,
-    ) -> Result<SettingsConnectionProperties, NetworkError> {
-        let proxy = SettingsConnectionProxy::new(connection, path.clone())
-            .await
-            .map_err(NetworkError::DbusError)?;
-
-        let (unsaved, flags, filename) =
-            tokio::join!(proxy.unsaved(), proxy.flags(), proxy.filename(),);
-
-        Ok(SettingsConnectionProperties {
-            unsaved: unsaved.map_err(NetworkError::DbusError)?,
-            flags: flags.map_err(NetworkError::DbusError)?,
-            filename: filename.map_err(NetworkError::DbusError)?,
-        })
-    }
-
-    fn from_props(
-        path: OwnedObjectPath,
-        props: SettingsConnectionProperties,
-        connection: Connection,
-    ) -> Self {
-        Self {
-            connection,
-            path: Property::new(path),
-            unsaved: Property::new(props.unsaved),
-            flags: Property::new(NMConnectionSettingsFlags::from_bits_truncate(props.flags)),
-            filename: Property::new(props.filename),
-        }
-    }
-
     /// Update the connection with new settings and properties.
     ///
     /// Update the connection with new settings and properties (replacing all
@@ -261,6 +220,47 @@ impl ConnectionSettings {
             args,
         )
         .await
+    }
+
+    async fn from_path(
+        connection: &Connection,
+        path: OwnedObjectPath,
+        conn: Connection,
+    ) -> Option<Self> {
+        let properties = Self::fetch_properties(connection, &path).await.ok()?;
+        Some(Self::from_props(path, properties, conn))
+    }
+
+    async fn fetch_properties(
+        connection: &Connection,
+        path: &OwnedObjectPath,
+    ) -> Result<SettingsConnectionProperties, NetworkError> {
+        let proxy = SettingsConnectionProxy::new(connection, path.clone())
+            .await
+            .map_err(NetworkError::DbusError)?;
+
+        let (unsaved, flags, filename) =
+            tokio::join!(proxy.unsaved(), proxy.flags(), proxy.filename(),);
+
+        Ok(SettingsConnectionProperties {
+            unsaved: unsaved.map_err(NetworkError::DbusError)?,
+            flags: flags.map_err(NetworkError::DbusError)?,
+            filename: filename.map_err(NetworkError::DbusError)?,
+        })
+    }
+
+    fn from_props(
+        path: OwnedObjectPath,
+        props: SettingsConnectionProperties,
+        connection: Connection,
+    ) -> Self {
+        Self {
+            connection,
+            path: Property::new(path),
+            unsaved: Property::new(props.unsaved),
+            flags: Property::new(NMConnectionSettingsFlags::from_bits_truncate(props.flags)),
+            filename: Property::new(props.filename),
+        }
     }
 }
 

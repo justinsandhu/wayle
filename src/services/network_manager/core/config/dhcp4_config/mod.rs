@@ -53,8 +53,7 @@ impl Dhcp4Config {
                 }
                 Err(_) => {
                     return Err(NetworkError::InitializationFailed(format!(
-                        "Failed to convert DHCP option '{}'",
-                        key
+                        "Failed to convert DHCP option '{key}'"
                     )));
                 }
             }

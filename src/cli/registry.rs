@@ -193,6 +193,15 @@ impl CommandRegistry {
             .map(|cmd| cmd.metadata())
     }
 
+    /// Registers all available CLI commands in their respective categories.
+    ///
+    /// This function serves as the central registration point for all CLI commands,
+    /// delegating to individual modules to register their commands.
+    pub fn register_all_commands(&mut self) {
+        config::register_commands(self, Arc::clone(&self.config_runtime));
+        media::register_commands(self);
+    }
+
     fn validate_args(metadata: &CommandMetadata, args: &[String]) -> Result<(), CliError> {
         let required_count = metadata.args.iter().filter(|arg| arg.required).count();
         let total_count = metadata.args.len();
@@ -229,14 +238,5 @@ impl CommandRegistry {
         }
 
         Ok(())
-    }
-
-    /// Registers all available CLI commands in their respective categories.
-    ///
-    /// This function serves as the central registration point for all CLI commands,
-    /// delegating to individual modules to register their commands.
-    pub fn register_all_commands(&mut self) {
-        config::register_commands(self, Arc::clone(&self.config_runtime));
-        media::register_commands(self);
     }
 }

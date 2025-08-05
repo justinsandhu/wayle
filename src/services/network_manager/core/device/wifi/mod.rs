@@ -111,6 +111,29 @@ impl DeviceWifi {
         Ok(device)
     }
 
+    // Request a scan for available access points.
+    ///
+    /// Triggers NetworkManager to scan for nearby WiFi networks. The scan runs
+    /// asynchronously and results will be reflected in the `access_points` property
+    /// when complete. The `last_scan` timestamp will update when the scan finishes.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::OperationFailed` if the scan request fails.
+    pub async fn request_scan(&self) -> Result<(), NetworkError> {
+        let proxy = DeviceWirelessProxy::new(&self.connection, self.path.get()).await?;
+
+        proxy
+            .request_scan(HashMap::new())
+            .await
+            .map_err(|e| NetworkError::OperationFailed {
+                operation: "request_scan",
+                reason: e.to_string(),
+            })?;
+
+        Ok(())
+    }
+
     async fn verify_is_wifi_device(
         connection: &Connection,
         device_path: &OwnedObjectPath,
@@ -256,28 +279,5 @@ impl DeviceWifi {
         };
 
         Some(device)
-    }
-
-    // Request a scan for available access points.
-    ///
-    /// Triggers NetworkManager to scan for nearby WiFi networks. The scan runs
-    /// asynchronously and results will be reflected in the `access_points` property
-    /// when complete. The `last_scan` timestamp will update when the scan finishes.
-    ///
-    /// # Errors
-    ///
-    /// Returns `NetworkError::OperationFailed` if the scan request fails.
-    pub async fn request_scan(&self) -> Result<(), NetworkError> {
-        let proxy = DeviceWirelessProxy::new(&self.connection, self.path.get()).await?;
-
-        proxy
-            .request_scan(HashMap::new())
-            .await
-            .map_err(|e| NetworkError::OperationFailed {
-                operation: "request_scan",
-                reason: e.to_string(),
-            })?;
-
-        Ok(())
     }
 }
