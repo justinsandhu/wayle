@@ -45,7 +45,7 @@ impl ConnectionSettings {
     /// Note: SettingsConnection properties can change, so consider using get_live()
     /// for monitoring changes.
     pub async fn get(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
-        let settings = Self::from_path(&connection, path, connection.clone()).await?;
+        let settings = Self::from_path(&connection, path).await?;
         Some(Arc::new(settings))
     }
 
@@ -65,11 +65,7 @@ impl ConnectionSettings {
         path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
         let properties = Self::fetch_properties(&connection, &path).await?;
-        let settings = Arc::new(Self::from_props(
-            path.clone(),
-            properties,
-            connection.clone(),
-        ));
+        let settings = Arc::new(Self::from_props(path.clone(), properties, &connection));
 
         ConnectionSettingsMonitor::start(settings.clone(), settings.connection.clone(), path)
             .await?;
@@ -222,13 +218,9 @@ impl ConnectionSettings {
         .await
     }
 
-    async fn from_path(
-        connection: &Connection,
-        path: OwnedObjectPath,
-        conn: Connection,
-    ) -> Option<Self> {
+    async fn from_path(connection: &Connection, path: OwnedObjectPath) -> Option<Self> {
         let properties = Self::fetch_properties(connection, &path).await.ok()?;
-        Some(Self::from_props(path, properties, conn))
+        Some(Self::from_props(path, properties, connection))
     }
 
     async fn fetch_properties(
@@ -252,10 +244,10 @@ impl ConnectionSettings {
     fn from_props(
         path: OwnedObjectPath,
         props: SettingsConnectionProperties,
-        connection: Connection,
+        connection: &Connection,
     ) -> Self {
         Self {
-            connection,
+            connection: connection.clone(),
             path: Property::new(path),
             unsaved: Property::new(props.unsaved),
             flags: Property::new(NMConnectionSettingsFlags::from_bits_truncate(props.flags)),
