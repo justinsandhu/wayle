@@ -124,7 +124,6 @@ impl Settings {
         &self,
         connection: HashMap<String, HashMap<String, OwnedValue>>,
     ) -> Result<OwnedObjectPath, NetworkError> {
-        // AddConnection saves to disk, so we need to use the actual add_connection from proxy
         let settings_proxy = SettingsProxy::new(&self.zbus_connection).await?;
         settings_proxy
             .add_connection(connection)

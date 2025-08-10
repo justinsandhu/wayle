@@ -121,7 +121,7 @@ impl DeviceWifi {
         Ok(device)
     }
 
-    // Request a scan for available access points.
+    /// Request a scan for available access points.
     ///
     /// Triggers NetworkManager to scan for nearby WiFi networks. The scan runs
     /// asynchronously and results will be reflected in the `access_points` property
