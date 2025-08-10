@@ -52,10 +52,7 @@ impl SettingsController {
         let (path, result) = settings_proxy
             .add_connection2(settings, flags.bits(), args)
             .await
-            .map_err(|e| NetworkError::OperationFailed {
-                operation: "add_connection2",
-                reason: e.to_string(),
-            })?;
+            .map_err(NetworkError::DbusError)?;
 
         Ok((path, result))
     }
@@ -96,9 +93,6 @@ impl SettingsController {
         settings_proxy
             .save_hostname(hostname)
             .await
-            .map_err(|e| NetworkError::OperationFailed {
-                operation: "save_hostname",
-                reason: e.to_string(),
-            })
+            .map_err(NetworkError::DbusError)
     }
 }

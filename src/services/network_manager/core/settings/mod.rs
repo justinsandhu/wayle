@@ -182,7 +182,6 @@ impl Settings {
     /// # Errors
     ///
     /// Returns `NetworkError::DbusError` if the DBus operation fails.
-    /// Returns `NetworkError::OperationFailed` if invalid flags or arguments are provided.
     pub async fn add_connection2(
         &self,
         settings: HashMap<String, HashMap<String, OwnedValue>>,
@@ -247,8 +246,7 @@ impl Settings {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::DbusError` if the DBus operation fails.
-    /// Returns `NetworkError::OperationFailed` if the hostname is invalid.
+    /// Returns `NetworkError::OperationFailed` if the operations fails.
     pub async fn save_hostname(&self, hostname: &str) -> Result<(), NetworkError> {
         controls::SettingsController::save_hostname(&self.zbus_connection, hostname).await
     }
