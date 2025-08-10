@@ -1,4 +1,5 @@
 use super::ConnectionType;
+use zbus::zvariant::OwnedObjectPath;
 
 /// Network service errors
 #[derive(thiserror::Error, Debug)]
@@ -13,13 +14,13 @@ pub enum NetworkError {
 
     /// Object not found at the specified D-Bus path
     #[error("Object not found at path: {0}")]
-    ObjectNotFound(String),
+    ObjectNotFound(OwnedObjectPath),
 
     /// Object exists but is of wrong type
-    #[error("Object at {path} is wrong type: expected {expected}, got {actual}")]
+    #[error("Object at {object_path} is wrong type: expected {expected}, got {actual}")]
     WrongObjectType {
         /// DBus object path that has wrong type.
-        path: String,
+        object_path: OwnedObjectPath,
         /// Expected object type.
         expected: String,
         /// Actual object type found.
@@ -27,12 +28,12 @@ pub enum NetworkError {
     },
 
     /// Failed to create or fetch an object
-    #[error("Failed to create {object_type} at {path}: {reason}")]
+    #[error("Failed to create {object_type} at {object_path}: {reason}")]
     ObjectCreationFailed {
         /// Type of object that failed to create.
         object_type: String,
         /// DBus path where creation failed.
-        path: String,
+        object_path: OwnedObjectPath,
         /// Reason for the failure.
         reason: String,
     },

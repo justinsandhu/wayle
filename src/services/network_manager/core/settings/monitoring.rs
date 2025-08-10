@@ -95,7 +95,7 @@ impl SettingsMonitor {
 
         let found_connection = current_connections
             .iter()
-            .find(|connection| connection.path.get() == connection_path);
+            .find(|connection| connection.object_path.get() == connection_path);
 
         if found_connection.is_none() {
             current_connections.push((*new_connection).clone());
@@ -112,13 +112,13 @@ impl SettingsMonitor {
         let mut current_connections = settings.connections.get();
         let found_connection = current_connections
             .iter()
-            .find(|connection| connection.path.get() == connection_path);
+            .find(|connection| connection.object_path.get() == connection_path);
 
         if found_connection.is_none() {
             return Ok(());
         }
 
-        current_connections.retain(|connection| connection.path.get() != connection_path);
+        current_connections.retain(|connection| connection.object_path.get() != connection_path);
         settings.connections.set(current_connections);
 
         Ok(())

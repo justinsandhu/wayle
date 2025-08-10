@@ -130,7 +130,7 @@ impl WifiMonitor {
                         let (new_ssid_stream, new_strength_stream) =
                             Self::handle_access_point_changed(
                                 &connection,
-                                new_ap_path.to_string(),
+                                new_ap_path,
                                 &ssid_prop,
                                 &strength_prop
                             ).await;
@@ -191,11 +191,11 @@ impl WifiMonitor {
 
     async fn handle_access_point_changed(
         connection: &Connection,
-        new_ap_path: String,
+        new_ap_path: OwnedObjectPath,
         ssid_prop: &Property<Option<String>>,
         strength_prop: &Property<Option<u8>>,
     ) -> (Option<SsidStream>, Option<StrengthStream>) {
-        if new_ap_path.is_empty() || new_ap_path == "/" {
+        if new_ap_path.is_empty() || new_ap_path == OwnedObjectPath::default() {
             ssid_prop.set(None);
             strength_prop.set(None);
             return (None, None);

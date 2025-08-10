@@ -66,14 +66,12 @@ impl DeviceWifiMonitor {
                 }
                 Some(change) = access_points_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.access_points.set(
-                            value.into_iter().map(|p| p.to_string()).collect()
-                        );
+                        device.access_points.set(value);
                     }
                 }
                 Some(change) = active_access_point_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.active_access_point.set(value.to_string());
+                        device.active_access_point.set(value);
                     }
                 }
                 Some(change) = wireless_capabilities_changed.next() => {

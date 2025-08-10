@@ -31,7 +31,7 @@ impl Deref for Wired {
 
 impl PartialEq for Wired {
     fn eq(&self, other: &Self) -> bool {
-        self.device.path.get() == other.device.path.get()
+        self.device.object_path == other.device.object_path
     }
 }
 
@@ -49,7 +49,7 @@ impl Wired {
             .await
             .map_err(|e| NetworkError::ObjectCreationFailed {
                 object_type: "Wired".to_string(),
-                path: device_path.to_string(),
+                object_path: device_path.clone(),
                 reason: e.to_string(),
             })?;
         let device = DeviceWired::clone(&device_arc);

@@ -17,7 +17,7 @@ use crate::services::{
 #[derive(Debug, Clone)]
 pub struct Dhcp6Config {
     /// D-Bus object path for this DHCP6 configuration
-    pub path: Property<OwnedObjectPath>,
+    pub object_path: Property<OwnedObjectPath>,
 
     /// Configuration options returned by the DHCP server.
     pub options: Property<HashMap<String, OwnedValue>>,
@@ -75,7 +75,7 @@ impl Dhcp6Config {
 
     fn from_options(path: OwnedObjectPath, options: HashMap<String, OwnedValue>) -> Self {
         Self {
-            path: Property::new(path),
+            object_path: Property::new(path),
             options: Property::new(options),
         }
     }

@@ -51,7 +51,7 @@ impl Deref for Wifi {
 
 impl PartialEq for Wifi {
     fn eq(&self, other: &Self) -> bool {
-        self.device.path.get() == other.device.path.get()
+        self.device.object_path == other.device.object_path
     }
 }
 
@@ -69,7 +69,7 @@ impl Wifi {
             .await
             .map_err(|e| NetworkError::ObjectCreationFailed {
                 object_type: "WiFi".to_string(),
-                path: device_path.to_string(),
+                object_path: device_path.clone(),
                 reason: e.to_string(),
             })?;
         let device = DeviceWifi::clone(&device_arc);
@@ -138,7 +138,13 @@ impl Wifi {
         ap_path: OwnedObjectPath,
         password: Option<String>,
     ) -> Result<(), NetworkError> {
-        WifiControls::connect(&self.connection, &self.device.path.get(), ap_path, password).await
+        WifiControls::connect(
+            &self.connection,
+            &self.device.object_path,
+            ap_path,
+            password,
+        )
+        .await
     }
 
     /// Disconnect from the current WiFi network.
@@ -150,7 +156,7 @@ impl Wifi {
     ///
     /// Returns `NetworkError::OperationFailed` if the disconnection fails
     pub async fn disconnect(&self) -> Result<(), NetworkError> {
-        WifiControls::disconnect(&self.connection, &self.device.path.get()).await
+        WifiControls::disconnect(&self.connection, &self.device.object_path).await
     }
 
     async fn from_device(

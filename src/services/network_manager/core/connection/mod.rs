@@ -123,7 +123,7 @@ impl ActiveConnection {
                 "Active Connection at path '{}' does not exist.",
                 path.clone()
             );
-            return Err(NetworkError::ObjectNotFound(path.to_string()));
+            return Err(NetworkError::ObjectNotFound(path.clone()));
         }
 
         let (

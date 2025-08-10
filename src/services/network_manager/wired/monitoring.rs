@@ -23,7 +23,7 @@ impl WiredMonitor {
         wired: &Arc<Wired>,
     ) -> Result<JoinHandle<()>, NetworkError> {
         let connectivity_prop = wired.connectivity.clone();
-        let device_path = wired.device.path.get();
+        let device_path = wired.device.object_path.clone();
 
         let device_proxy = DeviceProxy::new(connection, device_path)
             .await

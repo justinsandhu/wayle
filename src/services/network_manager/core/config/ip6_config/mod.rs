@@ -20,7 +20,7 @@ use crate::services::{
 #[derive(Debug, Clone)]
 pub struct Ip6Config {
     /// D-Bus object path for this IP6Config
-    pub path: Property<OwnedObjectPath>,
+    pub object_path: Property<OwnedObjectPath>,
 
     /// Array of IP address data objects.
     pub address_data: Property<Vec<Ipv6Address>>,
@@ -145,7 +145,7 @@ impl Ip6Config {
 
     fn from_props(path: OwnedObjectPath, props: Ip6ConfigProperties) -> Self {
         Self {
-            path: Property::new(path),
+            object_path: Property::new(path),
             address_data: Property::new(props.address_data),
             gateway: Property::new(props.gateway),
             nameservers: Property::new(props.nameservers),

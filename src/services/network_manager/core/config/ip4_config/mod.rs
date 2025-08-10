@@ -20,7 +20,7 @@ use crate::services::{
 #[derive(Debug, Clone)]
 pub struct Ip4Config {
     /// D-Bus object path for this IP4Config
-    pub path: Property<OwnedObjectPath>,
+    pub object_path: Property<OwnedObjectPath>,
 
     /// Array of IP address data objects.
     pub address_data: Property<Vec<Ipv4Address>>,
@@ -155,7 +155,7 @@ impl Ip4Config {
 
     fn from_props(path: OwnedObjectPath, props: Ip4ConfigProperties) -> Self {
         Self {
-            path: Property::new(path),
+            object_path: Property::new(path),
             address_data: Property::new(props.address_data),
             gateway: Property::new(props.gateway),
             nameserver_data: Property::new(props.nameserver_data),

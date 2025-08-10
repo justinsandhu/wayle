@@ -36,7 +36,7 @@ impl DeviceMonitor {
     #[allow(clippy::too_many_lines)]
     async fn monitor(weak: Weak<Device>, proxy: DeviceProxy<'static>) {
         let mut udi_changed = proxy.receive_udi_changed().await;
-        let mut path_changed = proxy.receive_path_changed().await;
+        let mut udev_path_changed = proxy.receive_path_changed().await;
         let mut interface_changed = proxy.receive_interface_changed().await;
         let mut ip_interface_changed = proxy.receive_ip_interface_changed().await;
         let mut driver_changed = proxy.receive_driver_changed().await;
@@ -78,9 +78,9 @@ impl DeviceMonitor {
                         device.udi.set(value);
                     }
                 }
-                Some(change) = path_changed.next() => {
+                Some(change) = udev_path_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.path.set(value);
+                        device.udev_path.set(value);
                     }
                 }
                 Some(change) = interface_changed.next() => {
@@ -128,27 +128,27 @@ impl DeviceMonitor {
                 }
                 Some(change) = active_connection_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.active_connection.set(value.to_string());
+                        device.active_connection.set(value);
                     }
                 }
                 Some(change) = ip4_config_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.ip4_config.set(value.to_string());
+                        device.ip4_config.set(value);
                     }
                 }
                 Some(change) = dhcp4_config_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.dhcp4_config.set(value.to_string());
+                        device.dhcp4_config.set(value);
                     }
                 }
                 Some(change) = ip6_config_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.ip6_config.set(value.to_string());
+                        device.ip6_config.set(value);
                     }
                 }
                 Some(change) = dhcp6_config_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.dhcp6_config.set(value.to_string());
+                        device.dhcp6_config.set(value);
                     }
                 }
                 Some(change) = managed_changed.next() => {
@@ -178,9 +178,7 @@ impl DeviceMonitor {
                 }
                 Some(change) = available_connections_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.available_connections.set(
-                            value.into_iter().map(|p| p.to_string()).collect()
-                        );
+                        device.available_connections.set(value);
                     }
                 }
                 Some(change) = physical_port_id_changed.next() => {
@@ -225,9 +223,7 @@ impl DeviceMonitor {
                 }
                 Some(change) = ports_changed.next() => {
                     if let Ok(value) = change.get().await {
-                        device.ports.set(
-                            value.into_iter().map(|p| p.to_string()).collect()
-                        );
+                        device.ports.set(value);
                     }
                 }
 

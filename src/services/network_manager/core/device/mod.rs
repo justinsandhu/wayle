@@ -13,7 +13,7 @@ use std::sync::Arc;
 use zbus::{Connection, zvariant::OwnedObjectPath};
 
 use crate::services::{
-    common::{Property, types::ObjectPath},
+    common::Property,
     network_manager::{
         LldpNeighbor, NMConnectivityState, NMDeviceCapabilities, NMDeviceInterfaceFlags,
         NMDeviceState, NMDeviceStateReason, NMDeviceType, NMMetered, NetworkError,
@@ -48,7 +48,7 @@ pub struct Device {
     pub(crate) connection: DbusConnection,
 
     /// D-Bus object path for this device.
-    pub object_path: ObjectPath,
+    pub object_path: OwnedObjectPath,
 
     /// Operating-system specific transient device hardware identifier. Opaque
     /// string representing the underlying hardware for the device, and shouldn't be used to
@@ -60,7 +60,7 @@ pub struct Device {
     pub udi: Property<String>,
 
     /// The path of the device as exposed by the udev property ID_PATH.
-    pub path: Property<String>,
+    pub udev_path: Property<String>,
 
     /// The name of the device's control (and often data) interface. Note that non UTF-8
     /// characters are backslash escaped, so the resulting name may be longer then 15
@@ -97,23 +97,23 @@ pub struct Device {
     /// The ActiveConnection object tracks the life-cycle of a connection to a specific
     /// network and implements the org.freedesktop.NetworkManager.Connection.Active D-Bus
     /// interface.
-    pub active_connection: Property<ObjectPath>,
+    pub active_connection: Property<OwnedObjectPath>,
 
     /// Object path of the Ip4Config object describing the configuration of the device. Only
     /// valid when the device is in the NM_DEVICE_STATE_ACTIVATED state.
-    pub ip4_config: Property<ObjectPath>,
+    pub ip4_config: Property<OwnedObjectPath>,
 
     /// Object path of the Dhcp4Config object describing the DHCP options returned by the
     /// DHCP server. Only valid when the device is in the NM_DEVICE_STATE_ACTIVATED state.
-    pub dhcp4_config: Property<ObjectPath>,
+    pub dhcp4_config: Property<OwnedObjectPath>,
 
     /// Object path of the Ip6Config object describing the configuration of the device. Only
     /// valid when the device is in the NM_DEVICE_STATE_ACTIVATED state.
-    pub ip6_config: Property<ObjectPath>,
+    pub ip6_config: Property<OwnedObjectPath>,
 
     /// Object path of the Dhcp6Config object describing the DHCP options returned by the
     /// DHCP server. Only valid when the device is in the NM_DEVICE_STATE_ACTIVATED state.
-    pub dhcp6_config: Property<ObjectPath>,
+    pub dhcp6_config: Property<OwnedObjectPath>,
 
     /// Whether or not this device is managed by NetworkManager. Setting this property has a
     /// similar effect to configuring the device as unmanaged via the
@@ -139,7 +139,7 @@ pub struct Device {
 
     /// An array of object paths of every configured connection that is currently 'available'
     /// through this device.
-    pub available_connections: Property<Vec<ObjectPath>>,
+    pub available_connections: Property<Vec<OwnedObjectPath>>,
 
     /// If non-empty, an (opaque) indicator of the physical network port associated with the
     /// device. Can be used to recognize when two seemingly-separate hardware devices
@@ -177,13 +177,13 @@ pub struct Device {
 
     /// The port devices of the controller device. Array of object paths of port devices for
     /// controller devices. For devices that are not controllers this is an empty array.
-    pub ports: Property<Vec<ObjectPath>>,
+    pub ports: Property<Vec<OwnedObjectPath>>,
 }
 
 /// Fetched device properties from D-Bus
 struct DeviceProperties {
     udi: String,
-    path: String,
+    udev_path: String,
     interface: String,
     ip_interface: String,
     driver: String,
@@ -192,17 +192,17 @@ struct DeviceProperties {
     capabilities: u32,
     state: u32,
     state_reason: (u32, u32),
-    active_connection: String,
-    ip4_config: String,
-    dhcp4_config: String,
-    ip6_config: String,
-    dhcp6_config: String,
+    active_connection: OwnedObjectPath,
+    ip4_config: OwnedObjectPath,
+    dhcp4_config: OwnedObjectPath,
+    ip6_config: OwnedObjectPath,
+    dhcp6_config: OwnedObjectPath,
     managed: bool,
     autoconnect: bool,
     firmware_missing: bool,
     nm_plugin_missing: bool,
     device_type: u32,
-    available_connections: Vec<String>,
+    available_connections: Vec<OwnedObjectPath>,
     physical_port_id: String,
     mtu: u32,
     metered: u32,
@@ -211,39 +211,39 @@ struct DeviceProperties {
     ip6_connectivity: u32,
     interface_flags: u32,
     hw_address: String,
-    ports: Vec<String>,
+    ports: Vec<OwnedObjectPath>,
 }
 
 impl Device {
     pub(crate) async fn get(
         connection: &Connection,
-        device_path: OwnedObjectPath,
+        object_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        let device = Self::from_path(connection, device_path.to_string()).await?;
+        let device = Self::from_path(connection, object_path).await?;
         Ok(Arc::new(device))
     }
 
     pub(crate) async fn get_live(
         connection: &Connection,
-        device_path: OwnedObjectPath,
+        object_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        let device = Self::from_path(connection, device_path.to_string())
+        let device = Self::from_path(connection, object_path.clone())
             .await
             .map_err(|e| NetworkError::ObjectCreationFailed {
                 object_type: "Device".to_string(),
-                path: device_path.to_string(),
+                object_path: object_path.clone(),
                 reason: e.to_string(),
             })?;
 
         let device = Arc::new(device);
-        DeviceMonitor::start(device.clone(), connection, device_path).await?;
+        DeviceMonitor::start(device.clone(), connection, object_path).await?;
 
         Ok(device)
     }
 
     pub(crate) async fn from_path(
         connection: &Connection,
-        object_path: ObjectPath,
+        object_path: OwnedObjectPath,
     ) -> Result<Self, NetworkError> {
         let proxy = DeviceProxy::new(connection, object_path.clone()).await?;
         let props = Self::fetch_properties(&proxy).await?;
@@ -324,14 +324,15 @@ impl Device {
 
         let device_path = path.clone().unwrap_or_default();
 
-        let available_connections = unwrap_vec!(available_connections, device_path)
-            .into_iter()
-            .map(|p| p.to_string())
-            .collect();
+        let available_connections: Vec<OwnedObjectPath> =
+            unwrap_vec!(available_connections, device_path)
+                .into_iter()
+                .map(|p| OwnedObjectPath::try_from(p.to_string()).unwrap_or_default())
+                .collect();
 
-        let ports = unwrap_vec!(ports, device_path)
+        let ports: Vec<OwnedObjectPath> = unwrap_vec!(ports, device_path)
             .into_iter()
-            .map(|p| p.to_string())
+            .map(|p| OwnedObjectPath::try_from(p.to_string()).unwrap_or_default())
             .collect();
 
         Ok(DeviceProperties {
@@ -344,11 +345,11 @@ impl Device {
             capabilities: unwrap_u32!(capabilities, device_path),
             state: unwrap_u32!(state, device_path),
             state_reason: state_reason.unwrap_or((0, 0)),
-            active_connection: unwrap_path!(active_connection, device_path).to_string(),
-            ip4_config: unwrap_path!(ip4_config, device_path).to_string(),
-            dhcp4_config: unwrap_path!(dhcp4_config, device_path).to_string(),
-            ip6_config: unwrap_path!(ip6_config, device_path).to_string(),
-            dhcp6_config: unwrap_path!(dhcp6_config, device_path).to_string(),
+            active_connection: unwrap_path!(active_connection, device_path),
+            ip4_config: unwrap_path!(ip4_config, device_path),
+            dhcp4_config: unwrap_path!(dhcp4_config, device_path),
+            ip6_config: unwrap_path!(ip6_config, device_path),
+            dhcp6_config: unwrap_path!(dhcp6_config, device_path),
             managed: unwrap_bool_or!(managed, device_path, true),
             autoconnect: unwrap_bool!(autoconnect, device_path),
             firmware_missing: unwrap_bool!(firmware_missing, device_path),
@@ -364,20 +365,20 @@ impl Device {
             interface_flags: unwrap_u32!(interface_flags, device_path),
             hw_address: unwrap_string!(hw_address, device_path),
             ports,
-            path: device_path,
+            udev_path: device_path,
         })
     }
 
     fn from_properties(
         props: DeviceProperties,
         connection: &Connection,
-        object_path: ObjectPath,
+        object_path: OwnedObjectPath,
     ) -> Self {
         Self {
             connection: DbusConnection(connection.clone()),
             object_path,
             udi: Property::new(props.udi),
-            path: Property::new(props.path),
+            udev_path: Property::new(props.udev_path),
             interface: Property::new(props.interface),
             ip_interface: Property::new(props.ip_interface),
             driver: Property::new(props.driver),

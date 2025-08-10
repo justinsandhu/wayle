@@ -105,7 +105,7 @@ impl DeviceWired {
 
         if device_type != NMDeviceType::Ethernet as u32 {
             return Err(NetworkError::WrongObjectType {
-                path: device_path.to_string(),
+                object_path: device_path.clone(),
                 expected: "Ethernet device".to_string(),
                 actual: format!("device type {device_type}"),
             });
@@ -150,7 +150,7 @@ impl DeviceWired {
     ) -> Result<Self, NetworkError> {
         Self::verify_is_ethernet_device(connection, &path).await?;
 
-        let base = Device::from_path(connection, path.to_string()).await?;
+        let base = Device::from_path(connection, path.clone()).await?;
         let wired_props = Self::fetch_wired_properties(connection, &path).await?;
 
         Ok(Self::from_props(base, wired_props))

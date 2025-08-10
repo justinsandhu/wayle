@@ -91,7 +91,7 @@ impl AccessPoint {
                 NetworkError::ObjectNotFound(_) => e,
                 _ => NetworkError::ObjectCreationFailed {
                     object_type: "AccessPoint".to_string(),
-                    path: path.to_string(),
+                    object_path: path.clone(),
                     reason: e.to_string(),
                 },
             })
@@ -114,7 +114,7 @@ impl AccessPoint {
                     NetworkError::ObjectNotFound(_) => e,
                     _ => NetworkError::ObjectCreationFailed {
                         object_type: "AccessPoint".to_string(),
-                        path: path.to_string(),
+                        object_path: path.clone(),
                         reason: e.to_string(),
                     },
                 })?;
@@ -133,7 +133,7 @@ impl AccessPoint {
             .map_err(NetworkError::DbusError)?;
 
         if ap_proxy.strength().await.is_err() {
-            return Err(NetworkError::ObjectNotFound(path.to_string()));
+            return Err(NetworkError::ObjectNotFound(path.clone()));
         }
 
         let (
