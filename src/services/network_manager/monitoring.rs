@@ -12,7 +12,7 @@ pub(crate) struct NetworkMonitoring;
 
 impl NetworkMonitoring {
     pub(crate) async fn start(
-        connection: Connection,
+        connection: &Connection,
         wifi: Option<Arc<Wifi>>,
         wired: Option<Arc<Wired>>,
         primary: Property<ConnectionType>,
@@ -23,12 +23,12 @@ impl NetworkMonitoring {
     }
 
     async fn spawn_primary_monitoring(
-        connection: Connection,
+        connection: &Connection,
         wifi: Option<Arc<Wifi>>,
         wired: Option<Arc<Wired>>,
         primary: Property<ConnectionType>,
     ) -> Result<(), NetworkError> {
-        let nm_proxy = NetworkManagerProxy::new(&connection)
+        let nm_proxy = NetworkManagerProxy::new(connection)
             .await
             .map_err(NetworkError::DbusError)?;
 

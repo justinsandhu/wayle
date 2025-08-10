@@ -3,7 +3,7 @@ pub(crate) mod monitoring;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::watch_all;
+use crate::{unwrap_bool, unwrap_string_or, watch_all};
 use futures::Stream;
 use monitoring::PlayerMonitor;
 use zbus::fdo::PropertiesProxy;
@@ -119,10 +119,10 @@ impl Player {
             .await
             .map_err(MediaError::DbusError)?;
 
-        let identity = base_proxy
-            .identity()
-            .await
-            .unwrap_or_else(|_| player_id.bus_name().to_string());
+        let identity = unwrap_string_or!(
+            base_proxy.identity().await,
+            player_id.bus_name().to_string()
+        );
         let desktop_entry = base_proxy.desktop_entry().await.ok();
 
         let metadata = TrackMetadata::new(player_proxy.clone()).await;
@@ -155,10 +155,10 @@ impl Player {
             .await
             .map_err(MediaError::DbusError)?;
 
-        let identity = base_proxy
-            .identity()
-            .await
-            .unwrap_or_else(|_| player_id.bus_name().to_string());
+        let identity = unwrap_string_or!(
+            base_proxy.identity().await,
+            player_id.bus_name().to_string()
+        );
         let desktop_entry = base_proxy.desktop_entry().await.ok();
 
         let metadata = TrackMetadata::new(player_proxy.clone()).await;
@@ -192,11 +192,11 @@ impl Player {
             player.volume.set(Volume::from(volume));
         }
 
-        let can_control = proxy.can_control().await.unwrap_or(false);
-        let can_play = proxy.can_play().await.unwrap_or(false);
-        let can_go_next = proxy.can_go_next().await.unwrap_or(false);
-        let can_go_previous = proxy.can_go_previous().await.unwrap_or(false);
-        let can_seek = proxy.can_seek().await.unwrap_or(false);
+        let can_control = unwrap_bool!(proxy.can_control().await);
+        let can_play = unwrap_bool!(proxy.can_play().await);
+        let can_go_next = unwrap_bool!(proxy.can_go_next().await);
+        let can_go_previous = unwrap_bool!(proxy.can_go_previous().await);
+        let can_seek = unwrap_bool!(proxy.can_seek().await);
         let can_loop = proxy.loop_status().await.is_ok();
         let can_shuffle = proxy.shuffle().await.is_ok();
 

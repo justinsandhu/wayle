@@ -5,7 +5,7 @@ use futures::stream::Stream;
 use monitoring::WifiMonitor;
 use zbus::{Connection, zvariant::OwnedObjectPath};
 
-use crate::{services::common::Property, watch_all};
+use crate::{services::common::Property, unwrap_bool, watch_all};
 
 use super::{
     AccessPointProxy, NetworkError, NetworkManagerProxy, NetworkStatus, SSID,
@@ -60,15 +60,17 @@ impl Wifi {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::InitializationFailed` if the WiFi device cannot be created
+    /// Returns `NetworkError::ObjectCreationFailed` if the WiFi device cannot be created
     pub async fn get(
-        connection: Connection,
+        connection: &Connection,
         device_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        let device_arc = DeviceWifi::get(connection.clone(), device_path)
+        let device_arc = DeviceWifi::get(connection, device_path.clone())
             .await
-            .ok_or_else(|| {
-                NetworkError::InitializationFailed("Failed to create WiFi device".into())
+            .map_err(|e| NetworkError::ObjectCreationFailed {
+                object_type: "WiFi".to_string(),
+                path: device_path.to_string(),
+                reason: e.to_string(),
             })?;
         let device = DeviceWifi::clone(&device_arc);
 
@@ -82,17 +84,16 @@ impl Wifi {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::InitializationFailed` if:
-    /// - The WiFi device cannot be created
-    /// - Failed to start monitoring
+    /// Returns `NetworkError::ObjectCreationFailed` if the WiFi device cannot be created
+    /// or if monitoring fails to start
     pub async fn get_live(
-        connection: Connection,
+        connection: &Connection,
         device_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        let device_arc = DeviceWifi::get_live(connection.clone(), device_path).await?;
+        let device_arc = DeviceWifi::get_live(connection, device_path).await?;
         let device = DeviceWifi::clone(&device_arc);
 
-        let wifi = Self::from_device(connection.clone(), device.clone()).await?;
+        let wifi = Self::from_device(connection, device.clone()).await?;
 
         WifiMonitor::start(connection, &wifi).await?;
 
@@ -152,15 +153,18 @@ impl Wifi {
         WifiControls::disconnect(&self.connection, &self.device.path.get()).await
     }
 
-    async fn from_device(connection: Connection, device: DeviceWifi) -> Result<Self, NetworkError> {
-        let nm_proxy = NetworkManagerProxy::new(&connection).await?;
+    async fn from_device(
+        connection: &Connection,
+        device: DeviceWifi,
+    ) -> Result<Self, NetworkError> {
+        let nm_proxy = NetworkManagerProxy::new(connection).await?;
 
-        let enabled_state = nm_proxy.wireless_enabled().await.unwrap_or(false);
+        let enabled_state = unwrap_bool!(nm_proxy.wireless_enabled().await);
         let device_state = &device.state.get();
 
         let active_ap_path = &device.active_access_point.get();
         let (ssid, strength) =
-            match AccessPointProxy::new(&connection, active_ap_path.to_string()).await {
+            match AccessPointProxy::new(connection, active_ap_path.to_string()).await {
                 Ok(ap_proxy) => {
                     let ssid = ap_proxy
                         .ssid()
@@ -175,7 +179,7 @@ impl Wifi {
             };
 
         Ok(Self {
-            connection,
+            connection: connection.clone(),
             device,
             enabled: Property::new(enabled_state),
             connectivity: Property::new(NetworkStatus::from_device_state(*device_state)),

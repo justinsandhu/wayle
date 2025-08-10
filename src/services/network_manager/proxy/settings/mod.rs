@@ -107,6 +107,10 @@ pub trait Settings {
     #[zbus(property)]
     fn can_modify(&self) -> zbus::Result<bool>;
 
+    // The version of the settings. This is incremented whenever the profile changes and can be used to detect concurrent modifications.
+    #[zbus(property)]
+    fn version_id(&self) -> zbus::Result<u64>;
+
     /// Emitted when a new connection has been added.
     #[zbus(signal)]
     fn new_connection(&self, connection: OwnedObjectPath) -> zbus::Result<()>;

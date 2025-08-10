@@ -22,13 +22,13 @@ pub(crate) struct WifiMonitor;
 
 impl WifiMonitor {
     pub async fn start(
-        connection: Connection,
+        connection: &Connection,
         wifi: &Wifi,
     ) -> Result<JoinHandle<()>, NetworkError> {
         let access_points = &wifi.access_points;
         let device = &wifi.device;
 
-        Self::populate_existing_access_points(&connection, device, access_points).await;
+        Self::populate_existing_access_points(connection, device, access_points).await;
 
         let handle = Self::spawn_monitoring_task(connection, wifi).await?;
 
@@ -48,7 +48,7 @@ impl WifiMonitor {
                 continue;
             };
 
-            if let Some(ap) = AccessPoint::get_live(connection.clone(), path).await {
+            if let Ok(ap) = AccessPoint::get_live(connection, path).await {
                 initial_aps.push(ap);
             }
         }
@@ -59,9 +59,11 @@ impl WifiMonitor {
     }
 
     async fn spawn_monitoring_task(
-        connection: Connection,
+        connection: &Connection,
         wifi: &Wifi,
     ) -> Result<JoinHandle<()>, NetworkError> {
+        let connection = connection.clone();
+
         let access_points_prop = wifi.access_points.clone();
         let device_prop = wifi.device.clone();
         let enabled_state_prop = wifi.enabled.clone();
@@ -171,7 +173,7 @@ impl WifiMonitor {
         ap_path: OwnedObjectPath,
         access_points: &Property<Vec<Arc<AccessPoint>>>,
     ) {
-        if let Some(new_ap) = AccessPoint::get_live(connection.clone(), ap_path).await {
+        if let Ok(new_ap) = AccessPoint::get_live(connection, ap_path).await {
             let mut aps = access_points.get();
             aps.push(new_ap);
             access_points.set(aps);

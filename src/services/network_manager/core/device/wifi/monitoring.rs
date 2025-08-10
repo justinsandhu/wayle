@@ -16,12 +16,12 @@ pub(crate) struct DeviceWifiMonitor;
 impl DeviceWifiMonitor {
     pub(super) async fn start(
         device: Arc<DeviceWifi>,
-        connection: Connection,
+        connection: &Connection,
         path: OwnedObjectPath,
     ) -> Result<(), NetworkError> {
         let weak = Arc::downgrade(&device);
 
-        let proxy = DeviceWirelessProxy::new(&connection, path)
+        let proxy = DeviceWirelessProxy::new(connection, path)
             .await
             .map_err(NetworkError::DbusError)?;
 

@@ -1,6 +1,8 @@
 mod monitoring;
 use std::sync::Arc;
 
+use crate::services::network_manager::NetworkError;
+use crate::{unwrap_bool, unwrap_path, unwrap_string, unwrap_u32, unwrap_vec};
 use monitoring::ActiveConnectionMonitor;
 use tracing::warn;
 use zbus::{Connection, zvariant::OwnedObjectPath};
@@ -17,10 +19,6 @@ use crate::services::{
 /// Properties update reactively as connection state changes.
 #[derive(Debug, Clone)]
 pub struct ActiveConnection {
-    /// The zbus connection
-    connection: Connection,
-    pub(crate) path: Property<OwnedObjectPath>,
-
     /// The path of the connection object that this ActiveConnection is using.
     pub connection_path: Property<OwnedObjectPath>,
 
@@ -85,30 +83,47 @@ pub struct ActiveConnection {
 
 impl ActiveConnection {
     /// Get a snapshot of the current connection state (no monitoring).
-    pub async fn get(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
-        Self::create_from_path(connection, path).await
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::ObjectNotFound` if connection doesn't exist.
+    /// Returns `NetworkError::DbusError` if DBus operations fail.
+    pub async fn get(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        Self::from_path(connection, path).await
     }
 
     /// Get a live-updating connection instance (with monitoring).
-    pub async fn get_live(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
-        let active_connection = Self::create_from_path(connection.clone(), path.clone()).await?;
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::ObjectNotFound` if connection doesn't exist.
+    /// Returns `NetworkError::DbusError` if DBus operations fail.
+    pub async fn get_live(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        let active_connection = Self::from_path(connection, path.clone()).await?;
 
         ActiveConnectionMonitor::start(active_connection.clone(), connection, path).await;
 
-        Some(active_connection)
+        Ok(active_connection)
     }
 
-    async fn create_from_path(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
-        let connection_proxy = ConnectionActiveProxy::new(&connection, path.clone())
-            .await
-            .ok()?;
+    async fn from_path(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        let connection_proxy = ConnectionActiveProxy::new(connection, path.clone()).await?;
 
         if connection_proxy.connection().await.is_err() {
             warn!(
                 "Active Connection at path '{}' does not exist.",
                 path.clone()
             );
-            return None;
+            return Err(NetworkError::ObjectNotFound(path.to_string()));
         }
 
         let (
@@ -147,28 +162,26 @@ impl ActiveConnection {
             connection_proxy.controller(),
         );
 
-        let connection_path = connection_path.unwrap_or_default();
-        let specific_object = specific_object.unwrap_or_default();
-        let id = id.unwrap_or_default();
-        let uuid = uuid.unwrap_or_default();
-        let type_ = type_.unwrap_or_default();
-        let devices = devices.unwrap_or_default();
-        let state = NMActiveConnectionState::from_u32(state.unwrap_or_default());
+        let connection_path = unwrap_path!(connection_path, path);
+        let specific_object = unwrap_path!(specific_object, path);
+        let id = unwrap_string!(id, path);
+        let uuid = unwrap_string!(uuid, path);
+        let type_ = unwrap_string!(type_, path);
+        let devices = unwrap_vec!(devices, path);
+        let state = NMActiveConnectionState::from_u32(unwrap_u32!(state, path));
         let state_flags =
-            NMActivationStateFlags::from_bits_truncate(state_flags.unwrap_or_default());
-        let default = default.unwrap_or_default();
-        let ip4_config = ip4_config.unwrap_or_default();
-        let dhcp4_config = dhcp4_config.unwrap_or_default();
-        let default6 = default6.unwrap_or_default();
-        let ip6_config = ip6_config.unwrap_or_default();
-        let dhcp6_config = dhcp6_config.unwrap_or_default();
-        let vpn = vpn.unwrap_or_default();
-        let controller = controller.unwrap_or_default();
+            NMActivationStateFlags::from_bits_truncate(unwrap_u32!(state_flags, path));
+        let default = unwrap_bool!(default, path);
+        let ip4_config = unwrap_path!(ip4_config, path);
+        let dhcp4_config = unwrap_path!(dhcp4_config, path);
+        let default6 = unwrap_bool!(default6, path);
+        let ip6_config = unwrap_path!(ip6_config, path);
+        let dhcp6_config = unwrap_path!(dhcp6_config, path);
+        let vpn = unwrap_bool!(vpn, path);
+        let controller = unwrap_path!(controller, path);
 
-        Some(Arc::new(Self {
-            connection,
+        Ok(Arc::new(Self {
             connection_path: Property::new(connection_path),
-            path: Property::new(path),
             specific_object: Property::new(specific_object),
             id: Property::new(id),
             uuid: Property::new(uuid),

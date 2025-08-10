@@ -1,3 +1,4 @@
+use crate::{unwrap_i32, unwrap_string, unwrap_vec};
 use std::collections::HashMap;
 use std::net::Ipv6Addr;
 use std::sync::Arc;
@@ -82,14 +83,24 @@ struct Ip6ConfigProperties {
 
 impl Ip6Config {
     /// Get a snapshot of the current IPv6 configuration state (no monitoring).
-    pub async fn get(connection: &Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if D-Bus operations fail.
+    pub async fn get(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
         let config = Self::from_path(connection, path).await?;
-        Some(Arc::new(config))
+        Ok(Arc::new(config))
     }
 
-    async fn from_path(connection: &Connection, path: OwnedObjectPath) -> Option<Self> {
-        let properties = Self::fetch_properties(connection, &path).await.ok()?;
-        Some(Self::from_props(path, properties))
+    async fn from_path(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Self, NetworkError> {
+        let properties = Self::fetch_properties(connection, &path).await?;
+        Ok(Self::from_props(path, properties))
     }
 
     async fn fetch_properties(
@@ -121,16 +132,14 @@ impl Ip6Config {
         );
 
         Ok(Ip6ConfigProperties {
-            address_data: Self::parse_address_data(address_data.map_err(NetworkError::DbusError)?),
-            gateway: Self::parse_gateway(gateway.map_err(NetworkError::DbusError)?),
-            nameservers: Self::parse_nameserver_data(
-                nameserver_data.map_err(NetworkError::DbusError)?,
-            ),
-            domains: domains.map_err(NetworkError::DbusError)?,
-            searches: searches.map_err(NetworkError::DbusError)?,
-            dns_options: dns_options.map_err(NetworkError::DbusError)?,
-            dns_priority: dns_priority.map_err(NetworkError::DbusError)?,
-            route_data: Self::parse_route_data(route_data.map_err(NetworkError::DbusError)?),
+            address_data: Self::parse_address_data(unwrap_vec!(address_data, path)),
+            gateway: Self::parse_gateway(unwrap_string!(gateway, path)),
+            nameservers: Self::parse_nameserver_data(unwrap_vec!(nameserver_data, path)),
+            domains: unwrap_vec!(domains, path),
+            searches: unwrap_vec!(searches, path),
+            dns_options: unwrap_vec!(dns_options, path),
+            dns_priority: unwrap_i32!(dns_priority, path),
+            route_data: Self::parse_route_data(unwrap_vec!(route_data, path)),
         })
     }
 

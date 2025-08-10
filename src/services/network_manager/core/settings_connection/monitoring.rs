@@ -16,12 +16,12 @@ pub(crate) struct ConnectionSettingsMonitor;
 impl ConnectionSettingsMonitor {
     pub(super) async fn start(
         settings: Arc<ConnectionSettings>,
-        connection: Connection,
+        connection: &Connection,
         path: OwnedObjectPath,
     ) -> Result<(), NetworkError> {
         let weak = Arc::downgrade(&settings);
 
-        let proxy = SettingsConnectionProxy::new(&connection, path)
+        let proxy = SettingsConnectionProxy::new(connection, path)
             .await
             .map_err(NetworkError::DbusError)?;
 

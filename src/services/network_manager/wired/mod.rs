@@ -14,7 +14,6 @@ use zbus::{Connection, zvariant::OwnedObjectPath};
 /// require manual connection management or authentication.
 #[derive(Clone, Debug)]
 pub struct Wired {
-    pub(crate) connection: Connection,
     /// The underlying wired device.
     pub device: DeviceWired,
 
@@ -41,19 +40,21 @@ impl Wired {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::InitializationFailed` if the wired device cannot be created
+    /// Returns `NetworkError::ObjectCreationFailed` if the wired device cannot be created
     pub async fn get(
-        connection: Connection,
+        connection: &Connection,
         device_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        let device_arc = DeviceWired::get(connection.clone(), device_path)
+        let device_arc = DeviceWired::get(connection, device_path.clone())
             .await
-            .ok_or_else(|| {
-                NetworkError::InitializationFailed("Failed to create wired device".into())
+            .map_err(|e| NetworkError::ObjectCreationFailed {
+                object_type: "Wired".to_string(),
+                path: device_path.to_string(),
+                reason: e.to_string(),
             })?;
         let device = DeviceWired::clone(&device_arc);
 
-        let wired = Self::create_from_device(connection, device).await?;
+        let wired = Self::from_device(device).await?;
         Ok(Arc::new(wired))
     }
 
@@ -63,17 +64,16 @@ impl Wired {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::InitializationFailed` if:
-    /// - The wired device cannot be created
-    /// - Failed to start monitoring
+    /// Returns `NetworkError::ObjectCreationFailed` if the wired device cannot be created
+    /// or if monitoring fails to start
     pub async fn get_live(
-        connection: Connection,
+        connection: &Connection,
         device_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        let device_arc = DeviceWired::get_live(connection.clone(), device_path).await?;
+        let device_arc = DeviceWired::get_live(connection, device_path).await?;
         let device = DeviceWired::clone(&device_arc);
 
-        let wired = Self::create_from_device(connection.clone(), device.clone()).await?;
+        let wired = Self::from_device(device.clone()).await?;
         let wired_arc = Arc::new(wired);
 
         let _monitoring_handle = WiredMonitor::start(connection, &wired_arc).await?;
@@ -81,15 +81,11 @@ impl Wired {
         Ok(wired_arc)
     }
 
-    async fn create_from_device(
-        connection: Connection,
-        device: DeviceWired,
-    ) -> Result<Self, NetworkError> {
+    async fn from_device(device: DeviceWired) -> Result<Self, NetworkError> {
         let device_state = &device.state.get();
         let connectivity = NetworkStatus::from_device_state(*device_state);
 
         Ok(Self {
-            connection,
             device,
             connectivity: Property::new(connectivity),
         })

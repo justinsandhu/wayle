@@ -50,9 +50,10 @@ impl Command for ActiveCommand {
             let player =
                 media_service
                     .player(&player_id)
-                    .ok_or_else(|| CliError::ServiceError {
+                    .await
+                    .map_err(|e| CliError::ServiceError {
                         service: "Media".to_string(),
-                        details: format!("Player not found: {player_id:?}"),
+                        details: format!("Failed to get player '{player_id}': {e}"),
                     })?;
             let player_name = player.identity.get();
 

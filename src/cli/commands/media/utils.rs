@@ -107,9 +107,10 @@ pub async fn get_player_id_or_active(
 
         service
             .player(&player_id)
-            .ok_or_else(|| CliError::ServiceError {
+            .await
+            .map_err(|e| CliError::ServiceError {
                 service: "Media".to_string(),
-                details: format!("Player {player_id} not found"),
+                details: format!("Failed to get player '{player_id}': {e}"),
             })
     } else {
         service.active_player().ok_or_else(|| {

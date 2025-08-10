@@ -1,18 +1,19 @@
 mod controls;
 mod monitoring;
 
+use crate::{unwrap_bool, unwrap_string, unwrap_u32};
 use controls::ConnectionSettingsControls;
 use monitoring::ConnectionSettingsMonitor;
 use std::{collections::HashMap, sync::Arc};
 use zbus::{
     Connection,
-    zvariant::{OwnedObjectPath, OwnedValue},
+    zvariant::{self, OwnedObjectPath, OwnedValue},
 };
 
 use crate::services::{
     common::Property,
     network_manager::{
-        NMConnectionSettingsFlags, NetworkError,
+        NMConnectionSettingsFlags, NetworkError, core::access_point::SSID,
         proxy::settings::connection::SettingsConnectionProxy,
     },
 };
@@ -39,14 +40,27 @@ pub struct ConnectionSettings {
     pub filename: Property<String>,
 }
 
+impl PartialEq for ConnectionSettings {
+    fn eq(&self, other: &Self) -> bool {
+        self.path.get() == other.path.get()
+    }
+}
+
 impl ConnectionSettings {
     /// Get a snapshot of the current settings connection state.
     ///
     /// Note: SettingsConnection properties can change, so consider using get_live()
     /// for monitoring changes.
-    pub async fn get(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
-        let settings = Self::from_path(&connection, path).await?;
-        Some(Arc::new(settings))
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if D-Bus operations fail.
+    pub async fn get(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        let settings = Self::from_path(connection, path).await?;
+        Ok(Arc::new(settings))
     }
 
     /// Get a live-updating settings connection instance.
@@ -57,18 +71,15 @@ impl ConnectionSettings {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::InitializationFailed` if:
-    /// - Failed to fetch properties from D-Bus
-    /// - Failed to start monitoring
+    /// Returns `NetworkError::DbusError` if D-Bus operations fail
     pub async fn get_live(
-        connection: Connection,
+        connection: &Connection,
         path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        let properties = Self::fetch_properties(&connection, &path).await?;
-        let settings = Arc::new(Self::from_props(path.clone(), properties, &connection));
+        let properties = Self::fetch_properties(connection, &path).await?;
+        let settings = Arc::new(Self::from_props(path.clone(), properties, connection));
 
-        ConnectionSettingsMonitor::start(settings.clone(), settings.connection.clone(), path)
-            .await?;
+        ConnectionSettingsMonitor::start(settings.clone(), connection, path).await?;
 
         Ok(settings)
     }
@@ -218,9 +229,25 @@ impl ConnectionSettings {
         .await
     }
 
-    async fn from_path(connection: &Connection, path: OwnedObjectPath) -> Option<Self> {
-        let properties = Self::fetch_properties(connection, &path).await.ok()?;
-        Some(Self::from_props(path, properties, connection))
+    pub(crate) async fn matches_ssid(&self, ssid: &SSID) -> bool {
+        let Ok(settings) = self.get_settings().await else {
+            return false;
+        };
+
+        settings
+            .get("802-11-wireless")
+            .and_then(|wireless| wireless.get("ssid"))
+            .and_then(|ssid| ssid.downcast_ref::<zvariant::Array>().ok())
+            .and_then(|arr| TryInto::<Vec<u8>>::try_into(arr).ok())
+            .is_some_and(|bytes| bytes == ssid.as_bytes())
+    }
+
+    async fn from_path(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Self, NetworkError> {
+        let properties = Self::fetch_properties(connection, &path).await?;
+        Ok(Self::from_props(path, properties, connection))
     }
 
     async fn fetch_properties(
@@ -232,12 +259,12 @@ impl ConnectionSettings {
             .map_err(NetworkError::DbusError)?;
 
         let (unsaved, flags, filename) =
-            tokio::join!(proxy.unsaved(), proxy.flags(), proxy.filename(),);
+            tokio::join!(proxy.unsaved(), proxy.flags(), proxy.filename());
 
         Ok(SettingsConnectionProperties {
-            unsaved: unsaved.map_err(NetworkError::DbusError)?,
-            flags: flags.map_err(NetworkError::DbusError)?,
-            filename: filename.map_err(NetworkError::DbusError)?,
+            unsaved: unwrap_bool!(unsaved, path),
+            flags: unwrap_u32!(flags, path),
+            filename: unwrap_string!(filename, path),
         })
     }
 

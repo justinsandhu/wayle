@@ -3,6 +3,7 @@ mod monitoring;
 use std::sync::Arc;
 use std::{collections::HashMap, ops::Deref};
 
+use crate::{unwrap_i64_or, unwrap_path_or, unwrap_string, unwrap_u32, unwrap_vec};
 use monitoring::DeviceWifiMonitor;
 use tracing::warn;
 use zbus::{Connection, zvariant::OwnedObjectPath};
@@ -79,9 +80,18 @@ impl Deref for DeviceWifi {
 
 impl DeviceWifi {
     /// Get a snapshot of the current WiFi device state (no monitoring).
-    pub async fn get(connection: Connection, device_path: OwnedObjectPath) -> Option<Arc<Self>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::WrongObjectType` if device at path is not a WiFi device,
+    /// `NetworkError::ObjectCreationFailed` if failed to create base device, or
+    /// `NetworkError::DbusError` if D-Bus operations fail.
+    pub async fn get(
+        connection: &Connection,
+        device_path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
         let device = Self::from_path(connection, device_path).await?;
-        Some(Arc::new(device))
+        Ok(Arc::new(device))
     }
 
     /// Get a live-updating WiFi device instance (with monitoring).
@@ -90,20 +100,20 @@ impl DeviceWifi {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::InitializationFailed` if:
-    /// - Device at path is not a WiFi device
-    /// - Failed to fetch WiFi properties from D-Bus
-    /// - Failed to start monitoring
+    /// Returns:
+    /// - `NetworkError::WrongObjectType` if device at path is not a WiFi device
+    /// - `NetworkError::ObjectCreationFailed` if failed to create base device
+    /// - `NetworkError::DbusError` if D-Bus operations fail
     pub async fn get_live(
-        connection: Connection,
+        connection: &Connection,
         device_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        Self::verify_is_wifi_device(&connection, &device_path).await?;
+        Self::verify_is_wifi_device(connection, &device_path).await?;
 
-        let base_arc = Device::get_live(connection.clone(), device_path.clone()).await?;
+        let base_arc = Device::get_live(connection, device_path.clone()).await?;
         let base = Device::clone(&base_arc);
 
-        let wifi_props = Self::fetch_wifi_properties(&connection, &device_path).await?;
+        let wifi_props = Self::fetch_wifi_properties(connection, &device_path).await?;
         let device = Arc::new(Self::from_props(base, wifi_props));
 
         DeviceWifiMonitor::start(device.clone(), connection, device_path).await?;
@@ -119,7 +129,8 @@ impl DeviceWifi {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::OperationFailed` if the scan request fails.
+    /// Returns `NetworkError::DbusError` if D-Bus proxy creation fails or
+    /// `NetworkError::OperationFailed` if the scan request fails.
     pub async fn request_scan(&self) -> Result<(), NetworkError> {
         let proxy = DeviceWirelessProxy::new(&self.connection, self.path.get()).await?;
 
@@ -148,9 +159,11 @@ impl DeviceWifi {
             .map_err(NetworkError::DbusError)?;
 
         if device_type != NMDeviceType::Wifi as u32 {
-            return Err(NetworkError::InitializationFailed(format!(
-                "Device at {device_path} is not a WiFi device"
-            )));
+            return Err(NetworkError::WrongObjectType {
+                path: device_path.to_string(),
+                expected: "WiFi device".to_string(),
+                actual: format!("device type {device_type}"),
+            });
         }
 
         Ok(())
@@ -183,13 +196,17 @@ impl DeviceWifi {
         );
 
         Ok(WifiProperties {
-            perm_hw_address: perm_hw_address.map_err(NetworkError::DbusError)?,
-            mode: mode.map_err(NetworkError::DbusError)?,
-            bitrate: bitrate.map_err(NetworkError::DbusError)?,
-            access_points: access_points.map_err(NetworkError::DbusError)?,
-            active_access_point: active_access_point.map_err(NetworkError::DbusError)?,
-            wireless_capabilities: wireless_capabilities.map_err(NetworkError::DbusError)?,
-            last_scan: last_scan.map_err(NetworkError::DbusError)?,
+            perm_hw_address: unwrap_string!(perm_hw_address, device_path),
+            mode: unwrap_u32!(mode, device_path),
+            bitrate: unwrap_u32!(bitrate, device_path),
+            access_points: unwrap_vec!(access_points, device_path),
+            active_access_point: unwrap_path_or!(
+                active_access_point,
+                device_path,
+                OwnedObjectPath::default()
+            ),
+            wireless_capabilities: unwrap_u32!(wireless_capabilities, device_path),
+            last_scan: unwrap_i64_or!(last_scan, -1, device_path),
         })
     }
 
@@ -212,28 +229,37 @@ impl DeviceWifi {
         }
     }
 
-    pub(crate) async fn from_path(connection: Connection, path: OwnedObjectPath) -> Option<Self> {
-        let device_proxy = DeviceProxy::new(&connection, path.clone()).await.ok()?;
+    async fn from_path(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Self, NetworkError> {
+        let device_proxy = DeviceProxy::new(connection, path.clone()).await?;
 
-        let device_type = device_proxy.device_type().await.ok()?;
+        let device_type = device_proxy.device_type().await?;
         if device_type != NMDeviceType::Wifi as u32 {
             warn!(
                 "Device at {path} is not a wifi device, got type: {} ({:?})",
                 device_type,
                 NMDeviceType::from_u32(device_type)
             );
-            return None;
+            return Err(NetworkError::WrongObjectType {
+                path: path.to_string(),
+                expected: "WiFi device".to_string(),
+                actual: format!("{:?}", NMDeviceType::from_u32(device_type)),
+            });
         }
 
-        let wifi_proxy = DeviceWirelessProxy::new(&connection, path.clone())
-            .await
-            .ok()?;
+        let wifi_proxy = DeviceWirelessProxy::new(connection, path.clone()).await?;
 
-        let base = match Device::from_path(connection.clone(), path.to_string()).await {
-            Some(base) => base,
-            None => {
+        let base = match Device::from_path(connection, path.to_string()).await {
+            Ok(base) => base,
+            Err(e) => {
                 warn!("Failed to create base Device for {}", path);
-                return None;
+                return Err(NetworkError::ObjectCreationFailed {
+                    object_type: "Device".to_string(),
+                    path: path.to_string(),
+                    reason: e.to_string(),
+                });
             }
         };
 
@@ -257,27 +283,22 @@ impl DeviceWifi {
 
         let device = Self {
             base,
-            perm_hw_address: Property::new(perm_hw_address.ok().unwrap_or_default()),
-            mode: Property::new(NM80211Mode::from_u32(mode.ok().unwrap_or(0))),
-            bitrate: Property::new(bitrate.ok().unwrap_or(0)),
+            perm_hw_address: Property::new(unwrap_string!(perm_hw_address)),
+            mode: Property::new(NM80211Mode::from_u32(unwrap_u32!(mode))),
+            bitrate: Property::new(unwrap_u32!(bitrate)),
             access_points: Property::new(
-                access_points
-                    .ok()
-                    .unwrap_or_default()
+                unwrap_vec!(access_points)
                     .into_iter()
                     .map(|p| p.to_string())
                     .collect(),
             ),
             active_access_point: Property::new(
-                active_access_point
-                    .ok()
-                    .map(|p| p.to_string())
-                    .unwrap_or_else(|| "/".to_string()),
+                unwrap_path_or!(active_access_point, OwnedObjectPath::default()).to_string(),
             ),
-            wireless_capabilities: Property::new(wireless_capabilities.ok().unwrap_or(0)),
-            last_scan: Property::new(last_scan.ok().unwrap_or(-1)),
+            wireless_capabilities: Property::new(unwrap_u32!(wireless_capabilities)),
+            last_scan: Property::new(unwrap_i64_or!(last_scan, -1)),
         };
 
-        Some(device)
+        Ok(device)
     }
 }

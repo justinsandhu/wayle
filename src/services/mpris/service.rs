@@ -63,7 +63,7 @@ impl MprisService {
         };
 
         MprisMonitoring::start(
-            service.connection.clone(),
+            &service.connection,
             Arc::clone(&service.players),
             service.player_list.clone(),
             service.active_player.clone(),
@@ -74,41 +74,74 @@ impl MprisService {
         Ok(service)
     }
 
-    /// Get a reactive player by ID.
-    pub fn player(&self, player_id: &PlayerId) -> Option<Arc<Player>> {
-        self.player_list
-            .get()
-            .into_iter()
-            .find(|p| &p.id == player_id)
+    /// Get a snapshot of a specific media player's current state.
+    ///
+    /// Returns a non-monitored player instance representing the current state
+    /// at the time of the call. The returned player's properties will not
+    /// update when the actual player state changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError::PlayerNotFound` if the player doesn't exist.
+    /// Returns `MediaError::DbusError` if D-Bus operations fail.
+    pub async fn player(&self, player_id: &PlayerId) -> Result<Arc<Player>, MediaError> {
+        Player::get(&self.connection, player_id.clone()).await
     }
 
-    /// Get all players.
+    /// Get a live-updating instance of a specific media player.
+    ///
+    /// Returns a monitored player instance that automatically updates its
+    /// properties when the actual player state changes. Use this when you
+    /// need to track ongoing changes to a player's state.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MediaError::PlayerNotFound` if the player doesn't exist.
+    /// Returns `MediaError::DbusError` if D-Bus operations fail.
+    pub async fn player_monitored(&self, player_id: &PlayerId) -> Result<Arc<Player>, MediaError> {
+        Player::get_live(&self.connection, player_id.clone()).await
+    }
+
+    /// Get the current list of available media players.
+    ///
+    /// Returns a snapshot of all currently available MPRIS players,
+    /// excluding any that match the ignored patterns configured at startup.
     pub fn players(&self) -> Vec<Arc<Player>> {
         self.player_list.get()
     }
 
-    /// Watch for changes to the player list.
+    /// Get a stream that emits updates when the player list changes.
     ///
-    /// Emits whenever players are added or removed from the system.
-    pub fn watch_players(&self) -> impl Stream<Item = Vec<Arc<Player>>> + Send {
+    /// Returns a stream that emits the updated player list whenever
+    /// players are added or removed from the system.
+    pub fn players_monitored(&self) -> impl Stream<Item = Vec<Arc<Player>>> + Send {
         self.player_list.watch()
     }
 
-    /// Watch for changes to the active player.
-    pub fn watch_active_player(&self) -> impl Stream<Item = Option<Arc<Player>>> + Send {
-        self.active_player.watch()
-    }
-
-    /// Get the currently active player ID.
+    /// Get the currently active media player.
+    ///
+    /// Returns the player that is currently set as active, or None if
+    /// no player is active.
     pub fn active_player(&self) -> Option<Arc<Player>> {
         self.active_player.get()
     }
 
-    /// Set the active player.
+    /// Get a stream that emits updates when the active player changes.
+    ///
+    /// Returns a stream that emits whenever a different player becomes
+    /// active or when the active player is cleared.
+    pub fn active_player_monitored(&self) -> impl Stream<Item = Option<Arc<Player>>> + Send {
+        self.active_player.watch()
+    }
+
+    /// Set which media player should be considered active.
+    ///
+    /// Sets the specified player as the active one, or clears the active
+    /// player if None is provided.
     ///
     /// # Errors
     ///
-    /// Returns `MediaError::PlayerNotFound` if the specified player doesn't exist
+    /// Returns `MediaError::PlayerNotFound` if the specified player doesn't exist.
     pub async fn set_active_player(&self, player_id: Option<PlayerId>) -> Result<(), MediaError> {
         if let Some(ref id) = player_id {
             let players = self.players.read().await;
@@ -118,7 +151,7 @@ impl MprisService {
         }
 
         let player = match player_id {
-            Some(ref id) => self.player(id),
+            Some(ref id) => self.player(id).await.ok(),
             None => None,
         };
 

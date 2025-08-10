@@ -5,6 +5,9 @@ pub mod wifi;
 /// Wired (ethernet) device functionality and management.
 pub mod wired;
 
+use crate::{
+    unwrap_bool, unwrap_bool_or, unwrap_path, unwrap_string, unwrap_u32, unwrap_u32_or, unwrap_vec,
+};
 use monitoring::DeviceMonitor;
 use std::sync::Arc;
 use zbus::{Connection, zvariant::OwnedObjectPath};
@@ -213,20 +216,24 @@ struct DeviceProperties {
 
 impl Device {
     pub(crate) async fn get(
-        connection: Connection,
+        connection: &Connection,
         device_path: OwnedObjectPath,
-    ) -> Option<Arc<Self>> {
+    ) -> Result<Arc<Self>, NetworkError> {
         let device = Self::from_path(connection, device_path.to_string()).await?;
-        Some(Arc::new(device))
+        Ok(Arc::new(device))
     }
 
     pub(crate) async fn get_live(
-        connection: Connection,
+        connection: &Connection,
         device_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        let device = Self::from_path(connection.clone(), device_path.to_string())
+        let device = Self::from_path(connection, device_path.to_string())
             .await
-            .ok_or_else(|| NetworkError::InitializationFailed("Failed to create device".into()))?;
+            .map_err(|e| NetworkError::ObjectCreationFailed {
+                object_type: "Device".to_string(),
+                path: device_path.to_string(),
+                reason: e.to_string(),
+            })?;
 
         let device = Arc::new(device);
         DeviceMonitor::start(device.clone(), connection, device_path).await?;
@@ -234,16 +241,17 @@ impl Device {
         Ok(device)
     }
 
-    pub(crate) async fn from_path(connection: Connection, object_path: ObjectPath) -> Option<Self> {
-        let proxy = DeviceProxy::new(&connection, object_path.clone())
-            .await
-            .ok()?;
+    pub(crate) async fn from_path(
+        connection: &Connection,
+        object_path: ObjectPath,
+    ) -> Result<Self, NetworkError> {
+        let proxy = DeviceProxy::new(connection, object_path.clone()).await?;
         let props = Self::fetch_properties(&proxy).await?;
-        Some(Self::from_properties(props, connection, object_path))
+        Ok(Self::from_properties(props, connection, object_path))
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn fetch_properties(proxy: &DeviceProxy<'_>) -> Option<DeviceProperties> {
+    async fn fetch_properties(proxy: &DeviceProxy<'_>) -> Result<DeviceProperties, NetworkError> {
         let (udi, path, interface, ip_interface, driver, driver_version, firmware_version) = tokio::join!(
             proxy.udi(),
             proxy.path(),
@@ -314,51 +322,59 @@ impl Device {
             proxy.lldp_neighbors(),
         );
 
-        Some(DeviceProperties {
-            udi: udi.ok()?,
-            path: path.ok()?,
-            interface: interface.ok()?,
-            ip_interface: ip_interface.ok()?,
-            driver: driver.ok()?,
-            driver_version: driver_version.ok()?,
-            firmware_version: firmware_version.ok()?,
-            capabilities: capabilities.ok()?,
-            state: state.ok()?,
-            state_reason: state_reason.ok()?,
-            active_connection: active_connection.ok()?.to_string(),
-            ip4_config: ip4_config.ok()?.to_string(),
-            dhcp4_config: dhcp4_config.ok()?.to_string(),
-            ip6_config: ip6_config.ok()?.to_string(),
-            dhcp6_config: dhcp6_config.ok()?.to_string(),
-            managed: managed.ok()?,
-            autoconnect: autoconnect.ok()?,
-            firmware_missing: firmware_missing.ok()?,
-            nm_plugin_missing: nm_plugin_missing.ok()?,
-            device_type: device_type.ok()?,
-            available_connections: available_connections
-                .ok()?
-                .into_iter()
-                .map(|p| p.to_string())
-                .collect(),
-            physical_port_id: physical_port_id.ok()?,
-            mtu: mtu.ok()?,
-            metered: metered.ok()?,
-            real: real.ok()?,
-            ip4_connectivity: ip4_connectivity.ok()?,
-            ip6_connectivity: ip6_connectivity.ok()?,
-            interface_flags: interface_flags.ok()?,
-            hw_address: hw_address.ok()?,
-            ports: ports.ok()?.into_iter().map(|p| p.to_string()).collect(),
+        let device_path = path.clone().unwrap_or_default();
+
+        let available_connections = unwrap_vec!(available_connections, device_path)
+            .into_iter()
+            .map(|p| p.to_string())
+            .collect();
+
+        let ports = unwrap_vec!(ports, device_path)
+            .into_iter()
+            .map(|p| p.to_string())
+            .collect();
+
+        Ok(DeviceProperties {
+            udi: unwrap_string!(udi, device_path),
+            interface: unwrap_string!(interface, device_path),
+            ip_interface: unwrap_string!(ip_interface, device_path),
+            driver: unwrap_string!(driver, device_path),
+            driver_version: unwrap_string!(driver_version, device_path),
+            firmware_version: unwrap_string!(firmware_version, device_path),
+            capabilities: unwrap_u32!(capabilities, device_path),
+            state: unwrap_u32!(state, device_path),
+            state_reason: state_reason.unwrap_or((0, 0)),
+            active_connection: unwrap_path!(active_connection, device_path).to_string(),
+            ip4_config: unwrap_path!(ip4_config, device_path).to_string(),
+            dhcp4_config: unwrap_path!(dhcp4_config, device_path).to_string(),
+            ip6_config: unwrap_path!(ip6_config, device_path).to_string(),
+            dhcp6_config: unwrap_path!(dhcp6_config, device_path).to_string(),
+            managed: unwrap_bool_or!(managed, device_path, true),
+            autoconnect: unwrap_bool!(autoconnect, device_path),
+            firmware_missing: unwrap_bool!(firmware_missing, device_path),
+            nm_plugin_missing: unwrap_bool!(nm_plugin_missing, device_path),
+            device_type: unwrap_u32!(device_type, device_path),
+            available_connections,
+            physical_port_id: unwrap_string!(physical_port_id, device_path),
+            mtu: unwrap_u32_or!(mtu, device_path, 1500),
+            metered: unwrap_u32!(metered, device_path),
+            real: unwrap_bool_or!(real, device_path, true),
+            ip4_connectivity: unwrap_u32!(ip4_connectivity, device_path),
+            ip6_connectivity: unwrap_u32!(ip6_connectivity, device_path),
+            interface_flags: unwrap_u32!(interface_flags, device_path),
+            hw_address: unwrap_string!(hw_address, device_path),
+            ports,
+            path: device_path,
         })
     }
 
     fn from_properties(
         props: DeviceProperties,
-        connection: Connection,
+        connection: &Connection,
         object_path: ObjectPath,
     ) -> Self {
         Self {
-            connection: DbusConnection(connection),
+            connection: DbusConnection(connection.clone()),
             object_path,
             udi: Property::new(props.udi),
             path: Property::new(props.path),

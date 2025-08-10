@@ -16,12 +16,12 @@ pub(crate) struct ActiveConnectionMonitor;
 impl ActiveConnectionMonitor {
     pub(super) async fn start(
         active_connection: Arc<ActiveConnection>,
-        zbus_connection: Connection,
+        zbus_connection: &Connection,
         path: OwnedObjectPath,
     ) {
         let weak = Arc::downgrade(&active_connection);
 
-        let Ok(proxy) = ConnectionActiveProxy::new(&zbus_connection, path).await else {
+        let Ok(proxy) = ConnectionActiveProxy::new(zbus_connection, path).await else {
             debug!("Failed to create proxy for active connection monitoring");
             return;
         };

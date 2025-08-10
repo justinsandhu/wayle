@@ -25,14 +25,25 @@ pub struct Dhcp6Config {
 
 impl Dhcp6Config {
     /// Get a snapshot of the current DHCP6 configuration state (no monitoring).
-    pub async fn get(connection: &Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if D-Bus operations fail or
+    /// `NetworkError::DataConversionFailed` if DHCP option conversion fails.
+    pub async fn get(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
         let config = Self::from_path(connection, path).await?;
-        Some(Arc::new(config))
+        Ok(Arc::new(config))
     }
 
-    async fn from_path(connection: &Connection, path: OwnedObjectPath) -> Option<Self> {
-        let options = Self::fetch_options(connection, &path).await.ok()?;
-        Some(Self::from_options(path, options))
+    async fn from_path(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Self, NetworkError> {
+        let options = Self::fetch_options(connection, &path).await?;
+        Ok(Self::from_options(path, options))
     }
 
     async fn fetch_options(
@@ -52,9 +63,10 @@ impl Dhcp6Config {
                     converted.insert(key, owned_value);
                 }
                 Err(_) => {
-                    return Err(NetworkError::InitializationFailed(format!(
-                        "Failed to convert DHCP option '{key}'"
-                    )));
+                    return Err(NetworkError::DataConversionFailed {
+                        data_type: format!("DHCP6 option '{key}'"),
+                        reason: "Failed to convert to OwnedValue".to_string(),
+                    });
                 }
             }
         }

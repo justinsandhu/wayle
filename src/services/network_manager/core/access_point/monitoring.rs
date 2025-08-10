@@ -11,17 +11,17 @@ use crate::services::network_manager::{
 use super::{AccessPoint, BSSID, SSID, SecurityType};
 
 /// Monitors D-Bus properties and updates the reactive AccessPoint model.
-pub(crate) struct AccessPointMonitor;
+pub(super) struct AccessPointMonitor;
 
 impl AccessPointMonitor {
     pub(super) async fn start(
         access_point: Arc<AccessPoint>,
-        zbus_connection: Connection,
+        zbus_connection: &Connection,
         path: OwnedObjectPath,
     ) {
         let weak = Arc::downgrade(&access_point);
 
-        let Ok(proxy) = AccessPointProxy::new(&zbus_connection, path).await else {
+        let Ok(proxy) = AccessPointProxy::new(zbus_connection, path).await else {
             debug!("Failed to create proxy for access point monitoring");
             return;
         };

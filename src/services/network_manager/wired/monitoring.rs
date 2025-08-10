@@ -12,20 +12,20 @@ pub(crate) struct WiredMonitor;
 
 impl WiredMonitor {
     pub async fn start(
-        connection: Connection,
+        connection: &Connection,
         wired: &Arc<Wired>,
     ) -> Result<JoinHandle<()>, NetworkError> {
         Self::spawn_monitoring_task(connection, wired).await
     }
 
     async fn spawn_monitoring_task(
-        connection: Connection,
+        connection: &Connection,
         wired: &Arc<Wired>,
     ) -> Result<JoinHandle<()>, NetworkError> {
         let connectivity_prop = wired.connectivity.clone();
         let device_path = wired.device.path.get();
 
-        let device_proxy = DeviceProxy::new(&connection, device_path)
+        let device_proxy = DeviceProxy::new(connection, device_path)
             .await
             .map_err(NetworkError::DbusError)?;
 

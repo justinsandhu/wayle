@@ -16,12 +16,12 @@ pub(crate) struct DeviceMonitor;
 impl DeviceMonitor {
     pub(super) async fn start(
         device: Arc<Device>,
-        connection: Connection,
+        connection: &Connection,
         path: OwnedObjectPath,
     ) -> Result<(), NetworkError> {
         let weak = Arc::downgrade(&device);
 
-        let proxy = DeviceProxy::new(&connection, path)
+        let proxy = DeviceProxy::new(connection, path)
             .await
             .map_err(NetworkError::DbusError)?;
 

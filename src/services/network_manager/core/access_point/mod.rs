@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
-use tracing::warn;
+use crate::{unwrap_i32_or, unwrap_string, unwrap_u8, unwrap_u32, unwrap_vec};
 use zbus::{Connection, zvariant::OwnedObjectPath};
 
 use crate::services::{
     common::Property,
-    network_manager::{AccessPointProxy, NM80211ApFlags, NM80211ApSecurityFlags, NM80211Mode},
+    network_manager::{
+        AccessPointProxy, NM80211ApFlags, NM80211ApSecurityFlags, NM80211Mode, NetworkError,
+    },
 };
 
 mod monitoring;
@@ -74,27 +76,64 @@ impl PartialEq for AccessPoint {
 
 impl AccessPoint {
     /// Get a snapshot of the current access point state (no monitoring).
-    pub async fn get(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
-        Self::create_from_path(connection, path).await
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::ObjectNotFound` if access point doesn't exist.
+    /// Returns `NetworkError::ObjectCreationFailed` if access point creation fails.
+    pub async fn get(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        Self::from_path(connection, path.clone())
+            .await
+            .map_err(|e| match e {
+                NetworkError::ObjectNotFound(_) => e,
+                _ => NetworkError::ObjectCreationFailed {
+                    object_type: "AccessPoint".to_string(),
+                    path: path.to_string(),
+                    reason: e.to_string(),
+                },
+            })
     }
 
     /// Get a live-updating access point instance (with monitoring).
-    pub async fn get_live(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
-        let access_point = Self::create_from_path(connection.clone(), path.clone()).await?;
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::ObjectNotFound` if access point doesn't exist.
+    /// Returns `NetworkError::ObjectCreationFailed` if access point creation fails.
+    pub async fn get_live(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        let access_point =
+            Self::from_path(connection, path.clone())
+                .await
+                .map_err(|e| match e {
+                    NetworkError::ObjectNotFound(_) => e,
+                    _ => NetworkError::ObjectCreationFailed {
+                        object_type: "AccessPoint".to_string(),
+                        path: path.to_string(),
+                        reason: e.to_string(),
+                    },
+                })?;
 
         AccessPointMonitor::start(access_point.clone(), connection, path).await;
 
-        Some(access_point)
+        Ok(access_point)
     }
 
-    async fn create_from_path(connection: Connection, path: OwnedObjectPath) -> Option<Arc<Self>> {
-        let ap_proxy = AccessPointProxy::new(&connection, path.clone())
+    async fn from_path(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
+        let ap_proxy = AccessPointProxy::new(connection, path.clone())
             .await
-            .ok()?;
+            .map_err(NetworkError::DbusError)?;
 
         if ap_proxy.strength().await.is_err() {
-            warn!("Access point at path '{}' does not exist.", path.clone());
-            return None;
+            return Err(NetworkError::ObjectNotFound(path.to_string()));
         }
 
         let (
@@ -121,21 +160,21 @@ impl AccessPoint {
             ap_proxy.last_seen(),
         );
 
-        let flags = NM80211ApFlags::from_bits_truncate(flags.unwrap_or_default());
-        let wpa_flags = NM80211ApSecurityFlags::from_bits_truncate(wpa_flags.unwrap_or_default());
-        let rsn_flags = NM80211ApSecurityFlags::from_bits_truncate(rsn_flags.unwrap_or_default());
-        let ssid = SSID::new(ssid.unwrap_or_default());
-        let frequency = frequency.unwrap_or_default();
-        let hw_address = BSSID::new(hw_address.unwrap_or_default().into_bytes());
-        let mode = NM80211Mode::from_u32(mode.unwrap_or_default());
-        let max_bitrate = max_bitrate.unwrap_or_default();
-        let strength = strength.unwrap_or_default();
-        let last_seen = last_seen.unwrap_or(-1);
+        let flags = NM80211ApFlags::from_bits_truncate(unwrap_u32!(flags, path));
+        let wpa_flags = NM80211ApSecurityFlags::from_bits_truncate(unwrap_u32!(wpa_flags, path));
+        let rsn_flags = NM80211ApSecurityFlags::from_bits_truncate(unwrap_u32!(rsn_flags, path));
+        let ssid = SSID::new(unwrap_vec!(ssid, path));
+        let frequency = unwrap_u32!(frequency, path);
+        let hw_address = BSSID::new(unwrap_string!(hw_address, path).into_bytes());
+        let mode = NM80211Mode::from_u32(unwrap_u32!(mode, path));
+        let max_bitrate = unwrap_u32!(max_bitrate, path);
+        let strength = unwrap_u8!(strength, path);
+        let last_seen = unwrap_i32_or!(last_seen, path, -1);
 
         let security = SecurityType::from_flags(flags, wpa_flags, rsn_flags);
         let is_hidden = ssid.is_empty();
 
-        Some(Arc::new(Self {
+        Ok(Arc::new(Self {
             path,
             flags: Property::new(flags),
             wpa_flags: Property::new(wpa_flags),

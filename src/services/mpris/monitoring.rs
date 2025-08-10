@@ -24,14 +24,14 @@ impl MprisMonitoring {
     /// Discovers existing players and monitors for new players being added/removed.
     #[instrument(skip_all)]
     pub async fn start(
-        connection: Connection,
+        connection: &Connection,
         players: Arc<RwLock<HashMap<PlayerId, Arc<Player>>>>,
         player_list: Property<Vec<Arc<Player>>>,
         active_player: Property<Option<Arc<Player>>>,
         ignored_patterns: Vec<String>,
     ) -> Result<(), MediaError> {
         Self::discover_existing_players(
-            &connection,
+            connection,
             &players,
             &player_list,
             &active_player,
@@ -45,7 +45,7 @@ impl MprisMonitoring {
                 .keys()
                 .find(|id| id.bus_name() == saved_player_id)
             {
-                let pl = Player::get_live(&connection, player_id.clone()).await?;
+                let pl = Player::get_live(connection, player_id.clone()).await?;
                 active_player.set(Some(pl));
                 debug!("Restored active player from state: {}", saved_player_id);
             }
@@ -96,12 +96,14 @@ impl MprisMonitoring {
     }
 
     fn spawn_name_monitoring(
-        connection: Connection,
+        connection: &Connection,
         players: Arc<RwLock<HashMap<PlayerId, Arc<Player>>>>,
         player_list: Property<Vec<Arc<Player>>>,
         active_player: Property<Option<Arc<Player>>>,
         ignored_patterns: Vec<String>,
     ) {
+        let connection = connection.clone();
+
         tokio::spawn(async move {
             let Ok(dbus_proxy) = DBusProxy::new(&connection).await else {
                 warn!("Failed to create DBus proxy for name monitoring");

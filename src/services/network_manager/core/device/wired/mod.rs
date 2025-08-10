@@ -10,6 +10,7 @@ use crate::services::{
     common::Property,
     network_manager::{DeviceProxy, NMDeviceType, NetworkError, wired_proxy::DeviceWiredProxy},
 };
+use crate::{unwrap_string, unwrap_u32, unwrap_vec};
 
 use super::Device;
 
@@ -51,9 +52,17 @@ impl Deref for DeviceWired {
 
 impl DeviceWired {
     /// Get a snapshot of the current wired device state (no monitoring).
-    pub async fn get(connection: Connection, device_path: OwnedObjectPath) -> Option<Arc<Self>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::WrongObjectType` if device at path is not an ethernet device,
+    /// `NetworkError::DbusError` if D-Bus operations fail.
+    pub async fn get(
+        connection: &Connection,
+        device_path: OwnedObjectPath,
+    ) -> Result<Arc<Self>, NetworkError> {
         let device = Self::from_path(connection, device_path).await?;
-        Some(Arc::new(device))
+        Ok(Arc::new(device))
     }
 
     /// Get a live-updating wired device instance (with monitoring).
@@ -62,19 +71,18 @@ impl DeviceWired {
     ///
     /// # Errors
     ///
-    /// Returns `NetworkError::InitializationFailed` if:
-    /// - Device at path is not a wired (ethernet) device
-    /// - Failed to fetch wired properties from D-Bus
-    /// - Failed to start monitoring
+    /// Returns:
+    /// - `NetworkError::WrongObjectType` if device at path is not an ethernet device
+    /// - `NetworkError::DbusError` if D-Bus operations fail
     pub async fn get_live(
-        connection: Connection,
+        connection: &Connection,
         device_path: OwnedObjectPath,
     ) -> Result<Arc<Self>, NetworkError> {
-        Self::verify_is_ethernet_device(&connection, &device_path).await?;
+        Self::verify_is_ethernet_device(connection, &device_path).await?;
 
-        let base_device = Device::get_live(connection.clone(), device_path.clone()).await?;
+        let base_device = Device::get_live(connection, device_path.clone()).await?;
         let base = Device::clone(&base_device);
-        let wired_props = Self::fetch_wired_properties(&connection, &device_path).await?;
+        let wired_props = Self::fetch_wired_properties(connection, &device_path).await?;
         let device = Arc::new(Self::from_props(base, wired_props));
 
         DeviceWiredMonitor::start(device.clone(), connection, device_path).await?;
@@ -96,9 +104,11 @@ impl DeviceWired {
             .map_err(NetworkError::DbusError)?;
 
         if device_type != NMDeviceType::Ethernet as u32 {
-            return Err(NetworkError::InitializationFailed(format!(
-                "Device at {device_path} is not an ethernet device"
-            )));
+            return Err(NetworkError::WrongObjectType {
+                path: device_path.to_string(),
+                expected: "Ethernet device".to_string(),
+                actual: format!("device type {device_type}"),
+            });
         }
 
         Ok(())
@@ -119,9 +129,9 @@ impl DeviceWired {
         );
 
         Ok(WiredProperties {
-            perm_hw_address: perm_hw_address.map_err(NetworkError::DbusError)?,
-            speed: speed.map_err(NetworkError::DbusError)?,
-            s390_subchannels: s390_subchannels.map_err(NetworkError::DbusError)?,
+            perm_hw_address: unwrap_string!(perm_hw_address, device_path),
+            speed: unwrap_u32!(speed, device_path),
+            s390_subchannels: unwrap_vec!(s390_subchannels, device_path),
         })
     }
 
@@ -134,16 +144,15 @@ impl DeviceWired {
         }
     }
 
-    async fn from_path(connection: Connection, path: OwnedObjectPath) -> Option<Self> {
-        Self::verify_is_ethernet_device(&connection, &path)
-            .await
-            .ok()?;
+    async fn from_path(
+        connection: &Connection,
+        path: OwnedObjectPath,
+    ) -> Result<Self, NetworkError> {
+        Self::verify_is_ethernet_device(connection, &path).await?;
 
-        let base = Device::from_path(connection.clone(), path.to_string()).await?;
-        let wired_props = Self::fetch_wired_properties(&connection, &path)
-            .await
-            .ok()?;
+        let base = Device::from_path(connection, path.to_string()).await?;
+        let wired_props = Self::fetch_wired_properties(connection, &path).await?;
 
-        Some(Self::from_props(base, wired_props))
+        Ok(Self::from_props(base, wired_props))
     }
 }
