@@ -93,15 +93,12 @@ impl SettingsController {
     ) -> Result<(), NetworkError> {
         let settings_proxy = SettingsProxy::new(zbus_connection).await?;
 
-        settings_proxy.save_hostname(hostname).await.map_err(|e| {
-            if e.to_string().contains("invalid hostname") {
-                NetworkError::OperationFailed {
-                    operation: "save_hostname",
-                    reason: format!("Invalid hostname: {hostname}"),
-                }
-            } else {
-                NetworkError::DbusError(e)
-            }
-        })
+        settings_proxy
+            .save_hostname(hostname)
+            .await
+            .map_err(|e| NetworkError::OperationFailed {
+                operation: "save_hostname",
+                reason: e.to_string(),
+            })
     }
 }
