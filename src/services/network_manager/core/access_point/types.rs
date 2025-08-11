@@ -104,21 +104,43 @@ impl SecurityType {
         wpa_flags: NM80211ApSecurityFlags,
         rsn_flags: NM80211ApSecurityFlags,
     ) -> Self {
-        if rsn_flags.contains(NM80211ApSecurityFlags::KEY_MGMT_SAE) {
-            SecurityType::WPA3
-        } else if rsn_flags.contains(NM80211ApSecurityFlags::KEY_MGMT_802_1X)
-            || wpa_flags.contains(NM80211ApSecurityFlags::KEY_MGMT_802_1X)
-        {
-            SecurityType::Enterprise
-        } else if rsn_flags != NM80211ApSecurityFlags::NONE {
-            SecurityType::WPA2
-        } else if wpa_flags != NM80211ApSecurityFlags::NONE {
-            SecurityType::WPA
-        } else if flags.contains(NM80211ApFlags::PRIVACY) {
-            SecurityType::WEP
-        } else {
-            SecurityType::None
+        const ENTERPRISE_FLAGS: NM80211ApSecurityFlags = NM80211ApSecurityFlags::KEY_MGMT_802_1X
+            .union(NM80211ApSecurityFlags::KEY_MGMT_EAP_SUITE_B_192);
+
+        const WPA3_FLAGS: NM80211ApSecurityFlags = NM80211ApSecurityFlags::KEY_MGMT_SAE
+            .union(NM80211ApSecurityFlags::KEY_MGMT_OWE)
+            .union(NM80211ApSecurityFlags::KEY_MGMT_OWE_TM);
+
+        const WEP_FLAGS: NM80211ApSecurityFlags = NM80211ApSecurityFlags::PAIR_WEP40
+            .union(NM80211ApSecurityFlags::PAIR_WEP104)
+            .union(NM80211ApSecurityFlags::GROUP_WEP40)
+            .union(NM80211ApSecurityFlags::GROUP_WEP104);
+
+        if rsn_flags.intersects(ENTERPRISE_FLAGS) || wpa_flags.intersects(ENTERPRISE_FLAGS) {
+            return Self::Enterprise;
         }
+
+        if rsn_flags.intersects(WPA3_FLAGS) {
+            return Self::WPA3;
+        }
+
+        if rsn_flags.contains(NM80211ApSecurityFlags::KEY_MGMT_PSK) {
+            return Self::WPA2;
+        }
+
+        if wpa_flags.contains(NM80211ApSecurityFlags::KEY_MGMT_PSK) {
+            return Self::WPA;
+        }
+
+        if wpa_flags.intersects(WEP_FLAGS) || rsn_flags.intersects(WEP_FLAGS) {
+            return Self::WEP;
+        }
+
+        if flags.contains(NM80211ApFlags::PRIVACY) && wpa_flags.is_empty() && rsn_flags.is_empty() {
+            return Self::WEP;
+        }
+
+        Self::None
     }
 }
 
