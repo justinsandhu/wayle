@@ -1,0 +1,326 @@
+mod controls;
+mod monitoring;
+
+use std::sync::Arc;
+
+use futures::{Stream, future::join_all};
+use monitoring::SettingsMonitor;
+use zbus::Connection;
+
+use std::collections::HashMap;
+use zbus::zvariant::{OwnedObjectPath, OwnedValue};
+
+use super::{access_point::SSID, settings_connection::ConnectionSettings};
+use crate::{
+    services::{
+        common::Property,
+        network::{NMSettingsAddConnection2Flags, NetworkError, SettingsProxy},
+    },
+    unwrap_bool, unwrap_string, unwrap_u64, unwrap_vec,
+};
+use futures::StreamExt;
+
+/// Connection Settings Profile Manager.
+///
+/// The Settings interface allows clients to view and administrate
+/// the connections stored and used by NetworkManager.
+#[derive(Debug, Clone)]
+pub struct Settings {
+    /// The DBus connection used for NetworkManager communication.
+    pub zbus_connection: Connection,
+    /// List of object paths of available network connection profiles.
+    pub connections: Property<Vec<ConnectionSettings>>,
+    /// The machine hostname stored in persistent configuration.
+    pub hostname: Property<String>,
+    /// If true, adding and modifying connections is supported.
+    pub can_modify: Property<bool>,
+    /// The version of the settings. This is incremented whenever the profile
+    /// changes and can be used to detect concurrent modifications. Since: 1.44
+    pub version_id: Property<u64>,
+}
+
+impl Settings {
+    /// Get a snapshot of current NetworkManager settings.
+    ///
+    /// Retrieves the Settings interface to view and administrate connections.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if DBus operations fail.
+    pub async fn get(zbus_connection: &Connection) -> Result<Arc<Self>, NetworkError> {
+        let settings = Self::from_connection(zbus_connection).await?;
+        Ok(Arc::new(settings))
+    }
+
+    /// Get live-updating NetworkManager settings.
+    ///
+    /// Retrieves the Settings interface with monitoring for changes to
+    /// connections, hostname, and other settings properties.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if DBus operations fail.
+    pub async fn get_live(zbus_connection: &Connection) -> Result<Arc<Self>, NetworkError> {
+        let properties = Self::from_connection(zbus_connection).await?;
+        let settings = Arc::new(properties);
+
+        SettingsMonitor::start(zbus_connection, settings.clone()).await;
+
+        Ok(settings)
+    }
+
+    /// List the saved network connections known to NetworkManager.
+    ///
+    /// # Returns
+    ///
+    /// List of connection object paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if the DBus operation fails.
+    pub async fn list_connections(&self) -> Result<Vec<OwnedObjectPath>, NetworkError> {
+        controls::SettingsController::list_connections(&self.zbus_connection).await
+    }
+
+    /// Retrieve the object path of a connection, given that connection's UUID.
+    ///
+    /// # Arguments
+    ///
+    /// * `uuid` - The UUID to find the connection object path for.
+    ///
+    /// # Returns
+    ///
+    /// The connection's object path.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if the DBus operation fails or connection not found.
+    pub async fn get_connection_by_uuid(
+        &self,
+        uuid: &str,
+    ) -> Result<OwnedObjectPath, NetworkError> {
+        controls::SettingsController::get_connection_by_uuid(&self.zbus_connection, uuid).await
+    }
+
+    /// Add new connection and save it to disk.
+    ///
+    /// This operation does not start the network connection unless
+    /// (1) device is idle and able to connect to the network described
+    ///     by the new connection AND
+    /// (2) the connection is allowed to be started automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `connection` - Connection settings and properties.
+    ///
+    /// # Returns
+    ///
+    /// Object path of the new connection that was just added.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if the DBus operation fails.
+    pub async fn add_connection(
+        &self,
+        connection: HashMap<String, HashMap<String, OwnedValue>>,
+    ) -> Result<OwnedObjectPath, NetworkError> {
+        let settings_proxy = SettingsProxy::new(&self.zbus_connection).await?;
+        settings_proxy
+            .add_connection(connection)
+            .await
+            .map_err(NetworkError::DbusError)
+    }
+
+    /// Add new connection but do not save it to disk immediately.
+    ///
+    /// This operation does not start the network connection unless (1) device is idle
+    /// and able to connect to the network described by the new connection, and (2) the
+    /// connection is allowed to be started automatically. Use the 'Save' method on the
+    /// connection to save these changes to disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `connection` - Connection settings and properties.
+    ///
+    /// # Returns
+    ///
+    /// Object path of the new connection that was just added.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if the DBus operation fails.
+    pub async fn add_connection_unsaved(
+        &self,
+        connection: HashMap<String, HashMap<String, OwnedValue>>,
+    ) -> Result<OwnedObjectPath, NetworkError> {
+        controls::SettingsController::add_connection(&self.zbus_connection, connection).await
+    }
+
+    /// Add a new connection profile.
+    ///
+    /// AddConnection2 is an alternative to AddConnection and AddConnectionUnsaved.
+    /// The new variant can do everything that the older variants could, and more.
+    /// Its behavior is extensible via extra flags and args arguments.
+    ///
+    /// # Arguments
+    ///
+    /// * `settings` - Connection configuration as nested hashmaps. The outer map keys are
+    ///   setting names like "connection", "802-3-ethernet", "ipv4", etc. The inner maps
+    ///   contain the properties for each setting.
+    /// * `flags` - Control how the connection is stored:
+    ///   - `TO_DISK`: Persist the connection to disk
+    ///   - `IN_MEMORY`: Keep the connection in memory only
+    ///   - `BLOCK_AUTOCONNECT`: Prevent automatic connection until manually activated
+    /// * `args` - Additional arguments:
+    ///   - `"plugin"`: Specify storage backend like "keyfile" or "ifcfg-rh" (Since 1.38)
+    /// # Returns
+    ///
+    /// Returns a tuple containing:
+    /// - The DBus object path of the newly created connection
+    /// - A result dictionary (currently empty but reserved for future use)
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if the DBus operation fails.
+    pub async fn add_connection2(
+        &self,
+        settings: HashMap<String, HashMap<String, OwnedValue>>,
+        flags: NMSettingsAddConnection2Flags,
+        args: HashMap<String, OwnedValue>,
+    ) -> Result<(OwnedObjectPath, HashMap<String, OwnedValue>), NetworkError> {
+        controls::SettingsController::add_connection2(&self.zbus_connection, settings, flags, args)
+            .await
+    }
+
+    /// Loads or reloads the indicated connections from disk.
+    ///
+    /// You should call this after making changes directly to an on-disk
+    /// connection file to make sure that NetworkManager sees the changes.
+    /// As with AddConnection(), this operation does not necessarily start
+    /// the network connection.
+    ///
+    /// # Arguments
+    ///
+    /// * `filenames` - Array of paths to on-disk connection profiles in directories monitored by NetworkManager
+    ///
+    /// # Returns
+    ///
+    /// Returns a tuple containing:
+    /// - `status`: Success or failure of the operation as a whole. True if NetworkManager
+    ///   at least tried to load the indicated connections, even if it did not succeed.
+    ///   False if an error occurred before trying to load the connections (eg, permission denied).
+    /// - `failures`: Paths of connection files that could not be loaded
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if the DBus operation fails.
+    pub async fn load_connections(
+        &self,
+        filenames: Vec<String>,
+    ) -> Result<(bool, Vec<String>), NetworkError> {
+        controls::SettingsController::load_connections(&self.zbus_connection, filenames).await
+    }
+
+    /// Tells NetworkManager to reload all connection files from disk.
+    ///
+    /// Reloads all connection files from disk, including noticing any
+    /// added or deleted connection files.
+    ///
+    /// # Returns
+    ///
+    /// This always returns true.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::DbusError` if the DBus operation fails.
+    pub async fn reload_connections(&self) -> Result<bool, NetworkError> {
+        controls::SettingsController::reload_connections(&self.zbus_connection).await
+    }
+
+    /// Save the hostname to persistent configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `hostname` - The hostname to save to persistent configuration.
+    ///   If blank, the persistent hostname is cleared.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NetworkError::OperationFailed` if the operations fails.
+    pub async fn save_hostname(&self, hostname: &str) -> Result<(), NetworkError> {
+        controls::SettingsController::save_hostname(&self.zbus_connection, hostname).await
+    }
+
+    /// Get saved connection profiles that match the given SSID.
+    ///
+    /// Returns all connection profiles configured for the specified SSID.
+    /// A single SSID may have multiple profiles with different configurations.
+    pub async fn connections_for_ssid(&self, ssid: &SSID) -> Vec<ConnectionSettings> {
+        let mut matching = Vec::new();
+
+        for connection in self.connections.get() {
+            if connection.matches_ssid(ssid).await {
+                matching.push(connection);
+            }
+        }
+
+        matching
+    }
+
+    /// Get a reactive stream of saved connections for the given SSID.
+    ///
+    /// Returns a stream that emits whenever connections are added, removed,
+    /// or modified for the specified SSID.
+    pub fn connections_for_ssid_monitored(
+        &self,
+        ssid: SSID,
+    ) -> impl Stream<Item = Vec<ConnectionSettings>> + '_ {
+        self.connections.watch().then(move |connections| {
+            let ssid = ssid.clone();
+
+            async move {
+                let mut matching = Vec::new();
+
+                for connection in connections {
+                    if connection.matches_ssid(&ssid).await {
+                        matching.push(connection);
+                    }
+                }
+
+                matching
+            }
+        })
+    }
+
+    async fn from_connection(zbus_connection: &Connection) -> Result<Self, NetworkError> {
+        let settings_proxy = SettingsProxy::new(zbus_connection).await?;
+
+        let (connections, hostname, can_modify, version_id) = tokio::join!(
+            settings_proxy.connections(),
+            settings_proxy.hostname(),
+            settings_proxy.can_modify(),
+            settings_proxy.version_id()
+        );
+
+        let connection_paths = unwrap_vec!(connections);
+
+        let connection_futures = connection_paths
+            .into_iter()
+            .map(|path| ConnectionSettings::get(zbus_connection, path));
+
+        let connection_list: Vec<ConnectionSettings> = join_all(connection_futures)
+            .await
+            .into_iter()
+            .flatten()
+            .map(|arc| (*arc).clone())
+            .collect();
+
+        Ok(Self {
+            zbus_connection: zbus_connection.clone(),
+            connections: Property::new(connection_list),
+            hostname: Property::new(unwrap_string!(hostname)),
+            can_modify: Property::new(unwrap_bool!(can_modify)),
+            version_id: Property::new(unwrap_u64!(version_id)),
+        })
+    }
+}

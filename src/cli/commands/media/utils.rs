@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     cli::CliError,
-    services::mpris::{MediaService, Player, PlayerId},
+    services::media::{MediaService, Player, PlayerId},
 };
 
 /// Finds a player by identifier (index or partial name match)

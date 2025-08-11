@@ -6,7 +6,7 @@ use crate::{
         types::{ArgType, CommandArg, CommandMetadata},
     },
     runtime_state::RuntimeState,
-    services::mpris::{Config, MediaService},
+    services::media::{Config, MediaService},
 };
 
 use super::utils::find_player_by_identifier;

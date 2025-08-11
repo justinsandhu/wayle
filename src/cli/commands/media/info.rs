@@ -7,7 +7,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::{
+    services::media::{
         Config, LoopMode, MediaService, PlaybackState, ShuffleMode, UNKNOWN_METADATA, core::Player,
     },
 };

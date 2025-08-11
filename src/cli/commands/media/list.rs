@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     cli::{CliError, Command, CommandResult, types::CommandMetadata},
-    services::mpris::{Config, MediaService, PlaybackState, UNKNOWN_METADATA},
+    services::media::{Config, MediaService, PlaybackState, UNKNOWN_METADATA},
 };
 
 /// Command to list all available media players

@@ -7,7 +7,7 @@ use crate::{
         CliError, Command, CommandResult,
         types::{ArgType, CommandArg, CommandMetadata},
     },
-    services::mpris::{Config, MediaService},
+    services::media::{Config, MediaService},
 };
 
 use super::utils::get_player_id_or_active;
