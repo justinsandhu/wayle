@@ -4,6 +4,7 @@
 //! reactive configuration store. Commands are organized by category
 //! and automatically generate help text from metadata.
 
+
 mod commands;
 pub mod formatting;
 mod registry;
